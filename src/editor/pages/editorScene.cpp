@@ -75,11 +75,12 @@ void Editor::Scene::draw()
   ImGui::PopStyleVar(3);
 
   auto dockSpaceID = ImGui::GetID("DockSpace");
+  auto dockSpace = ImGui::DockBuilderGetNode(dockSpaceID);
+
   dockSpaceID = ImGui::DockSpace(dockSpaceID, ImVec2(0.0f, 0.0f), 0, 0);
   ImGui::End();
 
-  auto dockSpace = ImGui::DockBuilderGetNode(dockSpaceID);
-  if(dockSpace == nullptr)
+  if(!dockSpace)
   {
     ImGui::DockBuilderRemoveNode(dockSpaceID); // Clear out existing layout
     ImGui::DockBuilderAddNode(dockSpaceID); // Add empty node
