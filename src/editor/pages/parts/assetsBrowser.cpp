@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 #include <string>
 #include "../../../utils/logger.h"
+#include "../../../utils/proc.h"
 
 using FileType = Project::FileType;
 namespace fs = std::filesystem;
@@ -437,7 +438,10 @@ void Editor::AssetsBrowser::draw() {
       ctx.selAssetUUID = asset.getUUID();
     }
     if (isDblClick) {
-      SDL_OpenURL(asset.path.c_str());
+      if (!Utils::Proc::openFile(asset.path))
+      {
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File. This may be due to WSL path conversion failure.");
+      }
     }
 
     if (ImGui::BeginDragDropSource()) {
@@ -581,11 +585,15 @@ void Editor::AssetsBrowser::showContextMenu(const std::string& path) {
   std::string showPrompt = ICON_MDI_FOLDER_OPEN " Show in File Manager";
 #endif
   if(ImGui::MenuItem(showPrompt.c_str())) {
-    showInFileBrowser(path);
+    if (!Utils::Proc::openInFileBrowser(path)) {
+      Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File Explorer. This may be due to WSL path conversion failure.");
+    }
   }
 
   if(ImGui::MenuItem(ICON_MDI_OPEN_IN_NEW " Open")) {
-    SDL_OpenURL(path.c_str());
+    if (!Utils::Proc::openFile(path)) {
+      Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File. This may be due to WSL path conversion failure.");
+    }
   }
   
   if(ImGui::MenuItem(ICON_MDI_CONTENT_COPY " Copy Path")) {
@@ -602,37 +610,4 @@ void Editor::AssetsBrowser::showContextMenu(const std::string& path) {
   if(ImGui::MenuItem(ICON_MDI_DELETE " Delete")) {
     deletePath = path;
   }
-}
-
-void Editor::AssetsBrowser::showInFileBrowser(const std::string& path) {
-#if defined(_WIN32)
-  std::string explorerArgs = "/select," + path;
-  const char* args[] = {
-    "explorer.exe",
-    explorerArgs.c_str(),
-    NULL
-  };
-#elif defined(__APPLE__)
-  const char* args[] = {
-    "open",
-    "-R",
-    path.c_str(),
-    NULL
-  };
-#else
-  std::string pathArg = std::format("array:string:file:///{}", path);
-  const char* args[] = {
-    "dbus-send",
-    "--session",
-    "--dest=org.freedesktop.FileManager1",
-    "--type=method_call",
-    "/org/freedesktop/FileManager1",
-    "org.freedesktop.FileManager1.ShowItems",
-    pathArg.c_str(),
-    "string:",
-    NULL
-  };
-#endif
-
-  SDL_CreateProcess(args, false);
 }
