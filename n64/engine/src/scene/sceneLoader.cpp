@@ -154,7 +154,9 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
   objFile = ptrIn + 4;
 
   objects.push_back(obj);
-  idLookup[obj->id] = obj;
+  if(obj->id < idLookup.size()) {
+    idLookup[obj->id] = obj;
+  }
 
   return obj;
 }

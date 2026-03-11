@@ -100,4 +100,5 @@ add_executable(n64_engine
         engine/src/script/nodeGraph.cpp
         engine/src/renderer/material.cpp
         engine/src/scene/components/animModel.cpp
+        engine/src/lib/matrixManager.cpp
 )

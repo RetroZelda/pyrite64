@@ -173,7 +173,9 @@ void P64::Scene::update(float deltaTime)
 
   for(auto &obj : pendingObjDelete)
   {
-    idLookup[obj->id] = nullptr;
+    if(obj->id < idLookup.size()) {
+      idLookup[obj->id] = nullptr;
+    }
     std::erase(objects, obj);
     obj->~Object();
     free(obj);

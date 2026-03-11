@@ -112,5 +112,6 @@ int main()
 	  P64::VI::SwapChain::drain();
 	  P64::SceneManager::unload();
 	  P64::Mem::freeDepthBuffer();
+    P64::MatrixManager::reset();
   }
 }

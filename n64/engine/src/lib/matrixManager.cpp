@@ -7,7 +7,7 @@
 #include "lib/types.h"
 
 namespace {
-  constexpr uint32_t MATRIX_COUNT = 128 * 3;
+  constexpr uint32_t MATRIX_COUNT = 192 * 3;
   static_assert(MATRIX_COUNT % 32 == 0);
 
   uint32_t usedFlags[MATRIX_COUNT / 32]{};
@@ -41,11 +41,16 @@ T3DMat4FP *P64::MatrixManager::alloc(uint32_t count) {
     }
   }
 
-  Log::error("MatrixManager: Out of matrices!");
-  return nullptr;
+  // if we fail to alloc a new mat, fallback to the slower generic malloc
+  return (T3DMat4FP*)malloc_uncached(sizeof(T3DMat4FP) * count);
 }
 
 void P64::MatrixManager::free(T3DMat4FP *mat, uint32_t count) {
+  if(mat > &bufferPtr[MATRIX_COUNT]) {
+    free_uncached(mat);
+    return;
+  }
+
   uint32_t idx = (mat - bufferPtr) / 32;
   uint32_t countMask = (1 << count) - 1;
   uint32_t b = (mat - bufferPtr) % 32;
