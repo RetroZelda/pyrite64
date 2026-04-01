@@ -5,20 +5,51 @@
 #include "overlay.h"
 
 #include "debug/debugDraw.h"
+#include "debug/debugMenu.h"
 #include "scene/scene.h"
 #include "vi/swapChain.h"
 #include "audio/audioManager.h"
 #include "lib/matrixManager.h"
 #include "lib/memory.h"
+#include "lib/hash.h"
 
 #include <vector>
 #include <string>
+#include <variant>
 #include <filesystem>
 
 namespace P64::SceneManager
 {
   extern const char* SCENE_NAMES[];
 }
+
+// ==============================================
+// Tree-based Menu system (single root)
+// ==============================================
+
+// Generate MenuItemType from the exact same list as DebugVarType
+#define X(Type, Name) Name,
+enum class MenuItemType : uint8_t {
+    DEBUG_MENU_TYPES
+    ACTION
+};
+#undef X
+
+struct MenuItem {
+    std::string text{};
+    Debug::Menu::MenuValue value{};
+    Debug::Menu::MenuValue step{};
+    MenuItemType type = MenuItemType::ACTION;
+    std::function<void(MenuItem&)> onChange;
+};
+
+struct Menu {
+    std::string title = "Debug";
+    Menu* parent = nullptr;
+    std::vector<MenuItem> items{};
+    std::vector<Menu> children{};
+    uint32_t currIndex = 0;
+};
 
 namespace {
   constexpr uint32_t SCREEN_HEIGHT = 240;
@@ -36,25 +67,13 @@ namespace {
   constexpr color_t COLOR_GLOBAL_DRAW{0x33,0x33,0x33, 0xFF};
   constexpr color_t COLOR_AUDIO{0x43, 0x52, 0xFF, 0xFF};
 
-  enum class MenuItemType : uint8_t {
-    BOOL,
-    INT,
-    ACTION
-  };
-  struct MenuItem {
-    const char *text{};
-    int value{};
-    MenuItemType type{};
-    std::function<void(MenuItem&)> onChange{};
-  };
-
-  struct Menu {
-    std::vector<MenuItem> items{};
-    uint32_t currIndex;
-  };
+  constexpr const char* STR_DEBUG    = "Debug";
+  constexpr const char* STR_SCENES   = "Scenes";
+  constexpr const char* STR_BACK     = "< Back >";
+  constexpr const char* STR_CH_TODO  = "CH (TODO)";
 
   constinit Menu menu{};
-  constinit Menu menuScenes{};
+  Menu* currentMenu = nullptr;
 
   constinit T3DMetrics *metrics = nullptr;
   
@@ -74,20 +93,92 @@ namespace {
     return timeOffX * frameTimeScale;
   };
 
-  void addBoolItem(Menu &m, const char* name, bool &value) {
-    m.items.push_back({name, value, MenuItemType::BOOL, [&value](auto &item) {
-      value = item.value;
-    }});
-  }
-  void addActionItem(Menu &m, const char* name, std::function<void(MenuItem&)> action) {
-    m.items.push_back({name, 0, MenuItemType::ACTION, action});
+  // -------------------------------------------------------------------------
+  // Helper: create the correct submenu tree from a | separated path
+  //         AND automatically add "< Back >" to every non-root submenu
+  // -------------------------------------------------------------------------
+  Menu* findOrCreateSubmenu(Menu& root, std::string path)
+  {
+    Menu* current = &root;
+    size_t pos = 0;
+
+    while ((pos = path.find('|')) != std::string::npos)
+    {
+      std::string submenuName = path.substr(0, pos);
+      path.erase(0, pos + 1);
+
+      bool found = false;
+      for (auto& child : current->children)
+      {
+        if (child.title == submenuName)
+        {
+          current = &child;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found)
+      {
+        current->children.emplace_back();
+        Menu& newMenu = current->children.back();
+        newMenu.title = submenuName;
+        newMenu.parent = current;
+
+        // Every path-created submenu gets a < Back > item
+        newMenu.items.push_back({
+          STR_BACK,
+          Debug::Menu::MenuValue{},
+          Debug::Menu::MenuValue{},
+          MenuItemType::ACTION,
+          [](MenuItem&) { /* back is handled by Left/Right */ }
+        });
+
+        current = &newMenu;
+      }
+    }
+
+    return current;
   }
 
-  bool showCollMesh = false;
-  bool showCollBCS = false;
-  bool matrixDebug = false;
-  bool showMenuScene = false;
-  bool showFrameTime = false;
+  void addRegisteredDebugVarsToMenu(Menu& m)
+  {
+    for (const auto& var : Debug::Menu::DebugRegistry::Get().GetAllVars())
+    {
+      Menu* targetMenu = findOrCreateSubmenu(m, var.path);
+
+      // Extract only the final leaf name for display (full path is kept in the submenu hierarchy)
+      std::string fullPath = var.path;
+      size_t lastPipe = fullPath.find_last_of('|');
+      std::string displayName = (lastPipe == std::string::npos)
+                                ? fullPath
+                                : fullPath.substr(lastPipe + 1);
+
+      #define X(Type, Name) \
+      if (var.type == Debug::Menu::DebugVarType::Name) { \
+        Type* ptr = static_cast<Type*>(var.ptr); \
+        targetMenu->items.push_back({ \
+          displayName, \
+          Debug::Menu::MenuValue{*ptr}, \
+          var.step, \
+          MenuItemType::Name, \
+          [ptr](MenuItem& item) { *ptr = std::get<Type>(item.value); } \
+        }); \
+      }
+      DEBUG_MENU_TYPES
+      #undef X
+    }
+  }
+
+  void addActionItem(Menu &m, const char* name, std::function<void(MenuItem&)> action) {
+    m.items.push_back({std::string(name), Debug::Menu::MenuValue{}, Debug::Menu::MenuValue{}, MenuItemType::ACTION, action});
+  }
+
+  REGISTER_TWEAKABLE_VAR(bool, "Coll-Obj",   showCollBCS,   false);
+  REGISTER_TWEAKABLE_VAR(bool, "Coll-Tri",   showCollMesh,  false);
+  REGISTER_TWEAKABLE_VAR(bool, "Memory",     matrixDebug,   false);
+  REGISTER_TWEAKABLE_VAR(bool, "Frames",     showFrameTime, false);
+  REGISTER_TWEAKABLE_VAR(bool, "FPS",        showFrameRate, false);
 
   bool isVisible = false;
   bool didInit = false;
@@ -118,13 +209,47 @@ void Debug::Overlay::init()
   }
 }
 
+static void buildDebugMenu()
+{
+  menu.title = STR_DEBUG;
+  menu.parent = nullptr;
+  menu.currIndex = 0;
+
+  // Scenes child menu should be above the variables
+  menu.children.emplace_back();
+  Menu& scenesMenu = menu.children.back();
+  scenesMenu.title = STR_SCENES;
+  scenesMenu.parent = &menu;
+  scenesMenu.currIndex = 0;
+
+  addActionItem(scenesMenu, STR_BACK, [](MenuItem&) { /* handled by Left/Right */ });
+
+  for(auto &sceneName : sceneNames)
+  {
+    addActionItem(scenesMenu, sceneName.c_str(), [&sceneName](MenuItem&) {
+      uint32_t sceneId = std::stoi(sceneName.substr(1));
+      P64::SceneManager::load(sceneId);
+    });
+  }
+
+  addRegisteredDebugVarsToMenu(menu);
+  currentMenu = &menu;
+}
+
 void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 {
   if(!isVisible)
   {
+  if(showFrameRate)
+  {
     //Debug::printStart();
     //Debug::printf(20, 16, "%.2f\n", (double)P64::VI::SwapChain::getFPS());
     //Debug::printf(20, 16+8, "%d / %d\n", metrics->trisPostCull, metrics->trisPreCull);
+    
+    rdpq_sync_pipe();
+    Debug::printStart();
+    Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
+  }
     return;
   }
 
@@ -136,6 +261,11 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
     didInit = true;
   }
 
+  if(currentMenu == nullptr) {
+    buildDebugMenu();
+    return; // skip drawing on the first frame to avoid handling input that toggled the menu and move the cursor unexpectedly
+  }
+
   auto &collScene = scene.getCollision();
   uint64_t newTicksSelf = get_user_ticks();
   MEMORY_BARRIER();
@@ -144,39 +274,68 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 
   auto btn = joypad_get_buttons_pressed(JOYPAD_PORT_1);
 
-  if(menu.items.empty()) {
-    addActionItem(menu, "Scenes", []([[maybe_unused]] auto &item) { showMenuScene = true; });
+  const size_t numItems = currentMenu->items.size();
+  const size_t numChildren = currentMenu->children.size();
+  const size_t totalEntries = numItems + numChildren;
 
-    addBoolItem(menu, "Coll-Obj", showCollBCS);
-    addBoolItem(menu, "Coll-Tri", showCollMesh);
-    addBoolItem(menu, "Memory", matrixDebug);
-    addBoolItem(menu, "Frames", showFrameTime);
-
-    addActionItem(menuScenes, "< Back >", []([[maybe_unused]] auto &item) {
-      showMenuScene = false;
-    });
-
-    for(auto &sceneName : sceneNames)
-    {
-      addActionItem(menuScenes, sceneName.c_str(), [&scene, sceneName]([[maybe_unused]] auto &item) {
-        uint32_t sceneId = std::stoi(sceneName.substr(1));
-        P64::SceneManager::load(sceneId);
-      });
-    }
+  // Up / Down
+  if(btn.d_up) {
+    currentMenu->currIndex = (currentMenu->currIndex + totalEntries - 1) % totalEntries;
+  }
+  if(btn.d_down) {
+    currentMenu->currIndex = (currentMenu->currIndex + 1) % totalEntries;
   }
 
-  Menu *currMenu = showMenuScene ? &menuScenes : &menu;
+  // LEFT / RIGHT
+  if(btn.d_left || btn.d_right)
+  {
+    size_t idx = currentMenu->currIndex;
+    if(idx < numChildren)
+    {
+      if(btn.d_right)
+      {
+        currentMenu = &currentMenu->children[idx];
+      }
+    }
+    else
+    {
+      size_t itemIdx = idx - numChildren;
+      MenuItem& item = currentMenu->items[itemIdx];
 
-  if(btn.d_up)--currMenu->currIndex;
-  if(btn.d_down)++currMenu->currIndex;
-  if(currMenu->currIndex > currMenu->items.size() - 1)currMenu->currIndex = 0;
+      if(item.type != MenuItemType::ACTION)
+      {
+        std::visit([&](auto& v) {
+          using T = std::decay_t<decltype(v)>;
 
-  if(btn.d_left)currMenu->items[currMenu->currIndex].value--;
-  if(btn.d_right)currMenu->items[currMenu->currIndex].value++;
-  if(btn.d_left || btn.d_right) {
-    auto &item = currMenu->items[currMenu->currIndex];
-    if(item.type == MenuItemType::BOOL)item.value = (item.value < 0) ? 1 : (item.value % 2);
-    item.onChange(item);
+          if constexpr (std::is_same_v<T, std::monostate>)
+          {
+            return;
+          }
+          else if constexpr (std::is_same_v<T, bool>)
+          {
+            v = !v;
+          }
+          else
+          {
+            if (btn.d_left)  v -= std::get<T>(item.step);
+            if (btn.d_right) v += std::get<T>(item.step);
+          }
+        }, item.value);
+
+        if(item.onChange) item.onChange(item);
+      }
+      else if(item.type == MenuItemType::ACTION)
+      {
+        if(P64::Lib::Hash::fnv32(item.text.c_str()) == P64::Lib::Hash::fnv32(STR_BACK) && currentMenu->parent)
+        {
+          currentMenu = currentMenu->parent;
+        }
+        else if(btn.d_right && item.onChange)
+        {
+          item.onChange(item);
+        }
+      }
+    }
   }
 
   collScene.debugDraw(showCollMesh, showCollBCS);
@@ -208,11 +367,19 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
     Debug::printStart();
 
     posY = 64;
-    Debug::printf(posX + 200, posY-8, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
+    if(showFrameRate)
+    {    
+        Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
+    }
 
     return;
   }
   Debug::printStart();
+
+  if(showFrameRate)
+  {    
+    Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
+  }
 
   posY = 24;
 
@@ -245,22 +412,47 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 
   posX = 24;
 
-  // Menu
+  // === Draw current menu ===
   posY = 38;
-  for(auto &item : currMenu->items) {
-    bool isSel = currMenu->currIndex == (uint32_t)(&item - &currMenu->items[0]);
-    switch(item.type) {
-      case MenuItemType::INT:
-        Debug::printf(posX, posY, "%c %s: %d", isSel ? '>' : ' ', item.text, item.value);
-        break;
-      case MenuItemType::BOOL:
-        Debug::printf(posX, posY, "%c %s: %c", isSel ? '>' : ' ', item.text, item.value ? '1' : '0');
-        break;
-      case MenuItemType::ACTION:
-        Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text);
-        break;
-    }
-//    Debug::printf(posX, posY, "%c %s: %d", isSel ? '>' : ' ', item.text, item.value);
+  Debug::printf(posX, posY, "%s", currentMenu->title.c_str());
+  posY += 10;
+
+  // Child sub-menus first
+  for(auto &child : currentMenu->children) {
+    bool isSel = currentMenu->currIndex == (uint32_t)(&child - &currentMenu->children[0]);
+    Debug::printf(posX, posY, "%c ▶ %s", isSel ? '>' : ' ', child.title.c_str());
+    posY += 8;
+  }
+
+  // Items (variables) last – std::visit for printing
+  for(auto &item : currentMenu->items) {
+    bool isSel = currentMenu->currIndex == numChildren + (uint32_t)(&item - &currentMenu->items[0]);
+
+    std::visit([&](const auto& v) {
+      using T = std::decay_t<decltype(v)>;
+
+      if constexpr (std::is_same_v<T, std::monostate>)
+      {
+        Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
+      }
+      else if constexpr (std::is_same_v<T, bool>)
+      {
+        Debug::printf(posX, posY, "%c %s: %c", isSel ? '>' : ' ', item.text.c_str(), v ? '1' : '0');
+      }
+      else if constexpr (std::is_integral_v<T>)
+      {
+        Debug::printf(posX, posY, "%c %s: %lld", isSel ? '>' : ' ', item.text.c_str(), (long long)v);
+      }
+      else if constexpr (std::is_floating_point_v<T>)
+      {
+        Debug::printf(posX, posY, "%c %s: %.2f", isSel ? '>' : ' ', item.text.c_str(), static_cast<double>(v));
+      }
+      else
+      {
+        Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
+      }
+    }, item.value);
+
     posY += 8;
   }
 
@@ -268,7 +460,7 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
   posX = 24;
   posY = SCREEN_HEIGHT - 24;
 
-  posX = Debug::printf(posX, posY, "CH (TODO)");
+  posX = Debug::printf(posX, posY, STR_CH_TODO);
   /*uint32_t audioMask = scene.getAudio().getActiveChannelMask();
   for(int i=0; i<16; ++i) {
     bool isActive = audioMask & (1 << i);
