@@ -491,6 +491,8 @@ void Editor::AssetsBrowser::draw() {
     ImGui::EndPopup();
   }
 
+  static int ctxSceneId = -1;
+
   if(tab.showScenes)
   {
     for (const auto &scene : scenes)
@@ -499,12 +501,16 @@ void Editor::AssetsBrowser::draw() {
       auto activeScene = ctx.project->getScenes().getLoadedScene();
 
       bool isSelected = activeScene && (activeScene->getId() == scene.id);
+      const auto &liveName = isSelected ? activeScene->getName() : scene.name;
+      const auto &displayName = liveName.empty() ? "(unnamed)" : liveName;
+      auto buttonLabel = displayName + "##" + std::to_string(scene.id);
+
       if(isSelected) {
         ImGui::PushStyleColor(ImGuiCol_Button, {0.5f,0.5f,0.7f,1});
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.5f,0.5f,0.7f,0.8f});
       }
 
-      if (ImGui::Button(scene.name.c_str(), textBtnSize)) {
+      if (ImGui::Button(buttonLabel.c_str(), textBtnSize)) {
         ctx.project->getScenes().loadScene(scene.id);
         ctx.project->conf.sceneIdLastOpened = scene.id;
         ctx.project->saveConfig();
@@ -514,8 +520,30 @@ void Editor::AssetsBrowser::draw() {
 
       if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       {
-        ImGui::SetTooltip("Scene: %s\nID: %d", scene.name.c_str(), scene.id);
+        ImGui::SetTooltip("Scene: %s\nID: %d\n\nRight-click for options", displayName.c_str(), scene.id);
       }
+
+      if(ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        ctxSceneId = scene.id;
+        ImGui::OpenPopup("SceneCtxMenu");
+      }
+    }
+
+    if(ImGui::BeginPopup("SceneCtxMenu")) {
+      bool canDelete = scenes.size() > 1;
+      if(!canDelete) ImGui::BeginDisabled();
+      if(ImGui::MenuItem(ICON_MDI_TRASH_CAN_OUTLINE " Delete")) {
+        ctx.project->getScenes().remove(ctxSceneId);
+        ctx.project->conf.sceneIdLastOpened = ctx.project->getScenes().getEntries().empty()
+          ? 0 : ctx.project->getScenes().getEntries().front().id;
+        ctx.project->saveConfig();
+      }
+      if(!canDelete) {
+        if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+          ImGui::SetMouseCursor(ImGuiMouseCursor_NotAllowed);
+        ImGui::EndDisabled();
+      }
+      ImGui::EndPopup();
     }
   }
 

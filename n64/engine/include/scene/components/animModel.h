@@ -54,6 +54,19 @@ namespace P64::Comp
         return &anims[idx];
       }
 
+      const T3DModel* getModel() const {
+        return model;
+      }
+      const T3DSkeleton& getSkelMain() const {
+        return skelMain;
+      }
+      const T3DSkeleton* getSkelAnim() const {
+        return skelAnim;
+      }
+      const T3DAnim* getAnims() const {
+        return anims;
+      }
+
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData);
 
     static void initDelete([[maybe_unused]] Object& obj, AnimModel* data, void* initData);
