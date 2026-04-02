@@ -184,6 +184,7 @@ namespace {
 
   bool isVisible = false;
   bool didInit = false;
+  bool isVarDirty = false;
 }
 
 void Debug::Overlay::toggle()
@@ -320,6 +321,7 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
             if (btn.d_left)  v -= std::get<T>(item.step);
             if (btn.d_right) v += std::get<T>(item.step);
           }
+          isVarDirty = true;
         }, item.value);
 
         if(item.onChange) item.onChange(item);
@@ -336,6 +338,19 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
         }
       }
     }
+  }
+
+  if(isVarDirty && Debug::Menu::getAutomaticSaveOffset() >= 0 && !eeprom_is_busy())
+  {
+    Debug::Menu::saveVariables(Debug::Menu::getAutomaticSaveOffset());
+    isVarDirty = false;
+  }
+
+
+  Debug::printStart();
+  if(eeprom_is_busy())
+  {
+    Debug::printf(250, 230, "Saving...");
   }
 
   collScene.debugDraw(showCollMesh, showCollBCS);
@@ -364,8 +379,6 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 
     rdpq_mode_pop();
 
-    Debug::printStart();
-
     posY = 64;
     if(showFrameRate)
     {    
@@ -374,7 +387,6 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 
     return;
   }
-  Debug::printStart();
 
   if(showFrameRate)
   {    
