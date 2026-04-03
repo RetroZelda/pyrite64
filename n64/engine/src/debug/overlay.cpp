@@ -181,6 +181,7 @@ namespace {
   REGISTER_TWEAKABLE_VAR(bool, "Memory",     matrixDebug,   false);
   REGISTER_TWEAKABLE_VAR(bool, "Frames",     showFrameTime, false);
   REGISTER_TWEAKABLE_VAR(bool, "FPS",        showFrameRate, false);
+  REGISTER_TWEAKABLE_VAR(bool, "Debug Shapes", showDebugDraws, false);
 
   bool isVisible = false;
   bool didInit = false;
@@ -243,16 +244,20 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 {
   if(!isVisible)
   {
-  if(showFrameRate)
-  {
-    //Debug::printStart();
-    //Debug::printf(20, 16, "%.2f\n", (double)P64::VI::SwapChain::getFPS());
-    //Debug::printf(20, 16+8, "%d / %d\n", metrics->trisPostCull, metrics->trisPreCull);
-    
-    rdpq_sync_pipe();
-    Debug::printStart();
-    Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
-  }
+    if(showDebugDraws)
+    {
+        Debug::draw(surf);
+    }
+    if(showFrameRate)
+    {
+        //Debug::printStart();
+        //Debug::printf(20, 16, "%.2f\n", (double)P64::VI::SwapChain::getFPS());
+        //Debug::printf(20, 16+8, "%d / %d\n", metrics->trisPostCull, metrics->trisPreCull);
+        
+        rdpq_sync_pipe();
+        Debug::printStart();
+        Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
+    }
     return;
   }
 
@@ -346,6 +351,8 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
     isVarDirty = false;
   }
 
+
+  Debug::draw(surf);
 
   Debug::printStart();
   if(eeprom_is_busy())
