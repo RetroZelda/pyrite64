@@ -33,7 +33,8 @@ namespace P64::SceneManager
 #define X(Type, Name) Name,
 enum class MenuItemType : uint8_t {
     DEBUG_MENU_TYPES
-    ACTION
+    ACTION,
+    BACK
 };
 #undef X
 
@@ -126,16 +127,6 @@ namespace {
         Menu& newMenu = current->children.back();
         newMenu.title = submenuName;
         newMenu.parent = current;
-
-        // Every path-created submenu gets a < Back > item
-        newMenu.items.push_back({
-          STR_BACK,
-          Debug::Menu::MenuValue{},
-          Debug::Menu::MenuValue{},
-          MenuItemType::ACTION,
-          [](MenuItem&) { /* back is handled by Left/Right */ }
-        });
-
         current = &newMenu;
       }
     }
@@ -174,6 +165,27 @@ namespace {
 
   void addActionItem(Menu &m, const char* name, std::function<void(MenuItem&)> action) {
     m.items.push_back({std::string(name), Debug::Menu::MenuValue{}, Debug::Menu::MenuValue{}, MenuItemType::ACTION, action});
+  }
+
+  void addBackToMenu(Menu& menuFocus)
+  {
+    // the back item should always be first in the list
+    if(menuFocus.parent != nullptr 
+    &&(menuFocus.items.size() == 0 || menuFocus.items[0].type != MenuItemType::BACK))
+    {
+        menuFocus.items.insert(menuFocus.items.begin(), {
+            STR_BACK,
+            Debug::Menu::MenuValue{},
+            Debug::Menu::MenuValue{},
+            MenuItemType::BACK,
+            [](MenuItem&) {}
+        });
+    }
+
+    for(Menu& child : menuFocus.children)
+    {
+        addBackToMenu(child);
+    }
   }
 
   REGISTER_TWEAKABLE_VAR(bool, "Coll-Obj",   showCollBCS,   false);
@@ -226,8 +238,6 @@ static void buildDebugMenu()
   scenesMenu.parent = &menu;
   scenesMenu.currIndex = 0;
 
-  addActionItem(scenesMenu, STR_BACK, [](MenuItem&) { /* handled by Left/Right */ });
-
   for(auto &sceneName : sceneNames)
   {
     addActionItem(scenesMenu, sceneName.c_str(), [&sceneName](MenuItem&) {
@@ -237,6 +247,7 @@ static void buildDebugMenu()
   }
 
   addRegisteredDebugVarsToMenu(menu);
+  addBackToMenu(menu);
   currentMenu = &menu;
 }
 
@@ -296,7 +307,12 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
   if(btn.d_left || btn.d_right)
   {
     size_t idx = currentMenu->currIndex;
-    if(idx < numChildren)
+    if(idx == 0)
+    {
+        if(currentMenu->parent)
+          currentMenu = currentMenu->parent;
+    }
+    if(idx < numChildren + 1)
     {
       if(btn.d_right)
       {
@@ -333,11 +349,7 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
       }
       else if(item.type == MenuItemType::ACTION)
       {
-        if(P64::Lib::Hash::fnv32(item.text.c_str()) == P64::Lib::Hash::fnv32(STR_BACK) && currentMenu->parent)
-        {
-          currentMenu = currentMenu->parent;
-        }
-        else if(btn.d_right && item.onChange)
+        if(btn.d_right && item.onChange)
         {
           item.onChange(item);
         }
