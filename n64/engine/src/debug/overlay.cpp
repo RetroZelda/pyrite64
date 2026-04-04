@@ -245,7 +245,7 @@ static void updateDebugMenu()
   size_t idx = currentMenu->currIndex;
   if(btn.d_up) 
   {
-    currentMenu->currIndex = (currentMenu->currIndex - 1) % (totalEntries + parentOffset);
+    currentMenu->currIndex = (currentMenu->currIndex + totalEntries - 1) % (totalEntries + parentOffset);
   }
   else if(btn.d_down) 
   {
