@@ -245,11 +245,11 @@ static void updateDebugMenu()
   size_t idx = currentMenu->currIndex;
   if(btn.d_up) 
   {
-    currentMenu->currIndex = (currentMenu->currIndex + totalEntries - 1) % (totalEntries + parentOffset);
+    if(currentMenu->currIndex-- == 0) currentMenu->currIndex = totalEntries + parentOffset - 1;
   }
   else if(btn.d_down) 
   {
-    currentMenu->currIndex = (currentMenu->currIndex + 1) % (totalEntries + parentOffset);
+    if(++currentMenu->currIndex >= (totalEntries + parentOffset)) currentMenu->currIndex = 0;
   }
   else if(btn.d_left || btn.d_right)
   {
