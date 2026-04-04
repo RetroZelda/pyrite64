@@ -236,6 +236,7 @@ static void buildDebugMenu()
 static void updateDebugMenu()
 {
   joypad_buttons_t btn = joypad_get_buttons_pressed(JOYPAD_PORT_1);
+  joypad_buttons_t held = joypad_get_buttons_held(JOYPAD_PORT_1);
 
   const size_t numItems = currentMenu->items.size();
   const size_t numChildren = currentMenu->children.size();
@@ -249,6 +250,12 @@ static void updateDebugMenu()
   }
   else if(btn.d_down) 
   {
+    // holding L will return us to the root
+    if(held.l)
+    {
+        while(currentMenu->parent) currentMenu = currentMenu->parent;
+        return;
+    }
     if(++currentMenu->currIndex >= (totalEntries + parentOffset)) currentMenu->currIndex = 0;
   }
   else if(btn.d_left || btn.d_right)
