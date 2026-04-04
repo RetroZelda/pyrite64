@@ -33,8 +33,7 @@ namespace P64::SceneManager
 #define X(Type, Name) Name,
 enum class MenuItemType : uint8_t {
     DEBUG_MENU_TYPES
-    ACTION,
-    BACK
+    ACTION
 };
 #undef X
 
@@ -69,11 +68,6 @@ namespace {
   constexpr color_t COLOR_SCENE_DRAW{0xFF,0x80,0x10, 0xFF};
   constexpr color_t COLOR_GLOBAL_DRAW{0x33,0x33,0x33, 0xFF};
   constexpr color_t COLOR_AUDIO{0x43, 0x52, 0xFF, 0xFF};
-
-  constexpr const char* STR_DEBUG    = "Debug";
-  constexpr const char* STR_SCENES   = "Scenes";
-  constexpr const char* STR_BACK     = "< Back >";
-  constexpr const char* STR_CH_TODO  = "CH (TODO)";
 
   constinit Menu menu{};
   Menu* currentMenu = nullptr;
@@ -167,27 +161,6 @@ namespace {
     m.items.push_back({std::string(name), Debug::Menu::MenuValue{}, Debug::Menu::MenuValue{}, MenuItemType::ACTION, action});
   }
 
-  void addBackToMenu(Menu& menuFocus)
-  {
-    // the back item should always be first in the list
-    if(menuFocus.parent != nullptr 
-    &&(menuFocus.items.size() == 0 || menuFocus.items[0].type != MenuItemType::BACK))
-    {
-        menuFocus.items.insert(menuFocus.items.begin(), {
-            STR_BACK,
-            Debug::Menu::MenuValue{},
-            Debug::Menu::MenuValue{},
-            MenuItemType::BACK,
-            [](MenuItem&) {}
-        });
-    }
-
-    for(Menu& child : menuFocus.children)
-    {
-        addBackToMenu(child);
-    }
-  }
-
   REGISTER_TWEAKABLE_VAR(bool, "Coll-Obj",   showCollBCS,   false);
   REGISTER_TWEAKABLE_VAR(bool, "Coll-Tri",   showCollMesh,  false);
   REGISTER_TWEAKABLE_VAR(bool, "Memory",     matrixDebug,   false);
@@ -225,16 +198,25 @@ void Debug::Overlay::init()
   }
 }
 
+static void setMenuHeirarchy(Menu& m, Menu* parent = nullptr)
+{
+    m.parent = parent;
+    for (auto& child : m.children)
+    {
+        setMenuHeirarchy(child, &m);
+    }
+}
+
 static void buildDebugMenu()
 {
-  menu.title = STR_DEBUG;
+  menu.title = "Debug";
   menu.parent = nullptr;
   menu.currIndex = 0;
 
   // Scenes child menu should be above the variables
   menu.children.emplace_back();
   Menu& scenesMenu = menu.children.back();
-  scenesMenu.title = STR_SCENES;
+  scenesMenu.title = "Scenes";
   scenesMenu.parent = &menu;
   scenesMenu.currIndex = 0;
 
@@ -247,8 +229,97 @@ static void buildDebugMenu()
   }
 
   addRegisteredDebugVarsToMenu(menu);
-  addBackToMenu(menu);
+  setMenuHeirarchy(menu, nullptr);
   currentMenu = &menu;
+}
+
+static void updateDebugMenu()
+{
+  joypad_buttons_t btn = joypad_get_buttons_pressed(JOYPAD_PORT_1);
+
+  const size_t numItems = currentMenu->items.size();
+  const size_t numChildren = currentMenu->children.size();
+  const size_t totalEntries = numItems + numChildren;
+  const size_t parentOffset = currentMenu->parent ? 1 : 0;
+
+  size_t idx = currentMenu->currIndex;
+  if(btn.d_up) 
+  {
+    currentMenu->currIndex = (currentMenu->currIndex - 1) % (totalEntries + parentOffset);
+  }
+  else if(btn.d_down) 
+  {
+    currentMenu->currIndex = (currentMenu->currIndex + 1) % (totalEntries + parentOffset);
+  }
+  else if(btn.d_left || btn.d_right)
+  {
+    if(currentMenu->parent)
+    {
+        if(idx == 0)
+        {
+            if(btn.d_left) currentMenu = currentMenu->parent;
+            return;
+        }
+        --idx;
+    }
+    
+    if(idx < numChildren)
+    {
+        if(btn.d_left)
+        {
+            currentMenu->currIndex = 0;
+        }
+        else
+        {
+            currentMenu = &currentMenu->children[idx];
+        }
+        return;
+    }
+    else if(idx >= numChildren)
+    {
+        size_t itemIdx = idx - numChildren;
+        MenuItem& item = currentMenu->items[itemIdx];
+
+        if(item.type < MenuItemType::ACTION) // its a variable type
+        {
+            std::visit([&](auto& v) 
+            {
+                using T = std::decay_t<decltype(v)>;
+
+                if constexpr (std::is_same_v<T, std::monostate>)
+                {
+                    return;
+                }
+                else if constexpr (std::is_same_v<T, bool>)
+                {
+                    v = !v;
+                }
+                else
+                {
+                    if (btn.d_left)  v -= std::get<T>(item.step);
+                    if (btn.d_right) v += std::get<T>(item.step);
+                }
+                isVarDirty = true;
+            }, item.value);
+
+            if(item.onChange) 
+                item.onChange(item);
+        }
+        else if(item.type == MenuItemType::ACTION)
+        {
+            if(btn.d_right && item.onChange)
+            {
+                item.onChange(item);
+            }
+        }
+    }
+  }
+
+  if(isVarDirty && Debug::Menu::getAutomaticSaveOffset() >= 0 && !eeprom_is_busy())
+  {
+    Debug::Menu::saveVariables(Debug::Menu::getAutomaticSaveOffset());
+    isVarDirty = false;
+  }
 }
 
 void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
@@ -289,80 +360,7 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
   uint64_t newTicksSelf = get_user_ticks();
   MEMORY_BARRIER();
 
-  auto btn = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-
-  const size_t numItems = currentMenu->items.size();
-  const size_t numChildren = currentMenu->children.size();
-  const size_t totalEntries = numItems + numChildren;
-
-  // Up / Down
-  if(btn.d_up) {
-    currentMenu->currIndex = (currentMenu->currIndex + totalEntries - 1) % totalEntries;
-  }
-  if(btn.d_down) {
-    currentMenu->currIndex = (currentMenu->currIndex + 1) % totalEntries;
-  }
-
-  // LEFT / RIGHT
-  if(btn.d_left || btn.d_right)
-  {
-    size_t idx = currentMenu->currIndex;
-    if(idx == 0)
-    {
-        if(currentMenu->parent)
-          currentMenu = currentMenu->parent;
-    }
-    if(idx < numChildren + 1)
-    {
-      if(btn.d_right)
-      {
-        currentMenu = &currentMenu->children[idx];
-      }
-    }
-    else
-    {
-      size_t itemIdx = idx - numChildren;
-      MenuItem& item = currentMenu->items[itemIdx];
-
-      if(item.type != MenuItemType::ACTION)
-      {
-        std::visit([&](auto& v) {
-          using T = std::decay_t<decltype(v)>;
-
-          if constexpr (std::is_same_v<T, std::monostate>)
-          {
-            return;
-          }
-          else if constexpr (std::is_same_v<T, bool>)
-          {
-            v = !v;
-          }
-          else
-          {
-            if (btn.d_left)  v -= std::get<T>(item.step);
-            if (btn.d_right) v += std::get<T>(item.step);
-          }
-          isVarDirty = true;
-        }, item.value);
-
-        if(item.onChange) item.onChange(item);
-      }
-      else if(item.type == MenuItemType::ACTION)
-      {
-        if(btn.d_right && item.onChange)
-        {
-          item.onChange(item);
-        }
-      }
-    }
-  }
-
-  if(isVarDirty && Debug::Menu::getAutomaticSaveOffset() >= 0 && !eeprom_is_busy())
-  {
-    Debug::Menu::saveVariables(Debug::Menu::getAutomaticSaveOffset());
-    isVarDirty = false;
-  }
-
+  updateDebugMenu();
 
   Debug::draw(surf);
 
@@ -444,47 +442,66 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
   posX = 24;
 
   // === Draw current menu ===
-  posY = 38;
-  Debug::printf(posX, posY, "%s", currentMenu->title.c_str());
-  posY += 10;
+  if(currentMenu)
+  {
+    posY = 38;
+    Debug::printf(posX, posY, "%s", currentMenu->title.c_str());
+    posY += 10;
 
-  // Child sub-menus first
-  for(auto &child : currentMenu->children) {
-    bool isSel = currentMenu->currIndex == (uint32_t)(&child - &currentMenu->children[0]);
-    Debug::printf(posX, posY, "%c ▶ %s", isSel ? '>' : ' ', child.title.c_str());
-    posY += 8;
-  }
+    const size_t numItems = currentMenu->items.size();
+    const size_t numChildren = currentMenu->children.size();
+    const size_t totalEntries = numItems + numChildren;
+    const size_t parentOffset = currentMenu->parent ? 1 : 0;
+    size_t itemCount = 0;
 
-  // Items (variables) last – std::visit for printing
-  for(auto &item : currentMenu->items) {
-    bool isSel = currentMenu->currIndex == numChildren + (uint32_t)(&item - &currentMenu->items[0]);
+    // back first
+    if(parentOffset)
+    {
+        bool isSel = currentMenu->currIndex == itemCount++;
+        Debug::printf(posX, posY, "%c < Back >", isSel ? '>' : ' ');
+        posY += 8;
+    }
 
-    std::visit([&](const auto& v) {
-      using T = std::decay_t<decltype(v)>;
+    // Child sub-menus first
+    for(auto &child : currentMenu->children) 
+    {
+        bool isSel = currentMenu->currIndex == itemCount++;
+        Debug::printf(posX, posY, "%c [dir] %s", isSel ? '>' : ' ', child.title.c_str());
+        posY += 8;
+    }
 
-      if constexpr (std::is_same_v<T, std::monostate>)
-      {
-        Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
-      }
-      else if constexpr (std::is_same_v<T, bool>)
-      {
-        Debug::printf(posX, posY, "%c %s: %c", isSel ? '>' : ' ', item.text.c_str(), v ? '1' : '0');
-      }
-      else if constexpr (std::is_integral_v<T>)
-      {
-        Debug::printf(posX, posY, "%c %s: %lld", isSel ? '>' : ' ', item.text.c_str(), (long long)v);
-      }
-      else if constexpr (std::is_floating_point_v<T>)
-      {
-        Debug::printf(posX, posY, "%c %s: %.2f", isSel ? '>' : ' ', item.text.c_str(), static_cast<double>(v));
-      }
-      else
-      {
-        Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
-      }
-    }, item.value);
+    // Items (variables) last – std::visit for printing
+    for(auto &item : currentMenu->items) 
+    {
+        bool isSel = currentMenu->currIndex == itemCount++;
 
-    posY += 8;
+        std::visit([&](const auto& v) {
+        using T = std::decay_t<decltype(v)>;
+
+        if constexpr (std::is_same_v<T, std::monostate>)
+        {
+            Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
+        }
+        else if constexpr (std::is_same_v<T, bool>)
+        {
+            Debug::printf(posX, posY, "%c %s: %c", isSel ? '>' : ' ', item.text.c_str(), v ? '1' : '0');
+        }
+        else if constexpr (std::is_integral_v<T>)
+        {
+            Debug::printf(posX, posY, "%c %s: %lld", isSel ? '>' : ' ', item.text.c_str(), (long long)v);
+        }
+        else if constexpr (std::is_floating_point_v<T>)
+        {
+            Debug::printf(posX, posY, "%c %s: %.2f", isSel ? '>' : ' ', item.text.c_str(), static_cast<double>(v));
+        }
+        else
+        {
+            Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
+        }
+        }, item.value);
+
+        posY += 8;
+    }
   }
 
   // audio channels
