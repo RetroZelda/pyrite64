@@ -182,4 +182,4 @@ namespace P64::Script::C751DA2F182978DE
 ```
 
 You can find further examples in the example project `material_test`.\
-Or for dynamic textures, in the `jam25` exmaple in `Player.c
+Or for dynamic textures, in the `jam25` example in `Player.cpp`.
