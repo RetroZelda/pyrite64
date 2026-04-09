@@ -80,7 +80,7 @@ namespace Project::Component::Code
         ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
       } else if(field.type == Utils::DataType::OBJECT_REF) {
         uint32_t uuid = static_cast<uint32_t>(Utils::parseU64(val));
-        auto refObj = ctx.scene->getObjectByUUID(uuid);
+        auto refObj = ctx.scene ? ctx.scene->getObjectByUUID(uuid) : nullptr;
         uint16_t objId = refObj ? refObj->id : 0;
         ctx.fileObj.write<uint32_t>(objId);
       } else {

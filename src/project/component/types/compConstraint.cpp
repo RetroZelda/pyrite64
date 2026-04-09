@@ -63,7 +63,7 @@ namespace Project::Component::Constraint
   void build(Object& obj, Entry &entry, Build::SceneCtx &ctx)
   {
     Data &data = *static_cast<Data*>(entry.data.get());
-    auto objRef = ctx.scene->getObjectByUUID(data.objectUUID.value);
+    auto objRef = ctx.scene ? ctx.scene->getObjectByUUID(data.objectUUID.value) : nullptr;
     uint16_t objId = objRef ? objRef->id : 0;
 
     uint8_t flags = 0;
