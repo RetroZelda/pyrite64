@@ -62,4 +62,14 @@ namespace P64
       return ptr;
     }
   };
+
+  struct PrefabRef
+  {
+    uint32_t idx;
+
+    inline uint32_t get()
+    {
+      return idx;
+    }
+  };
 }
