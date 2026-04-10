@@ -138,6 +138,7 @@ void P64::Scene::update(float deltaTime)
     loadObject((uint8_t*&)data.prefabData, [&](Object &obj)
     {
       obj.id = data.objectId;
+      obj.group = data.groupId;
       obj.pos = data.pos;
       obj.scale = data.scale;
       obj.rot = data.rot;
@@ -332,7 +333,8 @@ uint16_t P64::Scene::addObject(
   uint32_t prefabIdx,
   const fm_vec3_t &pos,
   const fm_vec3_t &scale,
-  const fm_quat_t &rot
+  const fm_quat_t &rot,
+  uint16_t desiredGroupId
 ) {
   auto *prefabData = AssetManager::getByIndex(prefabIdx);
   objectsToAdd.push_back({
@@ -340,6 +342,7 @@ uint16_t P64::Scene::addObject(
     .pos = pos,
     .scale = scale,
     .rot = rot,
+    .groupId = desiredGroupId,
     .objectId = ++nextId,
   });
   return nextId;

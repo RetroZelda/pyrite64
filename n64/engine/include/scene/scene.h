@@ -68,6 +68,7 @@ namespace P64
     fm_vec3_t pos{0,0,0};
     fm_vec3_t scale{1,1,1};
     fm_quat_t rot{0,0,0,1};
+    uint16_t groupId{0};
     uint16_t objectId{0};
   };
 
@@ -178,13 +179,15 @@ namespace P64
        * @param pos initial pos (default origin)
        * @param scale initial scale (default 1)
        * @param rot initial rotation (none)
+       * @param desiredGroupId id for the parent object
        * @return ID of the new object
        */
       uint16_t addObject(
         uint32_t prefabIdx,
         const fm_vec3_t &pos = {0,0,0},
         const fm_vec3_t &scale = {1,1,1},
-        const fm_quat_t &rot = {0,0,0,1}
+        const fm_quat_t &rot = {0,0,0,1},
+        uint16_t desiredGroupId = 0
       );
 
       void removeObject(Object &obj);
