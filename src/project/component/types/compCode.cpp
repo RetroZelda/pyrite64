@@ -85,7 +85,7 @@ namespace Project::Component::Code
         ctx.fileObj.write<uint32_t>(objId);
       } else if(field.type == Utils::DataType::PREFAB){
         uint64_t uuid = Utils::parseU64(val);
-        ctx.fileObj.write<uint32_t>(0x4552434B);//ctx.assetUUIDToIdx[uuid]);
+        ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
       } else {
         ctx.fileObj.writeAs(val, field.type);
       }
