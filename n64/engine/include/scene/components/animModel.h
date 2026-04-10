@@ -46,17 +46,31 @@ namespace P64::Comp
 
       T3DAnim* getMainAnim() {
         if (animIdxMain < 0) return nullptr;
-        return &anims[animIdxMain];
+        return anims ? &anims[animIdxMain] : nullptr;
       }
 
       T3DAnim* getBlendAnim() {
         if (animIdxBlend < 0) return nullptr;
-        return &anims[animIdxBlend];
+        return anims ? &anims[animIdxBlend] : nullptr;
       }
 
       T3DAnim* getAnim(int16_t idx) const {
-        return &anims[idx];
+        return anims ? &anims[idx] : nullptr;
       }
+
+      const T3DModel* getModel() const {
+        return model;
+      }
+      const T3DSkeleton& getSkelMain() const {
+        return skelMain;
+      }
+      const T3DSkeleton* getSkelAnim() const {
+        return skelAnim;
+      }
+      const T3DAnim* getAnims() const {
+        return anims;
+      }
+
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData);
 
