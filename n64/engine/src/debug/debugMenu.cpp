@@ -44,6 +44,7 @@ namespace Debug::Menu
 
     int32_t getVariableSaveByteSize()
     {
+#if DEBUG_MENU_ENABLED
         if(totalSizeCache < 0)
         {
             totalSizeCache = 0;
@@ -62,10 +63,14 @@ namespace Debug::Menu
             totalSizeCache +=  sizeof(uint32_t) * 2; // count the header and the size data
         }
         return totalSizeCache;
+#else
+        return 0;
+#endif // DEBUG_MENU_ENABLED
     }
 
     int32_t saveVariables(size_t offset)
     {
+#if DEBUG_MENU_ENABLED
         eeprom_write_bytes(&DATA_HEADER, offset, sizeof(uint32_t));
         int32_t writtenDataCount = offset + sizeof(uint32_t) * 2; // *2 so we can write the total size of the data we wrote
         for (const RegisteredDebugVar& var : Debug::Menu::DebugRegistry::Get().GetAllVars())
@@ -88,10 +93,14 @@ namespace Debug::Menu
         writtenDataCount -= offset;
         eeprom_write_bytes(&writtenDataCount, sizeof(uint32_t), sizeof(uint32_t));
         return writtenDataCount;
+#else
+        return 0;
+#endif // DEBUG_MENU_ENABLED
     }
 
     int32_t loadVariables(size_t offset)
     {
+#if DEBUG_MENU_ENABLED
         uint32_t headerValue = 0;
         int32_t dataToRead = 0;
         eeprom_read_bytes(&headerValue, offset, sizeof(uint32_t));
@@ -138,6 +147,9 @@ namespace Debug::Menu
 
 
         return readDataCount - offset;
+#else
+        return 0;
+#endif // DEBUG_MENU_ENABLED
     }
 
 };
