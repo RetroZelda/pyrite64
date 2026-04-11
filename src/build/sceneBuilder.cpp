@@ -5,6 +5,7 @@
 #include "projectBuilder.h"
 #include "../utils/string.h"
 #include <filesystem>
+#include <algorithm>
 
 #include "../utils/binaryFile.h"
 #include "../utils/fs.h"
@@ -147,7 +148,18 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
   ctx.fileScene.write<uint8_t>(0); // padding
 
   ctx.fileScene.write<uint16_t>(sc->conf.audioFreq.value);
-  ctx.fileScene.write<uint16_t>(0); // padding
+  ctx.fileScene.write<uint16_t>(std::clamp(sc->conf.physicsTickRate.value, 1, 100));
+
+  const auto &gravity = sc->conf.gravity.value;
+  ctx.fileScene.write<float>(gravity.x);
+  ctx.fileScene.write<float>(gravity.y);
+  ctx.fileScene.write<float>(gravity.z);
+  ctx.fileScene.write<float>(std::max(sc->conf.physicsScale.value, 0.001f));
+
+  ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.velocitySolverIterations.value, 1, 32));
+  ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.positionSolverIterations.value, 1, 32));
+  ctx.fileScene.write<uint8_t>(sc->conf.interpolatePhysicsTransforms.value ? 1 : 0);
+  ctx.fileScene.write<uint8_t>(0); // padding
 
   // Layer::Setup
   ctx.fileScene.write<uint8_t>(sc->conf.layers3D.size());

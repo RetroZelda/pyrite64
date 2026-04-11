@@ -1,130 +1,115 @@
 /**
-* @copyright 2023 - Max Bebök
-* @license MIT
-*/
+ * @file shapes.h
+ * @author Kevin Reier <https://github.com/Byterset>
+ * @brief Defines the Properties and helper functions of the different basic Collider shapes
+ */
 #pragma once
-#include <functional>
-#include <t3d/t3dmath.h>
-#include "lib/math.h"
-#include "flags.h"
 
-namespace P64
-{
-  class Object;
-}
+#include "vec_math.h"
+#include <cmath>
+#include "aabb.h"
 
-namespace P64::Coll
-{
-  struct MeshInstance;
-  struct BCS;
+namespace P64::Coll {
 
-  struct IVec3 {
-    int16_t v[3]{};
-  };
+  // ── Sphere ──────────────────────────────────────────────────────────
 
-  struct AABB
-  {
-    IVec3 min{};
-    IVec3 max{};
+  /// @brief Defines the Sphere Collider Type
+  struct SphereShape {
+    float radius; // Radius of the Sphere
 
-    bool vsAABB(const AABB &other) const;
-    bool vsRay(const fm_vec3_t &pos, const fm_vec3_t &dir) const;
-    bool vsPoint(const IVec3 &pos) const;
-  };
-  static_assert(sizeof(AABB) == (6 * sizeof(int16_t)));
-
-  struct BCS
-  {
-    fm_vec3_t center{}; // center of shape
-    fm_vec3_t halfExtend{}; // half extend from center, spheres only use X
-    fm_vec3_t velocity{}; // current velocity (will be mul. by delta-time internally)
-    fm_vec3_t parentOffset{}; // offset to apply when updating the object it's attached to
-
-    P64::Object *obj{};
-
-    uint8_t maskRead{0};
-    uint8_t maskWrite{0};
-    uint8_t flags{0};
-    uint8_t hitTriTypes{0}; // mask of triangle types the sphere last collided with
-
-    [[nodiscard]] constexpr float getRadius() const {
-      return halfExtend.y;
-    }
-    [[nodiscard]] constexpr float getRadius2() const {
-      return halfExtend.y * halfExtend.y;
+    fm_vec3_t support(const fm_vec3_t &dir) const {
+      fm_vec3_t unit;
+      fm_vec3_norm(&unit, &dir);
+      if(vec3IsZero(unit)) unit = VEC3_UP;
+      return fm_vec3_t{{unit.x * radius, unit.y * radius, unit.z * radius}};
     }
 
-    [[nodiscard]] constexpr bool isTrigger() const {
-      return (flags & BCSFlags::TRIGGER);
+    AABB boundingBox(const fm_quat_t * /*rotation*/) const {
+      return {fm_vec3_t{{-radius, -radius, -radius}}, fm_vec3_t{{radius, radius, radius}}};
     }
 
-    [[nodiscard]] constexpr bool isSolid() const {
-      return !isTrigger();
-    }
-
-    [[nodiscard]] constexpr bool isFixed() const {
-      return flags & BCSFlags::FIXED_XYZ;
-    }
-
-    [[nodiscard]] fm_vec3_t getMinAABB() const {
-      return center - halfExtend;
-    }
-    [[nodiscard]] fm_vec3_t getMaxAABB() const {
-      return center + halfExtend;
-    }
-
-    BCS operator*(float scale) const {
-      return {
-        .center = center * scale,
-        .halfExtend = halfExtend * scale
-      };
-    }
-
-    AABB toAABB() const {
-      auto min = center - halfExtend;
-      auto max = center + halfExtend;
-      return {
-        .min = {{ (int16_t)min.v[0], (int16_t)min.v[1], (int16_t)min.v[2] }},
-        .max = {{ (int16_t)max.v[0], (int16_t)max.v[1], (int16_t)max.v[2] }}
-      };
+    fm_vec3_t inertiaTensor(float mass) const {
+      float inertia = 0.4f * mass * radius * radius;
+      return fm_vec3_t{{inertia, inertia, inertia}};
     }
   };
 
-  struct CollInfo
-  {
-    fm_vec3_t penetration{};
-    fm_vec3_t floorWallAngle{};
-    MeshInstance* meshInstance{};
-    int collCount{};
-  };
+  // ── Box ─────────────────────────────────────────────────────────────
 
-  struct RaycastRes {
-    fm_vec3_t hitPos{};
-    fm_vec3_t normal{};
-    uint32_t flags{};
+  /// @brief Defines the Box (OBB) Collider Type
+  struct BoxShape {
+    fm_vec3_t halfSize; // Vector describing half the size in every axis
 
-    [[nodiscard]] bool hasResult() const {
-      return flags != 0;
+    fm_vec3_t support(const fm_vec3_t &dir) const {
+      return fm_vec3_t{{
+        copysignf(halfSize.x, dir.x),
+        copysignf(halfSize.y, dir.y),
+        copysignf(halfSize.z, dir.z)
+      }};
     }
+
+    AABB boundingBox(const fm_quat_t *q) const;
+    fm_vec3_t inertiaTensor(float mass) const;
   };
 
-  struct Triangle
-  {
-    fm_vec3_t normal{};
-    fm_vec3_t* v[3]{};
-    AABB aabb{};
+  // ── Capsule ─────────────────────────────────────────────────────────
+
+  /// @brief Defines the Capsule Collider Type
+  struct CapsuleShape {
+    float radius; // The radius of the capsule
+    float innerHalfHeight; // Half the height of the cylindrical part of the capsule (without the hemisphere ends)
+
+    fm_vec3_t support(const fm_vec3_t &dir) const {
+      fm_vec3_t unit;
+      fm_vec3_norm(&unit, &dir);
+      if(vec3IsZero(unit)) unit = VEC3_UP;
+
+      float y = copysignf(innerHalfHeight, unit.y);
+      return fm_vec3_t{{unit.x * radius, unit.y * radius + y, unit.z * radius}};
+    }
+
+    AABB boundingBox(const fm_quat_t *q) const;
+    fm_vec3_t inertiaTensor(float mass) const;
   };
 
-  struct Triangle2D {
-    fm_vec2_t v[3]{};
+  // ── Cylinder ────────────────────────────────────────────────────────
+
+  /// @brief Defines the Cylinder Collider Type
+  struct CylinderShape {
+    float radius; // The radius of the cylinder
+    float halfHeight; // Half of the height of the cylinder
+
+    fm_vec3_t support(const fm_vec3_t &dir) const;
+    AABB boundingBox(const fm_quat_t *q) const;
+    fm_vec3_t inertiaTensor(float mass) const;
   };
 
-  struct CollEvent
-  {
-    BCS* selfBCS{};
-    BCS* otherBCS{};
+  // ── Cone ────────────────────────────────────────────────────────────
 
-    MeshInstance* selfMesh{};
-    MeshInstance* otherMesh{};
+  /// @brief Defines the Cone Collider Type
+
+  struct ConeShape {
+    float radius; // The radius of the base of the cone
+    float halfHeight; // Half of the height of the cone from base to top
+
+    fm_vec3_t support(const fm_vec3_t &dir) const;
+    AABB boundingBox(const fm_quat_t *q) const;
+    fm_vec3_t inertiaTensor(float mass) const;
   };
-}
+
+  // ── Pyramid ─────────────────────────────────────────────────────────
+
+  /// @brief Defines the Pyramid Collider Type
+  ///
+  /// Hint: The Base of a Pyramid Collider does not need to be square
+  struct PyramidShape {
+    float baseHalfWidthX;
+    float baseHalfWidthZ;
+    float halfHeight;
+
+    fm_vec3_t support(const fm_vec3_t &dir) const;
+    AABB boundingBox(const fm_quat_t *q) const;
+    fm_vec3_t inertiaTensor(float mass) const;
+  };
+
+} // namespace P64::Coll

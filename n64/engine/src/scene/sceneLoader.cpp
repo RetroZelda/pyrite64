@@ -200,20 +200,23 @@ void P64::Scene::loadScene() {
       loadObject(objFile, {}, true);
     }
 
+    // Resolve effective active state for the full hierarchy before deferred
+    // component init so disabled parents/groups do not register physics data.
+    std::function<void(uint16_t, bool)> applyHierarchyActiveState = [&](uint16_t parentId, bool parentsActive) {
+      for(auto obj : objects)
+      {
+        if(obj->group != parentId) continue;
+
+        obj->setFlag(ObjectFlags::PARENTS_ACTIVE, parentsActive);
+        applyHierarchyActiveState(obj->id, obj->isEnabled());
+      }
+    };
+
+    applyHierarchyActiveState(0, true);
+
     // run component init only after all objects are registered in the scene
     runPendingComponentInit();
 
     free(objFileStart);
-  }
-
-  // update groups
-  for(auto obj : objects)
-  {
-    if(obj->hasChildren())
-    {
-      bool groupActive = obj->isSelfEnabled();
-      debugf("Updating group %d | a:%d\n", obj->id, groupActive);
-      setGroupEnabled(obj->id, groupActive);
-    }
   }
 }

@@ -76,23 +76,18 @@ add_executable(n64_engine
         engine/include/scene/components/audio2d.h
         engine/src/scene/components/audio2d.cpp
         engine/src/scene/components/collBody.cpp
-        engine/include/collision/flags.h
+        engine/src/scene/components/rigidBody.cpp
         engine/src/renderer/hdr/rspHDR.cpp
         engine/include/renderer/particles/ptxSprites.h
         engine/src/renderer/particles/ptxSystem.cpp
         engine/src/renderer/particles/ptxSprites.cpp
-        engine/src/collision/resolver.cpp
-        engine/src/collision/mesh.cpp
-        engine/src/collision/meshLoader.cpp
         engine/src/lib/math.cpp
         engine/src/debug/overlay.cpp
         engine/include/collision/attach.h
         engine/src/collision/attach.cpp
         engine/src/scene/componentTable.cpp
-        engine/src/collision/scene.cpp
         engine/src/scene/components/culling.cpp
         engine/include/renderer/material.h
-        engine/src/collision/shapes.cpp
         engine/src/scene/components/constraint.cpp
         engine/src/scene/components/camera.cpp
         engine/src/scene/components/nodeGraph.cpp

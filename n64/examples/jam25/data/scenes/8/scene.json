@@ -14,6 +14,12 @@
     "fbWidth": 320,
     "filter": 1,
     "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
+    "interpolatePhysicsTransforms": true,
     "layers2D": [
       {
         "blender": 0,
@@ -85,7 +91,11 @@
       }
     ],
     "name": "Map-Paper",
-    "renderPipeline": 0
+    "physicsScale": 16.0,
+    "physicsTickRate": 50,
+    "positionSolverIterations": 6,
+    "renderPipeline": 0,
+    "velocitySolverIterations": 7
   },
   "graph": {
     "children": [
@@ -339,6 +349,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 2076335883273801836
             },
@@ -418,6 +430,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block00",
                   "modelUUID": 13215419027432979116
                 },
@@ -537,7 +551,7 @@
                     "setLighting": false,
                     "setPrim": true
                   },
-                  "meshFilter": "block01",
+                  "meshFilter": "block01@cardb",
                   "model": 13215419027432979116
                 },
                 "id": 1,
@@ -546,6 +560,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01",
                   "modelUUID": 13215419027432979116
                 },
@@ -658,6 +674,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block02",
                   "modelUUID": 13215419027432979116
                 },
@@ -753,6 +771,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block00",
                   "modelUUID": 13215419027432979116
                 },
@@ -913,6 +933,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01",
                   "modelUUID": 13215419027432979116
                 },
@@ -1154,6 +1176,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01",
                   "modelUUID": 13215419027432979116
                 },
@@ -1395,6 +1419,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01",
                   "modelUUID": 13215419027432979116
                 },
@@ -1442,9 +1468,9 @@
             "id": 95,
             "name": "Platform Gap",
             "pos": [
-              -851.1611328125,
+              -851.125,
               0.0,
-              -251.50082397460938
+              -251.5
             ],
             "propOverrides": {},
             "proportionalScale": false,
@@ -2142,6 +2168,8 @@
               },
               {
                 "data": {
+                  "maskRead": 1,
+                  "maskWrite": 8,
                   "meshFilter": "seesaw",
                   "modelUUID": 13215419027432979116
                 },
@@ -2264,7 +2292,7 @@
                 ],
                 "propOverrides": {
                   "11272843812465326562": "1:1.000000,1.000000,1.000000",
-                  "13911321452997764027": "1:-0.212616,92.185135,-413.220795",
+                  "13911321452997764027": "1:-0.000000,90.000000,-410.000000",
                   "9467563534403475754": "0:0.000000,0.000000,0.000000,1.000000"
                 },
                 "proportionalScale": false,
@@ -2461,6 +2489,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "blockRot00",
                   "modelUUID": 13215419027432979116
                 },
@@ -2813,6 +2843,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "block01",
               "modelUUID": 13215419027432979116
             },
@@ -2843,7 +2875,7 @@
         "id": 28,
         "name": "Platform Gap (26)",
         "pos": [
-          -845.9656372070313,
+          -850.0,
           10.0,
           10.0
         ],
@@ -2851,9 +2883,9 @@
         "proportionalScale": false,
         "rot": [
           0.0,
-          0.7071066498756409,
           0.0,
-          0.70710688829422
+          0.0,
+          1.0
         ],
         "scale": [
           1.2899593114852905,
@@ -3700,6 +3732,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "blockRot00",
               "modelUUID": 13215419027432979116
             },
@@ -3809,6 +3843,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "center",
                   "modelUUID": 13215419027432979116
                 },
@@ -4117,6 +4153,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "blockRot00",
               "modelUUID": 13215419027432979116
             },
@@ -4258,6 +4296,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 14061694646240479583
             },
@@ -4421,6 +4461,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 14061694646240479583
             },
@@ -4769,6 +4811,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "blockRot01",
               "modelUUID": 13215419027432979116
             },
@@ -4816,9 +4860,9 @@
         "id": 75,
         "name": "CylinderRot Top 0",
         "pos": [
-          -247.4713592529297,
+          -247.5,
           495.0,
-          -876.618896484375
+          -877.5
         ],
         "propOverrides": {},
         "proportionalScale": false,
@@ -5062,6 +5106,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "blockRot00",
               "modelUUID": 13215419027432979116
             },
@@ -5171,6 +5217,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "",
                   "modelUUID": 14061694646240479583
                 },
@@ -5286,6 +5334,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "",
                   "modelUUID": 14061694646240479583
                 },
@@ -5616,6 +5666,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "blockRot00",
                   "modelUUID": 13215419027432979116
                 },
@@ -5821,6 +5873,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 14061694646240479583
             },
