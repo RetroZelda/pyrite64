@@ -34,6 +34,11 @@ namespace P64::Script::__UUID__
     // this is called once every frame, put your main logic here
   }
 
+  void fixedUpdate(Object& obj, Data *data, float fixedDeltaTime)
+  {
+    // this is called on the fixed physics timestep before collision/physics are stepped
+  }
+
   void draw(Object& obj, Data *data, float deltaTime)
   {
     // this is called once every frame, and for every active camera.

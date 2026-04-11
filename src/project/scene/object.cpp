@@ -9,6 +9,8 @@
 #include "../../utils/hash.h"
 #include "../../utils/jsonBuilder.h"
 #include "../../utils/json.h"
+#include "../../utils/logger.h"
+#include "../../editor/imgui/notification.h"
 
 using Builder = Utils::JSON::Builder;
 
@@ -61,6 +63,22 @@ namespace
 void Project::Object::addComponent(int compID) {
   if (compID < 0 || compID >= static_cast<int>(Component::TABLE.size()))return;
   auto &def = Component::TABLE[compID];
+
+  // if components already contains a rigidbody don't add another one and show an error message instead
+  if (def.id == 11) // rigidbody
+  { 
+    for (const auto &comp : components)
+    {
+      auto &compDef = Component::TABLE[comp.id];
+      
+      if (compDef.id == 11)
+      {
+        Utils::Logger::log("Object '" + name + "' already has a Rigidbody component, cannot add another one", Utils::Logger::LEVEL_ERROR);
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "Object '" + name + "' already has a Rigidbody component, cannot add another one");
+        return;
+      }
+    }
+  }
 
   components.push_back({
     .id = compID,

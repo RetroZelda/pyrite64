@@ -3,7 +3,7 @@
 * @license MIT
 */
 #pragma once
-#include "mesh.h"
+#include "mesh_collider.h"
 
 namespace P64::Coll
 {
@@ -32,8 +32,8 @@ namespace P64::Coll
 
     /**
      * sets a new mesh to track.
-     * @param meshInst
+     * @param meshCollider
      */
-    void setReference(const MeshInstance *meshInst);
+    void setReference(const Coll::MeshCollider *meshCollider);
   };
 }

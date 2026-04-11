@@ -14,6 +14,11 @@
     "fbWidth": 320,
     "filter": 1,
     "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
     "layers2D": [
       {
         "blender": 0,
@@ -101,7 +106,11 @@
       }
     ],
     "name": "Map-Ending",
-    "renderPipeline": 2
+    "physicsScale": 16.0,
+    "physicsTickRate": 50,
+    "positionSolverIterations": 6,
+    "renderPipeline": 2,
+    "velocitySolverIterations": 7
   },
   "graph": {
     "children": [
@@ -513,6 +522,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "",
                   "modelUUID": 6985508143550202785
                 },
@@ -737,6 +748,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "",
                   "modelUUID": 15813250936274457379
                 },
@@ -903,6 +916,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 18042696417486669443
             },
@@ -1015,6 +1030,8 @@
           },
           {
             "data": {
+              "maskRead": 255,
+              "maskWrite": 255,
               "meshFilter": "",
               "modelUUID": 18042696417486669443
             },
@@ -1110,6 +1127,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 18042696417486669443
             },
@@ -1140,9 +1159,9 @@
         "id": 20,
         "name": "platform",
         "pos": [
-          102.04335021972656,
-          623.9027099609375,
-          1239.462890625
+          100.0,
+          620.0,
+          1240.0
         ],
         "propOverrides": {},
         "proportionalScale": false,
@@ -1205,6 +1224,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 18042696417486669443
             },

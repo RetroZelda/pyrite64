@@ -97,4 +97,17 @@ void Editor::SceneInspector::draw() {
 
     ImTable::end();
   }
+
+  if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen))
+  {
+    ImTable::start("Physics");
+
+    ImTable::add("Tick Rate", scene->conf.physicsTickRate.value);
+    ImTable::add("Interpolate Transforms", scene->conf.interpolatePhysicsTransforms.value);
+    ImTable::add("Gravity", scene->conf.gravity.value);
+    ImTable::add("Physics Scale", scene->conf.physicsScale.value);
+    ImTable::add("Solver Vel. Iterations", scene->conf.velocitySolverIterations.value);
+    ImTable::add("Solver Pos. Iterations", scene->conf.positionSolverIterations.value);
+    ImTable::end();
+  }
 }

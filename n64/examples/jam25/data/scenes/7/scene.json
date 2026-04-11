@@ -14,6 +14,11 @@
     "fbWidth": 320,
     "filter": 1,
     "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
     "layers2D": [
       {
         "blender": 0,
@@ -85,7 +90,11 @@
       }
     ],
     "name": "Map-Intro",
-    "renderPipeline": 0
+    "physicsScale": 16.0,
+    "physicsTickRate": 60,
+    "positionSolverIterations": 6,
+    "renderPipeline": 0,
+    "velocitySolverIterations": 7
   },
   "graph": {
     "children": [
@@ -463,6 +472,8 @@
           },
           {
             "data": {
+              "maskRead": 0,
+              "maskWrite": 8,
               "meshFilter": "",
               "modelUUID": 9875025468559567941
             },
@@ -1845,6 +1856,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "coll",
                   "modelUUID": 244801699526709921
                 },
@@ -2092,6 +2105,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01_coll",
                   "modelUUID": 2790078963282814027
                 },
@@ -2340,6 +2355,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block01_coll",
                   "modelUUID": 2790078963282814027
                 },
@@ -2667,6 +2684,8 @@
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "iso00",
                   "modelUUID": 2790078963282814027
                 },
@@ -2680,6 +2699,7 @@
                     "axisX": "0",
                     "axisY": "1",
                     "axisZ": "0",
+                    "radius": "",
                     "speed": "0.5",
                     "type": "0"
                   },
@@ -3219,6 +3239,51 @@
                 "selectable": true,
                 "uuid": 2868184783,
                 "uuidPrefab": 1066636061
+              },
+              {
+                "children": [],
+                "components": [
+                  {
+                    "data": {
+                      "objectUUID": 0,
+                      "type": 1,
+                      "usePos": false,
+                      "useRot": false,
+                      "useScale": false
+                    },
+                    "id": 7,
+                    "name": "Constraint",
+                    "uuid": 11076820534920371011
+                  }
+                ],
+                "enabled": true,
+                "id": 18,
+                "name": "Coin (18)",
+                "pos": [
+                  30.0,
+                  0.0,
+                  0.0
+                ],
+                "propOverrides": {
+                  "11272843812465326562": "1:1.000000,1.000000,1.000000",
+                  "13911321452997764027": "1:285.075989,9.563898,559.171631",
+                  "9467563534403475754": "0:0.000000,0.000000,0.000000,1.000000"
+                },
+                "proportionalScale": false,
+                "rot": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "selectable": true,
+                "uuid": 3900369638,
+                "uuidPrefab": 1066636061
               }
             ],
             "components": [
@@ -3229,24 +3294,24 @@
                   "material": {
                     "depth": 0,
                     "env": [
-                      1.0,
-                      1.0,
-                      1.0,
-                      1.0
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0
                     ],
                     "fresnel": 0,
                     "fresnelColor": [
-                      1.0,
-                      1.0,
-                      1.0,
-                      1.0
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0
                     ],
-                    "lighting": true,
+                    "lighting": false,
                     "prim": [
-                      1.0,
-                      1.0,
-                      1.0,
-                      1.0
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0
                     ],
                     "setDepth": false,
                     "setEnv": false,
@@ -3258,17 +3323,19 @@
                   "model": 2790078963282814027
                 },
                 "id": 1,
-                "name": "Model",
-                "uuid": 9285043598254134544
+                "name": "Model (Static)",
+                "uuid": 11961205767780036253
               },
               {
                 "data": {
+                  "maskRead": 0,
+                  "maskWrite": 8,
                   "meshFilter": "block00_coll",
                   "modelUUID": 2790078963282814027
                 },
                 "id": 4,
                 "name": "Collision-Mesh",
-                "uuid": 4432304565998402894
+                "uuid": 15718330991551356186
               },
               {
                 "data": {
@@ -3279,34 +3346,16 @@
                 },
                 "id": 0,
                 "name": "Code",
-                "uuid": 950572236386669393
-              },
-              {
-                "data": {
-                  "halfExtend": [
-                    155.0,
-                    155.0,
-                    155.0
-                  ],
-                  "offset": [
-                    0.0,
-                    0.0,
-                    0.0
-                  ],
-                  "type": 1
-                },
-                "id": 8,
-                "name": "Culling",
-                "uuid": 2310040173833469337
+                "uuid": 10655101963096991217
               }
             ],
             "enabled": true,
-            "id": 15,
-            "name": "Rot Obj 1",
+            "id": 76,
+            "name": "New Object",
             "pos": [
-              -0.4111518859863281,
+              -0.41100001335144043,
               0.0,
-              561.8561401367188
+              561.8560180664063
             ],
             "propOverrides": {},
             "proportionalScale": false,
@@ -3322,14 +3371,14 @@
               2.0
             ],
             "selectable": true,
-            "uuid": 1371816841,
+            "uuid": 2958020465,
             "uuidPrefab": 0
           }
         ],
         "components": [],
         "enabled": true,
-        "id": 14,
-        "name": "Void Rot / Back",
+        "id": 22,
+        "name": "Void (22)",
         "pos": [
           -203.84361267089844,
           34.22049331665039,

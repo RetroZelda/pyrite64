@@ -28,6 +28,8 @@ namespace Project::Component::CollMesh
     Shared::MeshFilter filter{};
     Renderer::Object obj3D{};
     Utils::AABB aabb{};
+    PROP_U32(maskRead);
+    PROP_U32(maskWrite);
   };
 
   std::shared_ptr<void> init(Object &obj) {
@@ -40,6 +42,8 @@ namespace Project::Component::CollMesh
     return Utils::JSON::Builder{}
       .set(data.modelUUID)
       .set(data.filter.meshFilter)
+      .set(data.maskRead)
+      .set(data.maskWrite)
       .doc;
   }
 
@@ -47,6 +51,8 @@ namespace Project::Component::CollMesh
     auto data = std::make_shared<Data>();
     Utils::JSON::readProp(doc, data->modelUUID);
     Utils::JSON::readProp(doc, data->filter.meshFilter);
+    Utils::JSON::readProp(doc, data->maskRead, 0x00u);
+    Utils::JSON::readProp(doc, data->maskWrite, 0x00u);
     return data;
   }
 
@@ -103,6 +109,9 @@ namespace Project::Component::CollMesh
 
     ctx.fileObj.write<uint16_t>(id);
     ctx.fileObj.write<uint8_t>(flags);
+    ctx.fileObj.write<uint8_t>(data.maskRead.resolve(obj.propOverrides));
+    ctx.fileObj.write<uint8_t>(data.maskWrite.resolve(obj.propOverrides));
+
   }
 
   void draw(Object &obj, Entry &entry)
@@ -114,6 +123,8 @@ namespace Project::Component::CollMesh
 
     if (ImTable::start("Comp", &obj)) {
       ImTable::add("Name", entry.name);
+      ImTable::addBitMask8("Mask Read", data.maskRead.resolve(obj.propOverrides));
+      ImTable::addBitMask8("Mask Write", data.maskWrite.resolve(obj.propOverrides));
       ImTable::add("Model");
       //ImGui::InputScalar("##UUID", ImGuiDataType_U64, &data.scriptUUID);
 

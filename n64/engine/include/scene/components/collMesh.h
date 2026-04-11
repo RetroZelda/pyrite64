@@ -6,7 +6,7 @@
 #include "scene/object.h"
 #include <t3d/t3dmodel.h>
 
-#include "collision/mesh.h"
+#include "collision/mesh_collider.h"
 
 namespace P64::Comp
 {
@@ -14,7 +14,7 @@ namespace P64::Comp
   {
     static constexpr uint32_t ID = 4;
 
-    Coll::MeshInstance meshInstance{};
+    Coll::MeshCollider *meshCollider{nullptr};
     uint8_t flags;
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData);

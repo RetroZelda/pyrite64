@@ -18,6 +18,7 @@ namespace P64
   typedef uint32_t(*FuncGetAllocSize)(void*);
   typedef void(*FuncInitDel)(Object&, void*, void*);
   typedef void(*FuncUpdate)(Object&, void*, float deltaTime);
+  typedef void(*FuncFixedUpdate)(Object&, void*, float fixedDeltaTime);
   typedef void(*FuncDraw)(Object&, void*, float deltaTime);
   typedef void(*FuncOnEvent)(Object&, void*, const ObjectEvent&);
   typedef void(*FuncOnColl)(Object&, void*, const P64::Coll::CollEvent&);
@@ -26,6 +27,7 @@ namespace P64
   {
     FuncInitDel initDel{};
     FuncUpdate update{};
+    FuncFixedUpdate fixedUpdate{};
     FuncDraw draw{};
     FuncOnEvent onEvent{};
     FuncOnColl onColl{};

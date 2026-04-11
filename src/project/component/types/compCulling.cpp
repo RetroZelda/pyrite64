@@ -13,8 +13,6 @@
 #include "../../../renderer/scene.h"
 #include "../../../utils/meshGen.h"
 
-#include "../../../../n64/engine/include/collision/flags.h"
-
 namespace
 {
   constexpr int32_t TYPE_BOX      = 0;
