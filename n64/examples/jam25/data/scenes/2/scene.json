@@ -14,6 +14,11 @@
     "fbWidth": 320,
     "filter": 1,
     "frameLimit": 1,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
     "layers2D": [
       {
         "blender": 0,
@@ -85,7 +90,11 @@
       }
     ],
     "name": "Menu",
-    "renderPipeline": 2
+    "physicsScale": 16.0,
+    "physicsTickRate": 50,
+    "positionSolverIterations": 6,
+    "renderPipeline": 2,
+    "velocitySolverIterations": 7
   },
   "graph": {
     "children": [

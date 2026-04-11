@@ -14,6 +14,11 @@
     "fbWidth": 320,
     "filter": 1,
     "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
     "layers2D": [
       {
         "blender": 0,
@@ -85,7 +90,11 @@
       }
     ],
     "name": "Test-HDR",
-    "renderPipeline": 1
+    "physicsScale": 16.0,
+    "physicsTickRate": 50,
+    "positionSolverIterations": 6,
+    "renderPipeline": 1,
+    "velocitySolverIterations": 7
   },
   "graph": {
     "children": [
@@ -227,6 +236,8 @@
           },
           {
             "data": {
+              "maskRead": 255,
+              "maskWrite": 255,
               "meshFilter": "",
               "modelUUID": 67300967874118795
             },
@@ -288,12 +299,13 @@
           },
           {
             "data": {
+              "bounce": 0.0,
+              "friction": 0.800000011920929,
               "halfExtend": [
                 30.0,
                 30.0,
                 30.0
               ],
-              "isFixed": false,
               "isTrigger": true,
               "maskRead": 1,
               "maskWrite": 1,

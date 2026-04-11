@@ -38,6 +38,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
 
     bool hasInit    = Utils::CPP::hasFunction(src, "void", "init");
     bool hasDestroy = Utils::CPP::hasFunction(src, "void", "destroy");
+    bool hasFixedUpdate = Utils::CPP::hasFunction(src, "void", "fixedUpdate");
     bool hasUpdate  = Utils::CPP::hasFunction(src, "void", "update");
     bool hasDraw    = Utils::CPP::hasFunction(src, "void", "draw");
     bool hasEvent   = Utils::CPP::hasFunction(src, "void", "onEvent");
@@ -52,6 +53,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasInit)srcDecl += "void init(Object& obj, Data *data);\n";
     if(hasDestroy)srcDecl += "void destroy(Object& obj, Data *data);\n";
     if(hasUpdate)srcDecl += "void update(Object& obj, Data *data, float deltaTime);\n";
+    if(hasFixedUpdate)srcDecl += "void fixedUpdate(Object& obj, Data *data, float fixedDeltaTime);\n";
     if(hasDraw)srcDecl += "void draw(Object& obj, Data *data, float deltaTime);\n";
     if(hasEvent)srcDecl += "void onEvent(Object& obj, Data *data, const ObjectEvent& event);\n";
     if(hasColl)srcDecl += "void onCollision(Object& obj, Data *data, const P64::Coll::CollEvent& event);\n";
@@ -61,6 +63,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasInit)srcEntries += " .init = (FuncObjInit)" + uuidStr + "::init,\n";
     if(hasDestroy)srcEntries += " .destroy = (FuncObjInit)" + uuidStr + "::destroy,\n";
     if(hasUpdate)srcEntries += " .update = (FuncObjDataDelta)" + uuidStr + "::update,\n";
+    if(hasFixedUpdate)srcEntries += " .fixedUpdate = (FuncObjDataDelta)" + uuidStr + "::fixedUpdate,\n";
     if(hasDraw)srcEntries += " .draw = (FuncObjDataDelta)" + uuidStr + "::draw,\n";
     if(hasEvent)srcEntries += " .onEvent = (FuncObjDataEvent)" + uuidStr + "::onEvent,\n";
     if(hasColl)srcEntries += " .onColl = (FuncObjDataColl)" + uuidStr + "::onCollision,\n";

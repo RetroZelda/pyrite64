@@ -83,6 +83,9 @@ namespace Project::Component::Code
         auto refObj = ctx.scene ? ctx.scene->getObjectByUUID(uuid) : nullptr;
         uint16_t objId = refObj ? refObj->id : 0;
         ctx.fileObj.write<uint32_t>(objId);
+      } else if(field.type == Utils::DataType::PREFAB){
+        uint64_t uuid = Utils::parseU64(val);
+        ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
       } else {
         ctx.fileObj.writeAs(val, field.type);
       }
@@ -142,6 +145,12 @@ namespace Project::Component::Code
 
             uint32_t uuid = static_cast<uint32_t>(Utils::parseU64(data.args[field.name].value));
             ImTable::addObjectVecComboBox(name, objList, uuid, [&](uint32_t newId) {
+              data.args[field.name].value = std::to_string(newId);
+            });
+          } else if(field.type == Utils::DataType::PREFAB) {
+            const auto &prefabs = ctx.project->getAssets().getTypeEntries(FileType::PREFAB);
+            uint64_t uuid = Utils::parseU64(data.args[field.name].value);
+            ImTable::addAssetVecComboBox(name, prefabs, uuid, [&](uint64_t newId) {
               data.args[field.name].value = std::to_string(newId);
             });
           } else {

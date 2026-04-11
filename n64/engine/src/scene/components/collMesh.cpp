@@ -17,6 +17,8 @@ namespace
   {
     uint16_t assetIdx;
     uint8_t flags;
+    uint8_t maskRead{};
+    uint8_t maskWrite{};
     uint8_t _padding;
   };
 
@@ -34,8 +36,11 @@ namespace P64::Comp
   {
     auto *initData = (InitData*)initData_;
     if (initData == nullptr) {
-      if(data->meshInstance.mesh) {
-        obj.getScene().getCollision().unregisterMesh(&data->meshInstance);
+      if(data->meshCollider) {
+        obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
+        data->meshCollider->destroyData();
+        delete data->meshCollider;
+        data->meshCollider = nullptr;
       }
 
       data->~CollMesh();
@@ -43,22 +48,29 @@ namespace P64::Comp
     }
 
     new(data) CollMesh();
-    //debugf("Mesh: %d | id: %d\n", assetIdx, obj.id);
     data->flags = initData->flags;
 
     void *rawData = AssetManager::getByIndex(initData->assetIdx);
-    data->meshInstance.object = &obj;
-    data->meshInstance.mesh = Coll::Mesh::load(rawData);
-    obj.getScene().getCollision().registerMesh(&data->meshInstance);
+    data->meshCollider = Coll::MeshCollider::createFromRawData(rawData, &obj);
+
+    data->meshCollider->setCollisionMask(initData->maskRead, initData->maskWrite);
+    if(data->meshCollider && obj.isEnabled()) {
+      obj.getScene().getCollision().addMeshCollider(data->meshCollider);
+    }
   }
 
   void CollMesh::onEvent(Object &obj, CollMesh* data, const ObjectEvent &event)
   {
     if(event.type == EVENT_TYPE_DISABLE) {
-      return obj.getScene().getCollision().unregisterMesh(&data->meshInstance);
+      if(data->meshCollider) {
+        obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
+      }
+      return;
     }
     if(event.type == EVENT_TYPE_ENABLE) {
-      obj.getScene().getCollision().registerMesh(&data->meshInstance);
+      if(data->meshCollider) {
+        obj.getScene().getCollision().addMeshCollider(data->meshCollider);
+      }
     }
   }
 

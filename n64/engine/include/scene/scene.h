@@ -5,11 +5,12 @@
 #pragma once
 #include <libdragon.h>
 #include <vector>
+#include <functional>
 
 #include "event.h"
 #include "lighting.h"
 #include "object.h"
-#include "collision/scene.h"
+#include "collision/collision_scene.h"
 #include "lib/types.h"
 #include "renderer/drawLayer.h"
 #include "renderer/pipeline.h"
@@ -57,7 +58,15 @@ namespace P64
     uint8_t padding[1]{};
 
     uint16_t audioFreq{};
-    uint16_t padding2{};
+    uint16_t physicsTickRate{};
+
+    fm_vec3_t gravity{};
+    float physicsScale{};
+
+    uint8_t velocitySolverIterations{};
+    uint8_t positionSolverIterations{};
+    bool interpolatePhysicsTransforms{};
+    uint8_t padding2[1]{};
 
     DrawLayer::Setup layerSetup{};
   };
@@ -96,7 +105,7 @@ namespace P64
       // most scene probably don't exceed that much anyway
       std::array<Object*, 128> idLookup{};
 
-      Coll::Scene collScene{};
+      uint32_t accumulator_ticks{0};
       std::vector<Object*> pendingObjDelete{};
 
       uint32_t eventQueueIdx{0};
@@ -107,6 +116,17 @@ namespace P64
 
       SceneConf conf{};
       uint16_t id;
+
+      /// Saved physics transforms for render interpolation restore
+      struct SavedTransform {
+        Object *obj;
+        fm_vec3_t pos;
+        fm_quat_t rot;
+      };
+      std::vector<SavedTransform> savedTransforms_{};
+
+      void applyRenderInterpolation(float dt);
+      void restoreInterpolatedTransforms();
 
       void loadSceneConfig();
       Object* loadObject(uint8_t* &objFile, std::function<void(Object&)> callback = {}, bool deferComponentInit = false);
@@ -131,7 +151,8 @@ namespace P64
       [[nodiscard]] uint16_t getId() const { return id; }
       [[nodiscard]] Camera* getCamera(uint32_t index = 0) { return cameras[index]; }
       [[nodiscard]] Camera& getActiveCamera() { return *camMain; }
-      Coll::Scene &getCollision() { return collScene; }
+
+      Coll::CollisionScene &getCollision() { return *Coll::collisionSceneGetInstance(); }
 
       void onObjectCollision(const Coll::CollEvent &event);
 

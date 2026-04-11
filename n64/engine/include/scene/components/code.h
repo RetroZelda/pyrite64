@@ -16,10 +16,11 @@ namespace P64::Comp
   {
     static constexpr uint32_t ID = 0;
 
-    static constexpr uint32_t FN_UPDATE = 1 << 0;
-    static constexpr uint32_t FN_DRAW   = 1 << 1;
-    static constexpr uint32_t FN_EVENT  = 1 << 2;
-    static constexpr uint32_t FN_COLL   = 1 << 3;
+    static constexpr uint32_t FN_UPDATE       = 1 << 0;
+    static constexpr uint32_t FN_DRAW         = 1 << 1;
+    static constexpr uint32_t FN_EVENT        = 1 << 2;
+    static constexpr uint32_t FN_COLL         = 1 << 3;
+    static constexpr uint32_t FN_FIXED_UPDATE = 1 << 4;
 
     // store direct pointer to avoid lookup each time
     Script::ScriptEntry *script;
@@ -61,6 +62,7 @@ namespace P64::Comp
       if(data->script->draw) data->usedFunctions |= FN_DRAW;
       if(data->script->onEvent) data->usedFunctions |= FN_EVENT;
       if(data->script->onColl) data->usedFunctions |= FN_COLL;
+      if(data->script->fixedUpdate) data->usedFunctions |= FN_FIXED_UPDATE;
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
@@ -70,6 +72,12 @@ namespace P64::Comp
     static void update(Object& obj, Code* data, float deltaTime) {
       if(data->usedFunctions & FN_UPDATE) {
         data->script->update(obj, data->getCodeData(), deltaTime);
+      }
+    }
+
+    static void fixedUpdate(Object& obj, Code* data, float fixedDeltaTime) {
+      if(data->usedFunctions & FN_FIXED_UPDATE) {
+        data->script->fixedUpdate(obj, data->getCodeData(), fixedDeltaTime);
       }
     }
 

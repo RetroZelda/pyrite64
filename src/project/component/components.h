@@ -76,6 +76,7 @@ namespace Project::Component
   MAKE_COMP(Camera)
   MAKE_COMP(CollMesh)
   MAKE_COMP(CollBody)
+  MAKE_COMP(RigidBody)
   MAKE_COMP(Audio2D)
   MAKE_COMP(Constraint)
   MAKE_COMP(Culling)
@@ -147,14 +148,14 @@ namespace Project::Component
     CompInfo{
       .id = 5,
       .icon = ICON_MDI_CYLINDER " ",
-      .name = "Collision-Body",
+      .name = "Collider",
       .funcInit = CollBody::init,
       .funcDraw = CollBody::draw,
       .funcDrawPost3D = CollBody::draw3D,
       .funcSerialize = CollBody::serialize,
       .funcDeserialize = CollBody::deserialize,
       .funcBuild = CollBody::build,
-      .funcGetAABB = CollBody::getAABB
+      .funcGetAABB = nullptr
     },
     CompInfo{
       .id = 6,
@@ -217,7 +218,19 @@ namespace Project::Component
       .funcDeserialize = AnimModel::deserialize,
       .funcBuild = AnimModel::build,
       .funcGetAABB = AnimModel::getAABB
-    }
+    },
+    CompInfo{
+      .id = 11,
+      .icon = ICON_MDI_CYLINDER " ",
+      .name = "Rigid-Body",
+      .funcInit = RigidBody::init,
+      .funcDraw = RigidBody::draw,
+      .funcDrawPost3D = RigidBody::draw3D,
+      .funcSerialize = RigidBody::serialize,
+      .funcDeserialize = RigidBody::deserialize,
+      .funcBuild = RigidBody::build,
+      .funcGetAABB = nullptr
+    },
   };
 
   extern std::array<CompInfo, TABLE.size()> TABLE_SORTED_BY_NAME;
