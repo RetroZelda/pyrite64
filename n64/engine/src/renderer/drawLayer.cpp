@@ -3,7 +3,6 @@
 * @license MIT
 */
 #include "renderer/drawLayer.h"
-#include "../libdragon/rspq.h"
 #include <array>
 #include <vector>
 #include <t3d/t3d.h>
@@ -12,32 +11,17 @@
 #include "lib/logger.h"
 #include "scene/scene.h"
 
-#define LIBDRAGON_LAYERS 1
-
 namespace
 {
   struct Layer
   {
-    #ifdef LIBDRAGON_LAYERS
-      rspq_queue_t *queue{};
-    #else
-      volatile uint32_t *pointer{};
-      volatile uint32_t *current{};
-      volatile uint32_t *sentinel{};
-    #endif
+    rspq_queue_t *queue{};
   };
 
   constexpr uint32_t LAYER_BUFFER_COUNT = 3;
   std::vector<std::array<Layer, LAYER_BUFFER_COUNT>> layers{};
 
   constinit P64::DrawLayer::Setup *layerSetup{};
-
-  #ifndef LIBDRAGON_LAYERS
-    constexpr uint32_t LAYER_BUFFER_WORDS = 1024;
-    constexpr uint32_t LAYER_BUFFER_WORDS_2D = 1024*2;
-    constinit volatile uint32_t* layerMem{nullptr};
-  #endif
-
   constinit uint8_t frameIdx{0};
   constinit uint8_t currLayerIdx{0};
 }
@@ -53,59 +37,20 @@ void P64::DrawLayer::init(Setup &setup)
   layers = {};
   layers.resize(layerCount-1);
 
-  #ifdef LIBDRAGON_LAYERS
-    Log::info("DrawLayer count: %d", layers.size());
-    for(auto &layer : layers)
-    {
-      for(auto &l : layer) {
-        l.queue = rspq_queue_create();
-      }
+  Log::info("DrawLayer count: %d", layers.size());
+  for(auto &layer : layers)
+  {
+    for(auto &l : layer) {
+      l.queue = rspq_queue_create();
     }
-  #else
-    uint32_t countAlloc3D = setup.layerCount3D-1 + setup.layerCountPtx;
-    size_t allocSize = countAlloc3D * LAYER_BUFFER_WORDS;
-    allocSize += setup.layerCount2D * LAYER_BUFFER_WORDS_2D;
-    allocSize *= (LAYER_BUFFER_COUNT * sizeof(uint32_t));
-
-    Log::info("DrawLayer mem-size: %d bytes", allocSize);
-    layerMem = (volatile uint32_t*)malloc_uncached(allocSize);
-    auto mem = layerMem;
-
-    uint32_t layerIdx = 0;
-    for(auto &layer : layers)
-    {
-      bool is2D = layerIdx >= countAlloc3D;
-      layer.fill({});
-      for(uint32_t i = 0; i < LAYER_BUFFER_COUNT; i++)
-      {
-        layer[i].pointer = mem;
-        layer[i].current = mem;
-        mem += is2D ? LAYER_BUFFER_WORDS_2D : LAYER_BUFFER_WORDS;
-        layer[i].sentinel = mem;
-      }
-      ++layerIdx;
-    }
-  #endif
+  }
 }
 
 void P64::DrawLayer::use(uint32_t idx)
 {
   if(idx == currLayerIdx)return;
 
-  #ifdef LIBDRAGON_LAYERS
-    rspq_queue_switch(idx == 0 ? nullptr : layers[idx-1][frameIdx].queue);
-  #else
-    if(idx == 0)
-    {
-      layers[currLayerIdx-1][frameIdx].current = LD::RSPQ::redirectEnd();
-    } else {
-      LD::RSPQ::redirectStart(
-        layers[idx-1][frameIdx].current,
-        layers[idx-1][frameIdx].sentinel
-      );
-    }
-  #endif
-
+  rspq_queue_switch(idx == 0 ? nullptr : layers[idx-1][frameIdx].queue);
   currLayerIdx = idx;
 }
 
@@ -151,16 +96,10 @@ void P64::DrawLayer::draw(uint32_t layerIdx)
 
   auto &layer = layers[layerIdx-1];
 
-  #ifdef LIBDRAGON_LAYERS
-    //debugf("Draw-Layer: %lu, frame: %lu\n", layerIdx-1, frameIdx);
-    //rspq_queue_debug(layer[frameIdx].queue);
-    rspq_queue_run(layer[frameIdx].queue);
-    //rspq_wait();
-  #else
-    //uint32_t sizeWord = layer[frameIdx].current - layer[frameIdx].pointer;
-    //debugf("Usage Layer %lu: %lu/%d words\n", layerIdx-1, sizeWord, layer[frameIdx].sentinel - layer[frameIdx].pointer);
-    LD::RSPQ::exec(layer[frameIdx].pointer, layer[frameIdx].current);
-  #endif
+  //debugf("Draw-Layer: %lu, frame: %lu\n", layerIdx-1, frameIdx);
+  //rspq_queue_debug(layer[frameIdx].queue);
+  rspq_queue_run(layer[frameIdx].queue);
+  //rspq_wait();
 }
 
 void P64::DrawLayer::draw3D()
@@ -207,31 +146,20 @@ void P64::DrawLayer::nextFrame()
   frameIdx = (frameIdx + 1) % LAYER_BUFFER_COUNT;
   currLayerIdx = 0;
 
-  #ifdef LIBDRAGON_LAYERS
-    for(auto &layer : layers) {
-      rspq_queue_clear(layer[frameIdx].queue);
-    }
-  #else
-    for(auto &layer : layers) {
-      layer[frameIdx].current = layer[frameIdx].pointer;
-    }
-  #endif
+  for(auto &layer : layers) {
+    rspq_queue_clear(layer[frameIdx].queue);
+  }
 }
 
 void P64::DrawLayer::reset()
 {
-  #ifdef LIBDRAGON_LAYERS
-    for(auto &layer : layers)
-    {
-      for(auto &l : layer) {
-        rspq_queue_destroy(l.queue);
-        l.queue = nullptr;
-      }
+  for(auto &layer : layers)
+  {
+    for(auto &l : layer) {
+      rspq_queue_destroy(l.queue);
+      l.queue = nullptr;
     }
-  #else
-    if(layerMem)free_uncached((void*)layerMem);
-    layerMem = nullptr;
-  #endif
+  }
 
   layerSetup = nullptr;
   currLayerIdx = 0;
