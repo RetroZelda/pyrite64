@@ -131,18 +131,22 @@ namespace Debug::Menu
             eeprom_read_bytes(&headerValue, readDataCount, sizeof(uint32_t));
             readDataCount += sizeof(uint32_t);
 
-            RegisteredDebugVar* foundVar = varMap.at(headerValue);
-            #define X(Type, Name) \
-                case Debug::Menu::DebugVarType::Name: {\
-                    eeprom_read_bytes(foundVar->ptr, readDataCount, sizeof(Type));\
-                    readDataCount += sizeof(Type);\
-                } break;
-            switch(foundVar->type)
+            std::unordered_map<uint32_t, RegisteredDebugVar*>::iterator findResult = varMap.find(headerValue);
+            if(findResult != varMap.end())
             {
-                DEBUG_MENU_TYPES
-                default: break;
+                RegisteredDebugVar* foundVar = findResult->second;
+                #define X(Type, Name) \
+                    case Debug::Menu::DebugVarType::Name: {\
+                        eeprom_read_bytes(foundVar->ptr, readDataCount, sizeof(Type));\
+                        readDataCount += sizeof(Type);\
+                    } break;
+                switch(foundVar->type)
+                {
+                    DEBUG_MENU_TYPES
+                    default: break;
+                }
+                #undef X
             }
-            #undef X
         }
 
 

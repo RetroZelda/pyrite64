@@ -180,6 +180,7 @@ namespace {
 
   REGISTER_TWEAKABLE_VAR(bool, "Collision|Mesh",        showCollMesh,  false);
   REGISTER_TWEAKABLE_VAR(bool, "Collision|Colliders",   showColliders,  false);
+  REGISTER_TWEAKABLE_VAR(bool, "Collision|Timings",     showCollTimes, false);
   REGISTER_TWEAKABLE_VAR(bool, "Memory",                matrixDebug,   false);
   REGISTER_TWEAKABLE_VAR(bool, "Frames",                showFrameTime, false);
   REGISTER_TWEAKABLE_VAR(bool, "FPS",                   showFrameRate, false);
@@ -544,15 +545,18 @@ void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
 
   posX = 140;
   posY = 38;
-  for(size_t i = 0; i < std::size(collTimingEntries); ++i) {
-    const CollTimingEntry &entry = collTimingEntries[i];
-    if((i % 2) == 0 && i != 0) {
-      posY += 8;
-    }
+  if(showCollTimes)
+  {
+    for(size_t i = 0; i < std::size(collTimingEntries); ++i) {
+        const CollTimingEntry &entry = collTimingEntries[i];
+        if((i % 2) == 0 && i != 0) {
+        posY += 8;
+        }
 
-    float colX = (i % 2) == 0 ? 140.0f : 228.0f;
-    rdpq_set_prim_color(entry.color);
-    Debug::printf(colX, posY, "%s:%.2f", entry.label, (double)TICKS_TO_US(entry.ticks) / 1000.0);
+        float colX = (i % 2) == 0 ? 140.0f : 228.0f;
+        rdpq_set_prim_color(entry.color);
+        Debug::printf(colX, posY, "%s:%.2f", entry.label, (double)TICKS_TO_US(entry.ticks) / 1000.0);
+    }
   }
 
   rdpq_set_prim_color({0xFF,0xFF,0xFF, 0xFF});

@@ -10,8 +10,10 @@
 
 #if DEBUG_MENU_ENABLED
     #define TWEAKABLE static
+    #define TWEAKABLE_MEMBER_REF(Type) Type&
 #else
     #define TWEAKABLE constexpr static
+    #define TWEAKABLE_MEMBER_REF(Type) const Type
 #endif
 
 namespace Debug::Menu
