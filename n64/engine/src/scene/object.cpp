@@ -36,15 +36,10 @@ void P64::Object::setEnabled(bool isEnabled)
     auto compRefs = getCompRefs();
     for (uint32_t i=0; i<compCount; ++i) {
       const auto &compDef = COMP_TABLE[compRefs[i].type];
-      if(compDef.onEvent)
-      {
-        char* dataPtr = (char*)this + compRefs[i].offset;
-        compDef.onEvent(*this, dataPtr, {
-          .senderId = 0,
-          .type = isEnabledNow ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE,
-          .value = 0
-        });
-      }
+      char* dataPtr = (char*)this + compRefs[i].offset;
+      
+      if(isEnabledNow && compDef.onEnable) compDef.onEnable(*this, dataPtr);
+      else if(!isEnabledNow && compDef.onDisable) compDef.onDisable(*this, dataPtr);
     }
   }
 
@@ -55,7 +50,6 @@ void P64::Object::remove()
 {
   if(flags & ObjectFlags::PENDING_REMOVE)return;
   flags |= ObjectFlags::PENDING_REMOVE;
-  flags &= ~ObjectFlags::ACTIVE;
   SceneManager::getCurrent().removeObject(*this);
 }
 

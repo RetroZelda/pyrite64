@@ -242,7 +242,7 @@ void P64::Scene::update(float deltaTime)
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)
   {
-    if(!obj->isEnabled())continue;
+    if(!obj->isEnabled() || obj->isPendingRemove()) continue;
 
     auto compRefs = obj->getCompRefs();
 

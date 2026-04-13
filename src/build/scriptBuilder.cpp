@@ -38,6 +38,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
 
     bool hasInit    = Utils::CPP::hasFunction(src, "void", "init");
     bool hasDestroy = Utils::CPP::hasFunction(src, "void", "destroy");
+    bool hasEnable  = Utils::CPP::hasFunction(src, "void", "onEnable");
+    bool hasDisable = Utils::CPP::hasFunction(src, "void", "onDisable");
     bool hasFixedUpdate = Utils::CPP::hasFunction(src, "void", "fixedUpdate");
     bool hasUpdate  = Utils::CPP::hasFunction(src, "void", "update");
     bool hasDraw    = Utils::CPP::hasFunction(src, "void", "draw");
@@ -52,6 +54,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     srcDecl += " extern uint16_t DATA_SIZE;\n";
     if(hasInit)srcDecl += "void init(Object& obj, Data *data);\n";
     if(hasDestroy)srcDecl += "void destroy(Object& obj, Data *data);\n";
+    if(hasEnable)srcDecl += "void onEnable(Object& obj, Data *data);\n";
+    if(hasDisable)srcDecl += "void onDisable(Object& obj, Data *data);\n";
     if(hasUpdate)srcDecl += "void update(Object& obj, Data *data, float deltaTime);\n";
     if(hasFixedUpdate)srcDecl += "void fixedUpdate(Object& obj, Data *data, float fixedDeltaTime);\n";
     if(hasDraw)srcDecl += "void draw(Object& obj, Data *data, float deltaTime);\n";
@@ -62,6 +66,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     srcEntries += "{\n";
     if(hasInit)srcEntries += " .init = (FuncObjInit)" + uuidStr + "::init,\n";
     if(hasDestroy)srcEntries += " .destroy = (FuncObjInit)" + uuidStr + "::destroy,\n";
+    if(hasEnable)srcEntries += " .onEnable = (FuncObjInit)" + uuidStr + "::onEnable,\n";
+    if(hasDisable)srcEntries += " .onDisable = (FuncObjInit)" + uuidStr + "::onDisable,\n";
     if(hasUpdate)srcEntries += " .update = (FuncObjDataDelta)" + uuidStr + "::update,\n";
     if(hasFixedUpdate)srcEntries += " .fixedUpdate = (FuncObjDataDelta)" + uuidStr + "::fixedUpdate,\n";
     if(hasDraw)srcEntries += " .draw = (FuncObjDataDelta)" + uuidStr + "::draw,\n";

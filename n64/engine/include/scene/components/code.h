@@ -4,6 +4,7 @@
 */
 #pragma once
 #include "script/scriptTable.h"
+#include "scene/object.h"
 
 namespace Coll
 {
@@ -21,6 +22,8 @@ namespace P64::Comp
     static constexpr uint32_t FN_EVENT        = 1 << 2;
     static constexpr uint32_t FN_COLL         = 1 << 3;
     static constexpr uint32_t FN_FIXED_UPDATE = 1 << 4;
+    static constexpr uint32_t FN_ON_ENABLE    = 1 << 5;
+    static constexpr uint32_t FN_ON_DISABLE   = 1 << 6;
 
     // store direct pointer to avoid lookup each time
     Script::ScriptEntry *script;
@@ -40,10 +43,13 @@ namespace P64::Comp
       return sizeof(Code) + dataSize;
     }
 
-    static void initDelete([[maybe_unused]] Object& obj, Code* data, uint16_t* initData)
-    {
+    static void initDelete(Object& obj, Code* data, uint16_t* initData) {
       if (initData == nullptr)
       {
+        if(obj.isEnabled() && (data->usedFunctions & FN_ON_DISABLE)) {
+          data->script->onDisable(obj, data->getCodeData());
+        }
+
         if(data->script->destroy) {
           data->script->destroy(obj, data->getCodeData());
         }
@@ -63,9 +69,27 @@ namespace P64::Comp
       if(data->script->onEvent) data->usedFunctions |= FN_EVENT;
       if(data->script->onColl) data->usedFunctions |= FN_COLL;
       if(data->script->fixedUpdate) data->usedFunctions |= FN_FIXED_UPDATE;
+      if(data->script->onEnable) data->usedFunctions |= FN_ON_ENABLE;
+      if(data->script->onDisable) data->usedFunctions |= FN_ON_DISABLE;
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
+      }
+
+      if(obj.isEnabled() && (data->usedFunctions & FN_ON_ENABLE)) {
+        data->script->onEnable(obj, data->getCodeData());
+      }
+    }
+
+    static void onEnable(Object& obj, Code* data) {
+      if(data->usedFunctions & FN_ON_ENABLE) {
+        data->script->onEnable(obj, data->getCodeData());
+      }
+    }
+
+    static void onDisable(Object& obj, Code* data) {
+      if(data->usedFunctions & FN_ON_DISABLE) {
+        data->script->onDisable(obj, data->getCodeData());
       }
     }
 
