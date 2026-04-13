@@ -191,6 +191,24 @@ If you do have non-trivial data types as variables, please also manually destruc
 Accessing other components of the object is not safe, as they might have been destroyed already.\
 The object itself is still valid however, this can be useful to e.g. send an event to other objects.
 
+#### onEnable
+```cpp
+void onEnable(Object& obj, Data *data)
+```
+Called every time the object is enabled and after `init` if enabled in the scene.\
+This is the place to utilize initialized varaibles from `init` and/or register into external systems
+
+Accessing other components of the object is generally safe, although they might not be enabled themselves yet.
+
+#### onDisable
+```cpp
+void onDisable(Object& obj, Data *data)
+```
+Called every time the object is disabled and before `destroy` if enabled in the scene.\
+This is the place to utilize unregister from external systems that may have been initialized in `onEnable`
+
+Accessing other components of the object is generally safe, although they might still be enabled.
+
 #### Update
 ```cpp
 void update(Object& obj, Data *data, float deltaTime)
@@ -271,8 +289,6 @@ void fixedUpdate(Object &obj, Data *data, float fixedDeltaTime)
   }
 }
 ```
-
-
 
 #### Draw
 ```cpp
