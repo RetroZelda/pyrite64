@@ -150,6 +150,7 @@ namespace P64
       };
       std::unordered_map<uint8_t, ComponentTicks> ticksComponents;
       std::unordered_map<uint8_t, ComponentTicks> ticksScripts;
+      std::unordered_map<std::string, ComponentTicks> ticksUserGlobals; // filled out project-side for global scripts that may be running 
 
       explicit Scene(uint16_t sceneId, Scene** ref);
       ~Scene();

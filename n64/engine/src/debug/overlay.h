@@ -9,6 +9,7 @@ namespace P64::Debug::Overlay
 {
   extern uint64_t ticksSelf;
   extern bool useCpuAvg;
+  extern bool useDetailedTotals;
 
   void init();
   void draw(surface_t* surf);
@@ -19,4 +20,5 @@ namespace P64::Debug::Overlay
   void ovlCPU();
   void ovlComponents();
   void ovlScripts();
+  void ovlUserGlobals();
 }

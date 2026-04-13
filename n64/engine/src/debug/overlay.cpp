@@ -27,6 +27,7 @@ namespace P64::SceneManager
 
 constinit uint64_t P64::Debug::Overlay::ticksSelf = 0;
 constinit bool P64::Debug::Overlay::useCpuAvg = true;
+constinit bool P64::Debug::Overlay::useDetailedTotals = false;
 
 namespace {
   #include "overlay/ovlColors.h"
@@ -45,6 +46,7 @@ namespace {
   constinit P64::Debug::Menu menuCPUGeneral{};
   constinit P64::Debug::Menu menuCPUComponents{};
   constinit P64::Debug::Menu menuCPUScripts{};
+  constinit P64::Debug::Menu menuCPUUserGlobals{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
@@ -95,10 +97,12 @@ void P64::Debug::Overlay::init()
   menuCPU.items.clear();
   menuCPUComponents.items.clear();
   menuCPUScripts.items.clear();
+  menuCPUUserGlobals.items.clear();
 
   menuCPU.add("General", menuCPUGeneral)
          .add("Components", menuCPUComponents)
          .add("Scripts", menuCPUScripts)
+         .add("UserGlobals", menuCPUUserGlobals)
          .add("Average", useCpuAvg);
 
   menu.add("Scenes", menuScenes)
@@ -127,8 +131,16 @@ void P64::Debug::Overlay::init()
   menuMemory.onDraw = ovlMemory;
 
   menuCPUGeneral.onDraw = ovlCPU;
+  
   menuCPUComponents.onDraw = ovlComponents;
+  menuCPUComponents.add("Show Totals", useDetailedTotals);
+
   menuCPUScripts.onDraw = ovlScripts;
+  menuCPUScripts.add("Show Totals", useDetailedTotals);
+
+  menuCPUUserGlobals.onDraw = ovlUserGlobals;
+  menuCPUUserGlobals.add("Show Totals", useDetailedTotals);
+
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";
