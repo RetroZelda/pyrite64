@@ -54,23 +54,19 @@ namespace P64::Comp
     data->meshCollider = Coll::MeshCollider::createFromRawData(rawData, &obj);
 
     data->meshCollider->setCollisionMask(initData->maskRead, initData->maskWrite);
-    if(data->meshCollider && obj.isEnabled()) {
+  }
+
+  void CollMesh::onEnable(Object& obj, CollMesh* data)
+  {
+    if(data->meshCollider) {
       obj.getScene().getCollision().addMeshCollider(data->meshCollider);
     }
   }
 
-  void CollMesh::onEvent(Object &obj, CollMesh* data, const ObjectEvent &event)
+  void CollMesh::onDisable(Object& obj, CollMesh* data)
   {
-    if(event.type == EVENT_TYPE_DISABLE) {
-      if(data->meshCollider) {
-        obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
-      }
-      return;
-    }
-    if(event.type == EVENT_TYPE_ENABLE) {
-      if(data->meshCollider) {
-        obj.getScene().getCollision().addMeshCollider(data->meshCollider);
-      }
+    if(data->meshCollider) {
+      obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
     }
   }
 

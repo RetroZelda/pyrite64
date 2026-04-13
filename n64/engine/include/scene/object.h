@@ -123,6 +123,14 @@ namespace P64
       }
 
       /**
+       * Check if the object is pending removal.
+       * @return true enabled
+       */
+      [[nodiscard]] bool isPendingRemove() const {
+        return (flags & ObjectFlags::PENDING_REMOVE) == ObjectFlags::PENDING_REMOVE;
+      }
+
+      /**
        * Changes the state of the object to be enabled or disabled.
        * Prefer this over changing flags directly, as components may need to be notified.
        * @param isEnabled true to enable, false to disable

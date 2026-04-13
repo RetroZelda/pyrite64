@@ -44,14 +44,10 @@ namespace
     auto compRefs = obj.getCompRefs();
     for (uint32_t i=0; i<obj.compCount; ++i) {
       const auto &compDef = P64::COMP_TABLE[compRefs[i].type];
-      if(!compDef.onEvent) continue;
-
+      
       char* dataPtr = (char*)&obj + compRefs[i].offset;
-      compDef.onEvent(obj, dataPtr, {
-        .senderId = 0,
-        .type = enabled ? P64::EVENT_TYPE_ENABLE : P64::EVENT_TYPE_DISABLE,
-        .value = 0
-      });
+      if(enabled && compDef.onEnable) compDef.onEnable(obj, dataPtr);
+      else if(!enabled && compDef.onDisable) compDef.onDisable(obj, dataPtr);
     }
   }
 
@@ -243,7 +239,7 @@ void P64::Scene::update(float deltaTime)
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)
   {
-    if(!obj->isEnabled())continue;
+    if(!obj->isEnabled() || obj->isPendingRemove()) continue;
 
     auto compRefs = obj->getCompRefs();
 

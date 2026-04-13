@@ -191,6 +191,24 @@ If you do have non-trivial data types as variables, please also manually destruc
 Accessing other components of the object is not safe, as they might have been destroyed already.\
 The object itself is still valid however, this can be useful to e.g. send an event to other objects.
 
+#### onEnable
+```cpp
+void onEnable(Object& obj, Data *data)
+```
+Called every time the object is enabled and after `init` if enabled in the scene.\
+This is the place to utilize initialized varaibles from `init` and/or register into external systems
+
+Accessing other components of the object is generally safe, although they might not be enabled themselves yet.
+
+#### onDisable
+```cpp
+void onDisable(Object& obj, Data *data)
+```
+Called every time the object is disabled and before `destroy` if enabled in the scene.\
+This is the place to utilize unregister from external systems that may have been initialized in `onEnable`
+
+Accessing other components of the object is generally safe, although they might still be enabled.
+
 #### Update
 ```cpp
 void update(Object& obj, Data *data, float deltaTime)
@@ -272,8 +290,6 @@ void fixedUpdate(Object &obj, Data *data, float fixedDeltaTime)
 }
 ```
 
-
-
 #### Draw
 ```cpp
 void draw(Object& obj, Data *data, float deltaTime)
@@ -320,7 +336,7 @@ struct ObjectEvent
 };
 ```
 Besides the sender, you will get a type and value.\
-There are a few builtin types (e.g. object disable / enable), so it must be explicitly checked.
+There are a few builtin types, so it must be explicitly checked.
 
 The safe range for user-defined types is from `EVENT_TYPE_CUSTOM_START` to `EVENT_TYPE_CUSTOM_END`.\
 This starts from `0`, whereas builtin types reserve the end of the range. 
@@ -331,11 +347,7 @@ void onEvent(Object& obj, Data *data, const ObjectEvent &event)
 {
   switch(event.type)
   {
-    case EVENT_TYPE_ENABLE: // object got enabled
-    break;
-    case EVENT_TYPE_DISABLE: // object got disabled
-    break;
-    // you can check for your own custom types here too
+    // you can check for your own custom types here
   }
 }
 ```

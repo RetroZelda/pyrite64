@@ -17,6 +17,8 @@ namespace P64
 
   typedef uint32_t(*FuncGetAllocSize)(void*);
   typedef void(*FuncInitDel)(Object&, void*, void*);
+  typedef void(*FuncEnabled)(Object&, void*);
+  typedef void(*FuncDisabled)(Object&, void*);
   typedef void(*FuncUpdate)(Object&, void*, float deltaTime);
   typedef void(*FuncFixedUpdate)(Object&, void*, float fixedDeltaTime);
   typedef void(*FuncDraw)(Object&, void*, float deltaTime);
@@ -26,6 +28,8 @@ namespace P64
   struct ComponentDef
   {
     FuncInitDel initDel{};
+    FuncEnabled onEnable{};
+    FuncDisabled onDisable{};
     FuncUpdate update{};
     FuncFixedUpdate fixedUpdate{};
     FuncDraw draw{};

@@ -81,19 +81,16 @@ namespace P64::Comp
         data->collider.pyramidShape().halfHeight = scaledHalfExtend.y;
       break;
     }
-    if (obj.isEnabled()) {
-      coll.addCollider(&data->collider);
-    }
   }
 
-  void CollBody::onEvent(Object &obj, CollBody* data, const ObjectEvent &event)
+  void CollBody::onEnable(Object& obj, CollBody* data)
   {
-    if(event.type == EVENT_TYPE_DISABLE) {
-      return obj.getScene().getCollision().removeCollider(&data->collider);
-    }
-    if(event.type == EVENT_TYPE_ENABLE) {
-      return obj.getScene().getCollision().addCollider(&data->collider);
-    }
+    return obj.getScene().getCollision().addCollider(&data->collider);
+  }
+
+  void CollBody::onDisable(Object& obj, CollBody* data)
+  {
+    return obj.getScene().getCollision().removeCollider(&data->collider);
   }
 
   void CollBody::update(Object &obj, CollBody* data, float deltaTime)
