@@ -108,6 +108,8 @@ namespace
 
   static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_component_update_map;
   static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_component_draw_map;
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_update_map;
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_draw_map;
 }
 
 void P64::Debug::Overlay::ovlCPU()
@@ -254,5 +256,80 @@ void P64::Debug::Overlay::ovlComponents()
 
     if (!entries.empty())
       printTable(DEBUG_CHAR_SQUARE " Comp Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
+}
+
+namespace P64::Script {
+	extern const char* const scriptNames[];
+    extern const size_t numNames;
+};
+void P64::Debug::Overlay::ovlScripts()
+{
+  auto &scene = SceneManager::getCurrent();
+
+  setColor();
+  uint16_t posY = 54;
+
+  // Push new values each frame (only if the script actually ran)
+  for (const auto& [scriptId, tickData] : scene.ticksScripts)
+  {
+    if (tickData.count > 0)
+    {
+      sw_script_update_map[scriptId].push(tickData.update / tickData.count);
+      sw_script_draw_map[scriptId].push(tickData.draw / tickData.count);
+    }
+  }
+
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  // Script name lookup (add real names to the switch as you discover IDs)
+  auto getScriptLabel = [](uint8_t id) -> const char* {
+    
+    if(id < P64::Script::numNames) return P64::Script::scriptNames[id];
+
+    // fallback to cached "Script X"
+    static std::unordered_map<uint8_t, std::string> nameCache;
+    auto it = nameCache.find(id);
+    if (it == nameCache.end())
+    {
+      nameCache[id] = "Script " + std::to_string(id);
+      it = nameCache.find(id);
+    }
+    return it->second.c_str();
+  };
+
+  // === Script Update Table (left side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_script_update_map.size());
+
+    for (const auto& [id, sw] : sw_script_update_map)
+    {
+      entries.push_back({getScriptLabel(id), get(sw)});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Script Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
+
+  // === Script Draw Table (right side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_script_draw_map.size());
+
+    for (const auto& [id, sw] : sw_script_draw_map)
+    {
+      entries.push_back({getScriptLabel(id), get(sw)});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Script Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
   }
 }

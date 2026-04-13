@@ -18,4 +18,5 @@ namespace P64::Debug::Overlay
   void ovlMemory();
   void ovlCPU();
   void ovlComponents();
+  void ovlScripts();
 }

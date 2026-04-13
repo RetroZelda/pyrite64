@@ -33,6 +33,8 @@
 #include "scene/componentTable.h"
 #include "script/globalScript.h"
 
+#include "scene/components/code.h"
+
 namespace
 {
   uint16_t nextId = 0xFF;
@@ -240,6 +242,7 @@ void P64::Scene::update(float deltaTime)
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
 
   ticksComponents.clear();
+  ticksScripts.clear();
   uint64_t componentTicksStart, componentTicksEnd;
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)
@@ -259,6 +262,15 @@ void P64::Scene::update(float deltaTime)
       ComponentTicks& componentTickCounter = ticksComponents[compRefs[i].type];
       componentTickCounter.update += (componentTicksEnd - componentTicksStart);
       componentTickCounter.count += 1;
+
+      // hackily handle scripts
+      if(compRefs[i].type == 0)
+      {
+        P64::Comp::Code* codeData = reinterpret_cast<P64::Comp::Code*>(dataPtr);
+        ComponentTicks& scriptTickCounter = ticksScripts[codeData->index];
+        scriptTickCounter.update += (componentTicksEnd - componentTicksStart);
+        scriptTickCounter.count += 1;
+      }
     }
   }
 
@@ -357,6 +369,16 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
           componentTicksEnd = get_ticks();
           ComponentTicks& componentTickCounter = ticksComponents[compRefs[i].type];
           componentTickCounter.draw += (componentTicksEnd - componentTicksStart);
+
+
+            // hackily handle scripts
+            if(compRefs[i].type == 0)
+            {
+                P64::Comp::Code* codeData = reinterpret_cast<P64::Comp::Code*>(dataPtr);
+                ComponentTicks& scriptTickCounter = ticksScripts[codeData->index];
+                scriptTickCounter.draw += (componentTicksEnd - componentTicksStart);
+                scriptTickCounter.count += 1;
+            }
         }
       }
 

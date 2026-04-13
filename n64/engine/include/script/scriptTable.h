@@ -32,3 +32,8 @@ namespace P64::Script
   uint16_t getCodeSizeByIndex(uint32_t idx);
   NodeGraph::GraphFunc getGraphFuncByUUID(uint64_t uuid);
 }
+
+namespace P64::Script {
+    extern const char* const scriptNames[];
+    extern const size_t numNames;
+}

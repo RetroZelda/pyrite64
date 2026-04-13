@@ -148,6 +148,7 @@ namespace P64
         uint64_t count{0u};
       };
       std::unordered_map<uint8_t, ComponentTicks> ticksComponents;
+      std::unordered_map<uint8_t, ComponentTicks> ticksScripts;
 
       explicit Scene(uint16_t sceneId, Scene** ref);
       ~Scene();

@@ -30,6 +30,9 @@ namespace P64::Comp
     // the latter is very likely since many scripts will not have a "draw" function for example.
     uint32_t usedFunctions;
 
+    // We generally dont want this.  This is just here for telemetry to grab for per-script profiling
+    uint32_t index;
+
     inline void* getCodeData() {
       return (char*)this + sizeof(Code);
     };
@@ -51,6 +54,7 @@ namespace P64::Comp
       }
 
       data->usedFunctions = 0;
+      data->index = initData[0];
       data->script = &Script::getCodeByIndex(initData[0]);
 
       auto dataSize = Script::getCodeSizeByIndex(initData[0]);
