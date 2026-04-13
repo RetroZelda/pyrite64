@@ -9,6 +9,9 @@
 #include <t3d/t3d.h>
 
 #include "scene/scene.h"
+
+#include <malloc.h>
+
 #include "scene/globalState.h"
 #include "collision/mesh_collider.h"
 #include "vi/swapChain.h"
@@ -19,6 +22,7 @@
 #include "audio/audioManager.h"
 #include "../audio/audioManagerPrivate.h"
 #include "../debug/overlay.h"
+#include "debug/debugMenu.h"
 
 #include "renderer/pipeline.h"
 #include "renderer/pipelineHDRBloom.h"
@@ -80,6 +84,7 @@ P64::Scene::Scene(uint16_t sceneId, Scene** ref)
 {
   if(ref)*ref = this;
   Debug::init();
+  Debug::Overlay::init();
 
   loadSceneConfig();
   P64::AudioManager::init(conf.audioFreq);
@@ -262,6 +267,8 @@ void P64::Scene::update(float deltaTime)
     std::erase_if(savedTransforms_, [&](const SavedTransform &st) { return st.obj == obj; });
     std::erase(objects, obj);
     obj->~Object();
+
+    memObjects -= malloc_usable_size(obj);
     free(obj);
   }
   pendingObjDelete.clear();

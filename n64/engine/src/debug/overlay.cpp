@@ -4,202 +4,119 @@
 */
 #include "overlay.h"
 
+#include <cstring>
+
 #include "debug/debugDraw.h"
 #include "debug/debugMenu.h"
 #include "scene/scene.h"
 #include "vi/swapChain.h"
 #include "audio/audioManager.h"
-#include "lib/matrixManager.h"
-#include "lib/memory.h"
-#include "lib/hash.h"
 
 #include <vector>
 #include <string>
-#include <variant>
 #include <filesystem>
 
+#include "../../include/debug/menu.h"
 #include "../audio/audioManagerPrivate.h"
+#include "lib/memory.h"
 
 namespace P64::SceneManager
 {
   extern const char* SCENE_NAMES[];
 }
 
-// ==============================================
-// Tree-based Menu system (single root)
-// ==============================================
-
-// Generate MenuItemType from the exact same list as DebugVarType
-#define X(Type, Name) Name,
-enum class MenuItemType : uint8_t {
-    DEBUG_MENU_TYPES
-    ACTION
-};
-#undef X
-
-struct MenuItem {
-    std::string text{};
-    Debug::Menu::MenuValue value{};
-    Debug::Menu::MenuValue step{};
-    MenuItemType type = MenuItemType::ACTION;
-    std::function<void(MenuItem&)> onChange;
-};
-
-struct Menu {
-    std::string title = "Debug";
-    Menu* parent = nullptr;
-    std::vector<MenuItem> items{};
-    std::vector<Menu> children{};
-    uint32_t currIndex = 0;
-};
+constinit uint64_t P64::Debug::Overlay::ticksSelf = 0;
+constinit bool P64::Debug::Overlay::useCpuAvg = true;
 
 namespace {
-  constexpr uint32_t SCREEN_HEIGHT = 240;
-  constexpr uint32_t SCREEN_WIDTH = 320;
+  #include "overlay/ovlColors.h"
 
   constexpr float barWidth = 280.0f;
   constexpr float barHeight = 3.0f;
   constexpr float barRefTimeMs = 1000.0f / 30.0f; // FPS
+  constexpr float barRefBytes = 1024 * 1024 * 8; // 8mb
 
-  constexpr color_t COLOR_COLL_DETECT{ 0x00, 0xAA, 0x22, 0xFF};
-  constexpr color_t COLOR_COLL_DETECT_MESH{0x00, 0x88, 0xEE, 0xFF};
-  constexpr color_t COLOR_COLL{0x22,0xFF,0x00, 0xFF};
-  constexpr color_t COLOR_COLL_WAKE{0x00, 0x88, 0xCC, 0xFF};
-  constexpr color_t COLOR_COLL_WORLD{0x00, 0xCC, 0x88, 0xFF};
-  constexpr color_t COLOR_COLL_INTEGRATE_VEL{0x66, 0xCC, 0x00, 0xFF};
-  constexpr color_t COLOR_COLL_REFRESH{0xCC, 0xCC, 0x00, 0xFF};
-  constexpr color_t COLOR_COLL_PRESOLVE{0xFF, 0xA0, 0x00, 0xFF};
-  constexpr color_t COLOR_COLL_WARM{0xFF, 0x66, 0x00, 0xFF};
-  constexpr color_t COLOR_COLL_VEL_SOLVE{0xFF, 0x22, 0x22, 0xFF};
-  constexpr color_t COLOR_COLL_INTEGRATE_POS{0xCC, 0x33, 0x88, 0xFF};
-  constexpr color_t COLOR_COLL_POS_SOLVE{0x88, 0x44, 0xCC, 0xFF};
-  constexpr color_t COLOR_COLL_FINALIZE{0x66, 0x66, 0x66, 0xFF};
-  constexpr color_t COLOR_ACTOR_UPDATE{0xAA,0,0, 0xFF};
-  constexpr color_t COLOR_GLOBAL_UPDATE{0x33,0x33,0x33, 0xFF};
-  constexpr color_t COLOR_SCENE_DRAW{0xFF,0x80,0x10, 0xFF};
-  constexpr color_t COLOR_GLOBAL_DRAW{0x33,0x33,0x33, 0xFF};
-  constexpr color_t COLOR_AUDIO{0x43, 0x52, 0xFF, 0xFF};
-
-  struct CollTimingEntry {
-    const char *label{};
-    uint64_t ticks{};
-    color_t color{};
-  };
-
-  constinit Menu menu{};
-  Menu* currentMenu = nullptr;
-
-  constinit T3DMetrics *metrics = nullptr;
-  
-  uint64_t ticksSelf = 0;
+  constinit P64::Debug::Menu menu{};
+  constinit P64::Debug::Menu menuScenes{};
+  constinit P64::Debug::Menu menuColl{};
+  constinit P64::Debug::Menu menuAudio{};
+  constinit P64::Debug::Menu menuMemory{};
+  constinit P64::Debug::Menu menuCPU{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
-    return (float)(timeMs / (double)barRefTimeMs) * barWidth;
+    return (float)(timeMs * (1.0 / (double)barRefTimeMs)) * barWidth;
   }
 
-  float frameTimeScale = 2;
-
-  std::vector<std::string> sceneNames{};
-
-  float ticksToOffset(uint32_t ticks) {
-    float timeOffX = TICKS_TO_US((uint64_t)ticks) / 1000.0f;
-    return timeOffX * frameTimeScale;
-  };
-
-  // -------------------------------------------------------------------------
-  // Helper: create the correct submenu tree from a | separated path
-  //         AND automatically add "< Back >" to every non-root submenu
-  // -------------------------------------------------------------------------
-  Menu* findOrCreateSubmenu(Menu& root, std::string path)
-  {
-    Menu* current = &root;
-    size_t pos = 0;
-
-    while ((pos = path.find('|')) != std::string::npos)
-    {
-      std::string submenuName = path.substr(0, pos);
-      path.erase(0, pos + 1);
-
-      bool found = false;
-      for (auto& child : current->children)
-      {
-        if (child.title == submenuName)
-        {
-          current = &child;
-          found = true;
-          break;
-        }
-      }
-
-      if (!found)
-      {
-        current->children.emplace_back();
-        Menu& newMenu = current->children.back();
-        newMenu.title = submenuName;
-        newMenu.parent = current;
-        current = &newMenu;
-      }
-    }
-
-    return current;
+  constexpr float bytesToWidth(size_t bytes) {
+    double ratio = (double)bytes * (1.0 / (double)barRefBytes);
+    return (float)ratio * barWidth;
   }
 
-  void addRegisteredDebugVarsToMenu(Menu& m)
-  {
-    for (const auto& var : Debug::Menu::DebugRegistry::Get().GetAllVars())
-    {
-      Menu* targetMenu = findOrCreateSubmenu(m, var.path);
-
-      // Extract only the final leaf name for display (full path is kept in the submenu hierarchy)
-      std::string fullPath = var.path;
-      size_t lastPipe = fullPath.find_last_of('|');
-      std::string displayName = (lastPipe == std::string::npos)
-                                ? fullPath
-                                : fullPath.substr(lastPipe + 1);
-
-      #define X(Type, Name) \
-      if (var.type == Debug::Menu::DebugVarType::Name) { \
-        Type* ptr = static_cast<Type*>(var.ptr); \
-        targetMenu->items.push_back({ \
-          displayName, \
-          Debug::Menu::MenuValue{*ptr}, \
-          var.step, \
-          MenuItemType::Name, \
-          [ptr](MenuItem& item) { *ptr = std::get<Type>(item.value); } \
-        }); \
-      }
-      DEBUG_MENU_TYPES
-      #undef X
-    }
-  }
-
-  void addActionItem(Menu &m, const char* name, std::function<void(MenuItem&)> action) {
-    m.items.push_back({std::string(name), Debug::Menu::MenuValue{}, Debug::Menu::MenuValue{}, MenuItemType::ACTION, action});
-  }
-
-  REGISTER_TWEAKABLE_VAR(bool, "Collision|Mesh",        showCollMesh,  false);
-  REGISTER_TWEAKABLE_VAR(bool, "Collision|Colliders",   showColliders,  false);
-  REGISTER_TWEAKABLE_VAR(bool, "Memory",                matrixDebug,   false);
-  REGISTER_TWEAKABLE_VAR(bool, "Frames",                showFrameTime, false);
-  REGISTER_TWEAKABLE_VAR(bool, "FPS",                   showFrameRate, false);
-  REGISTER_TWEAKABLE_VAR(bool, "Debug Shapes",          showDebugDraws, false);
+  bool showCollMesh = false;
+  bool showColliders = false;
+  bool showFrameTime = false;
+  bool showBarCPU = true;
+  bool showBarRAM = true;
 
   bool isVisible = false;
-  bool didInit = false;
-  bool isVarDirty = false;
 }
 
-void Debug::Overlay::toggle()
+void P64::Debug::Overlay::toggle()
 {
   isVisible = !isVisible;
 }
 
 namespace fs = std::filesystem;
 
-void Debug::Overlay::init()
+void P64::Debug::Overlay::init()
 {
-  sceneNames = {};
+  auto &scene = P64::SceneManager::getCurrent();
+
+  for(auto &item : menu.items) {
+    if(item.type == MenuItemType::SUBMENU) {
+      if(item.getMenu()) {
+        if(menu.activSubMenu == item.getMenu()) {
+          menu.activSubMenu = nullptr;
+        }
+        delete item.getMenu();
+      }
+    }
+  }
+
+  menu.items.clear();
+  menuColl.items.clear();
+  menuScenes.items.clear();
+  menuAudio.items.clear();
+  menuMemory.items.clear();
+  menuCPU.items.clear();
+
+  menu.add("Scenes", menuScenes)
+      .add("CPU", menuCPU)
+      .add("Collision", menuColl)
+      .add("Audio", menuAudio)
+      .add("Memory", menuMemory)
+      .add("Bar CPU", showBarCPU)
+      .add("Bar RAM", showBarRAM)
+      .add("FPS", showFrameTime)
+    ;
+
+  menuColl
+    .add("Show Obj.", showColliders)
+    .add("Show Mesh", showCollMesh)
+    .add("Ticks", scene.getConf().physicsTickRate, 1, 120, 1)
+    .add("Iter. Pos", scene.getConf().positionSolverIterations, 1, 20, 1)
+    .add("Iter. Vel", scene.getConf().velocitySolverIterations, 1, 20, 1)
+    .add("Interp.", scene.getConf().interpolatePhysicsTransforms)
+  ;
+
+  menuAudio.onDraw = ovlAudio;
+  menuAudio.add("Freq.", scene.getConf().audioFreq, 8000, 48000, 0);
+  menuAudio.add("Volume", P64::AudioManager::masterVol, 0.0f, 1.0f, 0.05f);
+
+  menuMemory.onDraw = ovlMemory;
+  menuCPU.onDraw = ovlCPU;
+  menuCPU.add("Average", useCpuAvg);
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";
@@ -209,446 +126,132 @@ void Debug::Overlay::init()
     std::string name{dir.d_name};
     if(name[0] == 's' && name.length() == 5) {
       auto id = std::stoi(name.substr(1));
-      sceneNames.push_back(name.substr(1) + " - " + P64::SceneManager::SCENE_NAMES[id-1]);
+      menuScenes.add(P64::SceneManager::SCENE_NAMES[id-1], [id]([[maybe_unused]] auto &item) {
+        SceneManager::load(id);
+      });
     }
     res = dir_findnext(BASE_DIR, &dir);
   }
 }
 
-static void setMenuHeirarchy(Menu& m, Menu* parent = nullptr)
+P64::Debug::Menu& P64::Debug::Overlay::addCustomMenu(const char* name)
 {
-    m.parent = parent;
-    for (auto& child : m.children)
-    {
-        setMenuHeirarchy(child, &m);
-    }
+  auto m = new Menu();
+  menu.add(name, *m);
+  menu.items.back().value = m;
+  return *m;
 }
 
-static void buildDebugMenu()
+void P64::Debug::Overlay::removeCustomMenu(const char* name)
 {
-  menu.title = "Debug";
-  menu.parent = nullptr;
-  menu.currIndex = 0;
-
-  // Scenes child menu should be above the variables
-  menu.children.emplace_back();
-  Menu& scenesMenu = menu.children.back();
-  scenesMenu.title = "Scenes";
-  scenesMenu.parent = &menu;
-  scenesMenu.currIndex = 0;
-
-  for(auto &sceneName : sceneNames)
-  {
-    addActionItem(scenesMenu, sceneName.c_str(), [&sceneName](MenuItem&) {
-      uint32_t sceneId = std::stoi(sceneName.substr(1));
-      P64::SceneManager::load(sceneId);
-    });
-  }
-
-  addRegisteredDebugVarsToMenu(menu);
-  setMenuHeirarchy(menu, nullptr);
-  currentMenu = &menu;
-}
-
-static void updateDebugMenu()
-{
-  joypad_buttons_t btn = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-  joypad_buttons_t held = joypad_get_buttons_held(JOYPAD_PORT_1);
-
-  const size_t numItems = currentMenu->items.size();
-  const size_t numChildren = currentMenu->children.size();
-  const size_t totalEntries = numItems + numChildren;
-  const size_t parentOffset = currentMenu->parent ? 1 : 0;
-
-  size_t idx = currentMenu->currIndex;
-  if(btn.d_up) 
-  {
-    if(currentMenu->currIndex-- == 0) currentMenu->currIndex = totalEntries + parentOffset - 1;
-  }
-  else if(btn.d_down) 
-  {
-    // holding L will return us to the root
-    if(held.l)
-    {
-        while(currentMenu->parent) currentMenu = currentMenu->parent;
-        return;
+  for(auto it = menu.items.begin(); it != menu.items.end(); ++it) {
+    if(it->type == MenuItemType::SUBMENU && std::strcmp(it->text, name) == 0) {
+      if(it->getMenu())delete it->getMenu();
+      menu.items.erase(it);
+      break;
     }
-    if(++currentMenu->currIndex >= (totalEntries + parentOffset)) currentMenu->currIndex = 0;
-  }
-  else if(btn.d_left || btn.d_right)
-  {
-    if(currentMenu->parent)
-    {
-        if(idx == 0)
-        {
-            if(btn.d_left) currentMenu = currentMenu->parent;
-            return;
-        }
-        --idx;
-    }
-    
-    if(idx < numChildren)
-    {
-        if(btn.d_left)
-        {
-            currentMenu->currIndex = 0;
-        }
-        else
-        {
-            currentMenu = &currentMenu->children[idx];
-        }
-        return;
-    }
-    else if(idx >= numChildren)
-    {
-        size_t itemIdx = idx - numChildren;
-        MenuItem& item = currentMenu->items[itemIdx];
-
-        if(item.type < MenuItemType::ACTION) // its a variable type
-        {
-            std::visit([&](auto& v) 
-            {
-                using T = std::decay_t<decltype(v)>;
-
-                if constexpr (std::is_same_v<T, std::monostate>)
-                {
-                    return;
-                }
-                else if constexpr (std::is_same_v<T, bool>)
-                {
-                    v = !v;
-                }
-                else
-                {
-                    if (btn.d_left)  v -= std::get<T>(item.step);
-                    if (btn.d_right) v += std::get<T>(item.step);
-                }
-                isVarDirty = true;
-            }, item.value);
-
-            if(item.onChange) 
-                item.onChange(item);
-        }
-        else if(item.type == MenuItemType::ACTION)
-        {
-            if(btn.d_right && item.onChange)
-            {
-                item.onChange(item);
-            }
-        }
-    }
-  }
-
-  if(isVarDirty && Debug::Menu::getAutomaticSaveOffset() >= 0 && !eeprom_is_busy())
-  {
-    Debug::Menu::saveVariables(Debug::Menu::getAutomaticSaveOffset());
-    isVarDirty = false;
   }
 }
 
-void Debug::Overlay::draw(P64::Scene &scene, surface_t* surf)
+void P64::Debug::Overlay::draw(surface_t* surf)
 {
-  if(!isVisible)
-  {
-    if(showDebugDraws)
-    {
-        Debug::draw(surf);
-    }
-    if(showFrameRate)
-    {
-        //Debug::printStart();
-        //Debug::printf(20, 16, "%.2f\n", (double)P64::VI::SwapChain::getFPS());
-        //Debug::printf(20, 16+8, "%d / %d\n", metrics->trisPostCull, metrics->trisPreCull);
-        
-        rdpq_sync_pipe();
-        Debug::printStart();
-        Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
-    }
+  if(showFrameTime) {
+    Debug::printStart();
+    isMonospace = true;
+    Debug::printf(24, 22, "%.2f", (double)P64::VI::SwapChain::getFPS());
+    isMonospace = false;
+  }
+
+  if(!isVisible) {
     return;
   }
 
-  if(!metrics)metrics = (T3DMetrics*)malloc_uncached(sizeof(T3DMetrics));
-  t3d_metrics_fetch(metrics); // @TODO: remove
-
-  if(!didInit) {
-    init();
-    didInit = true;
-  }
-
-  if(currentMenu == nullptr) {
-    buildDebugMenu();
-    return; // skip drawing on the first frame to avoid handling input that toggled the menu and move the cursor unexpectedly
-  }
-
+  auto &scene = SceneManager::getCurrent();
   auto &collScene = scene.getCollision();
   uint64_t newTicksSelf = get_user_ticks();
   MEMORY_BARRIER();
 
-  updateDebugMenu();
-
   Debug::draw(surf);
-
-  Debug::printStart();
-  if(eeprom_is_busy())
-  {
-    Debug::printf(250, 230, "Saving...");
-  }
+  menu.update();
 
   collScene.debugDraw(showCollMesh, showColliders);
 
-  float posX = 16;
-  float posY = 130;
+  Debug::printStart();
 
-  if(showFrameTime) {
-    rdpq_sync_pipe();
+  heap_stats_t heapStats;
+  sys_get_heap_stats(&heapStats);
 
-    constexpr uint32_t fbCount = 3;
-    float viBarWidth = 300;
+  rdpq_set_prim_color({0xFF,0xFF,0xFF, 0xFF});
+  menu.draw();
 
-    color_t fbStateCol[6];
-    fbStateCol[0] = {0x00, 0x00, 0x00, 0xFF};
-    fbStateCol[1] = {0x33, 0xFF, 0x33, 0xFF};
-    fbStateCol[2] = {0x22, 0x77, 0x77, 0xFF};
-    fbStateCol[3] = {0x22, 0xAA, 0xAA, 0xFF};
-    fbStateCol[4] = {0xAA, 0xAA, 0xAA, 0xFF};
-    fbStateCol[5] = {0xAA, 0x22, 0xAA, 0xFF};
+  // Top bar for CPU time
+  if(showBarCPU)
+  {
+    uint16_t posX = 24;
+    uint16_t posY = 16;
 
-    rdpq_mode_push();
     rdpq_set_mode_fill({0,0,0, 0xFF});
-    rdpq_fill_rectangle(posX, posY-2, posX + viBarWidth, posY + 7 * fbCount+1);
-    rdpq_fill_rectangle(posX, posY-10, posX + viBarWidth, posY - 6);
+    rdpq_fill_rectangle(posX-1, posY-1, posX + (barWidth/2), posY + barHeight+1);
+    rdpq_set_fill_color({0x33,0x33,0x33, 0xFF});
+    rdpq_fill_rectangle(posX-1 + (barWidth/2), posY-1, posX + barWidth+1, posY + barHeight+1);
 
-    rdpq_mode_pop();
-
-    posY = 64;
-    if(showFrameRate)
-    {    
-        Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
-    }
-
-    return;
-  }
-
-  if(showFrameRate)
-  {    
-    Debug::printf(10, 230, "FPS: %.2f", (double)P64::VI::SwapChain::getFPS());
-  }
-
-  posY = 24;
-
-  heap_stats_t heap_stats;
-  sys_get_heap_stats(&heap_stats);
-
-  rdpq_set_prim_color(COLOR_COLL_DETECT);
-  posX = Debug::printf(posX, posY, "Coll:%.2f", (double)TICKS_TO_US(collScene.ticksDetect) / 1000.0) + 4;
-  rdpq_set_prim_color(COLOR_COLL);
-  posX = Debug::printf(posX, posY, "%.2f", (double)TICKS_TO_US(collScene.ticksTotal) / 1000.0) + 8;
-  rdpq_set_prim_color(COLOR_ACTOR_UPDATE);
-  Debug::printf(posX, posY, "%.2f", (double)TICKS_TO_US(scene.ticksActorUpdate) / 1000.0);
-    rdpq_set_prim_color(COLOR_GLOBAL_UPDATE);
-    posX = Debug::printf(posX, posY + 8, "%.2f", (double)TICKS_TO_US(scene.ticksGlobalUpdate) / 1000.0) + 8;
-  rdpq_set_prim_color(COLOR_SCENE_DRAW);
-  Debug::printf(posX, posY, "%.2f", (double)TICKS_TO_US(scene.ticksDraw - scene.ticksGlobalDraw) / 1000.0);
-    rdpq_set_prim_color(COLOR_GLOBAL_DRAW);
-    posX = Debug::printf(posX, posY+8, "%.2f", (double)TICKS_TO_US(scene.ticksGlobalDraw) / 1000.0)+ 8;
-  rdpq_set_prim_color(COLOR_AUDIO);
-  posX = Debug::printf(posX, posY, "%.2f", (double)TICKS_TO_US(P64::AudioManager::ticksUpdate) / 1000.0) + 8;
-
-  rdpq_set_prim_color({0xFF,0xFF,0xFF, 0xFF});
-
-  posX = surf->width - 64;
-  //posX = Debug::printf(posX, posY, "A:%d/%d", scene.activeActorCount, scene.drawActorCount) + 8;
-  // posX = Debug::printf(posX, posY, "T:%d", triCount) + 8;
-  Debug::printf(posX-32, posY, "H:%dkb", heap_stats.used);
-  Debug::printf(posX, posY+8, "O:%d\n", scene.getObjectCount());
-
-  posX = 24;
-
-  // === Draw current menu ===
-  if(currentMenu)
-  {
-    posY = 38;
-    Debug::printf(posX, posY, "%s", currentMenu->title.c_str());
-    posY += 10;
-
-    const size_t numItems = currentMenu->items.size();
-    const size_t numChildren = currentMenu->children.size();
-    const size_t totalEntries = numItems + numChildren;
-    const size_t parentOffset = currentMenu->parent ? 1 : 0;
-    size_t itemCount = 0;
-
-    // back first
-    if(parentOffset)
-    {
-        bool isSel = currentMenu->currIndex == itemCount++;
-        Debug::printf(posX, posY, "%c < Back >", isSel ? '>' : ' ');
-        posY += 8;
-    }
-
-    // Child sub-menus first
-    for(auto &child : currentMenu->children) 
-    {
-        bool isSel = currentMenu->currIndex == itemCount++;
-        Debug::printf(posX, posY, "%c [dir] %s", isSel ? '>' : ' ', child.title.c_str());
-        posY += 8;
-    }
-
-    // Items (variables) last – std::visit for printing
-    for(auto &item : currentMenu->items) 
-    {
-        bool isSel = currentMenu->currIndex == itemCount++;
-
-        std::visit([&](const auto& v) {
-        using T = std::decay_t<decltype(v)>;
-
-        if constexpr (std::is_same_v<T, std::monostate>)
-        {
-            Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
-        }
-        else if constexpr (std::is_same_v<T, bool>)
-        {
-            Debug::printf(posX, posY, "%c %s: %c", isSel ? '>' : ' ', item.text.c_str(), v ? '1' : '0');
-        }
-        else if constexpr (std::is_integral_v<T>)
-        {
-            Debug::printf(posX, posY, "%c %s: %lld", isSel ? '>' : ' ', item.text.c_str(), (long long)v);
-        }
-        else if constexpr (std::is_floating_point_v<T>)
-        {
-            Debug::printf(posX, posY, "%c %s: %.2f", isSel ? '>' : ' ', item.text.c_str(), static_cast<double>(v));
-        }
-        else
-        {
-            Debug::printf(posX, posY, "%c %s", isSel ? '>' : ' ', item.text.c_str());
-        }
-        }, item.value);
-
-        posY += 8;
-    }
-  }
-
-  const CollTimingEntry collTimingEntries[] = {
-    {"Wake", collScene.ticksWakePrep, COLOR_COLL_WAKE},
-    {"World", collScene.ticksWorldUpdate, COLOR_COLL_WORLD},
-    {"IntV", collScene.ticksIntegrateVel, COLOR_COLL_INTEGRATE_VEL},
-    {"DetB", collScene.ticksDetectBodyPairs, COLOR_COLL_DETECT},
-    {"DetM", collScene.ticksDetectMeshPairs, COLOR_COLL_DETECT_MESH},
-    {"Refresh", collScene.ticksRefreshCallbacks, COLOR_COLL_REFRESH},
-    {"Pre", collScene.ticksPreSolve, COLOR_COLL_PRESOLVE},
-    {"Warm", collScene.ticksWarmStart, COLOR_COLL_WARM},
-    {"Vel", collScene.ticksVelocitySolve, COLOR_COLL_VEL_SOLVE},
-    {"IntP", collScene.ticksIntegration, COLOR_COLL_INTEGRATE_POS},
-    {"Pos", collScene.ticksPositionSolve, COLOR_COLL_POS_SOLVE},
-    {"Final", collScene.ticksFinalize, COLOR_COLL_FINALIZE},
-  };
-
-  posX = 140;
-  posY = 38;
-  for(size_t i = 0; i < std::size(collTimingEntries); ++i) {
-    const CollTimingEntry &entry = collTimingEntries[i];
-    if((i % 2) == 0 && i != 0) {
-      posY += 8;
-    }
-
-    float colX = (i % 2) == 0 ? 140.0f : 228.0f;
-    rdpq_set_prim_color(entry.color);
-    Debug::printf(colX, posY, "%s:%.2f", entry.label, (double)TICKS_TO_US(entry.ticks) / 1000.0);
-  }
-
-  rdpq_set_prim_color({0xFF,0xFF,0xFF, 0xFF});
-
-  // audio channels
-  posX = 24;
-  posY = SCREEN_HEIGHT - 24;
-
-  posX = Debug::printf(posX, posY, "Audio ");
-  {
-    auto audioMetrics = P64::AudioManager::getMetrics();
-    char strMask[33] = {};
-    strMask[32] = '\0';
-    for(uint32_t i=0; i<32; ++i) {
-      bool isPlaying = audioMetrics.maskPlaying & (1 << i);
-      bool isUsed    = audioMetrics.maskAlloc & (1 << i);
-
-      if(isPlaying && isUsed)strMask[i] = '$';
-      else if(isUsed)strMask[i] = '-';
-      else if(isPlaying)strMask[i] = '?';
-      else strMask[i] = '.';
-    }
-    Debug::print(posX, posY, strMask);
-  }
-
-  // Matrix slots
-  if(matrixDebug)
-  {
-    posX = 100;
-    posY = 50;
-
-    for(uint32_t f=0; f<3; ++f) {
-      Debug::printf(posX, posY, "Color[%ld]: %p\n", f, P64::VI::SwapChain::getFrameBuffer(f)->buffer);
-      posY += 8;
-    }
-
-    posY = 90;
-    uint32_t matCount = P64::MatrixManager::getTotalCapacity();
-    for(uint32_t i=0; i<matCount; ++i) {
-      bool isUsed = P64::MatrixManager::isUsed(i);
-      Debug::printf(posX, posY, "%c", isUsed ? '+' : '.');
-      posX += 6;
-      if(i % 32 == 31) {
-        posX = 100;
-        posY += 8;
+    auto addBarSection = [&](uint64_t ticks, color_t color) {
+      float time = usToWidth(TICKS_TO_US(ticks));
+      if(time > 0.0f) {
+        rdpq_set_fill_color(color);
+        rdpq_fill_rectangle(posX, posY, posX + time, posY + barHeight);
+        posX += time;
       }
-    }
+    };
+
+    addBarSection(collScene.ticksDetect, COLOR_COLL_DETECT);
+    addBarSection(collScene.ticksTotal - collScene.ticksDetect, COLOR_COLL);
+    addBarSection(scene.ticksActorUpdate, COLOR_ACTOR_UPDATE);
+    addBarSection(scene.ticksGlobalUpdate, COLOR_GLOBAL_UPDATE);
+    addBarSection(scene.ticksDraw - scene.ticksGlobalDraw, COLOR_SCENE_DRAW);
+    addBarSection(scene.ticksGlobalDraw, COLOR_GLOBAL_DRAW);
+    addBarSection(P64::AudioManager::ticksUpdate, COLOR_AUDIO);
+
+    // Measure self-time
+    float timeSelf = usToWidth(TICKS_TO_US(ticksSelf));
+    rdpq_set_fill_color({0xFF,0xFF,0xFF, 0xFF});
+    rdpq_fill_rectangle(24 + barWidth - timeSelf, posY, 24 + barWidth, posY + barHeight);
   }
 
-
-  posX = 24;
-  posY = 16;
-
-  // Performance graph (only detection and rest of physics)
-  float timeDetect = usToWidth(TICKS_TO_US(collScene.ticksDetect));
-  float timePhysicsRest = usToWidth(TICKS_TO_US(collScene.ticksTotal - collScene.ticksDetect));
-  float timeActorUpdate = usToWidth(TICKS_TO_US(scene.ticksActorUpdate));
-  float timeGlobalUpdate = usToWidth(TICKS_TO_US(scene.ticksGlobalUpdate));
-  float timeSceneDraw = usToWidth(TICKS_TO_US(scene.ticksDraw - scene.ticksGlobalDraw));
-  float timeGlobalDraw = usToWidth(TICKS_TO_US(scene.ticksGlobalDraw));
-  float timeAudio = usToWidth(TICKS_TO_US(P64::AudioManager::ticksUpdate));
-  float timeSelf = usToWidth(TICKS_TO_US(ticksSelf));
-
-  rdpq_set_mode_fill({0,0,0, 0xFF});
-  rdpq_fill_rectangle(posX-1, posY-1, posX + (barWidth/2), posY + barHeight+1);
-  rdpq_set_mode_fill({0x33,0x33,0x33, 0xFF});
-  rdpq_fill_rectangle(posX-1 + (barWidth/2), posY-1, posX + barWidth+1, posY + barHeight+1);
-
-  // Draw detection time
-  if(timeDetect > 0.0f) {
-    rdpq_set_fill_color(COLOR_COLL_DETECT);
-    rdpq_fill_rectangle(posX, posY, posX + timeDetect, posY + barHeight);
-    posX += timeDetect;
-  }
-  // Draw rest of physics (total - detection)
-  if(timePhysicsRest > 0.0f) {
-    rdpq_set_fill_color(COLOR_COLL);
-    rdpq_fill_rectangle(posX, posY, posX + timePhysicsRest, posY + barHeight);
-    posX += timePhysicsRest;
-  }
-  rdpq_set_fill_color(COLOR_ACTOR_UPDATE);
-  rdpq_fill_rectangle(posX, posY, posX + timeActorUpdate, posY + barHeight); posX += timeActorUpdate;
-  rdpq_set_fill_color(COLOR_GLOBAL_UPDATE);
-  rdpq_fill_rectangle(posX, posY, posX + timeGlobalUpdate, posY + barHeight); posX += timeGlobalUpdate;
-  rdpq_set_fill_color(COLOR_SCENE_DRAW);
-  rdpq_fill_rectangle(posX, posY, posX + timeSceneDraw, posY + barHeight); posX += timeSceneDraw;
-  rdpq_set_fill_color(COLOR_GLOBAL_DRAW);
-  rdpq_fill_rectangle(posX, posY, posX + timeGlobalDraw, posY + barHeight); posX += timeGlobalDraw;
-  rdpq_set_fill_color(COLOR_AUDIO);
-  rdpq_fill_rectangle(posX, posY, posX + timeAudio, posY + barHeight); posX += timeAudio;
-  rdpq_set_fill_color({0xFF,0xFF,0xFF, 0xFF});
-  rdpq_fill_rectangle(24 + barWidth - timeSelf, posY, 24 + barWidth, posY + barHeight);
-
-  newTicksSelf = get_user_ticks() - newTicksSelf;
-  //if(newTicksSelf < TICKS_FROM_MS(2))
+  // RAM graph
+  if(showBarRAM)
   {
-    ticksSelf = newTicksSelf;
+    auto memInfo = P64::Mem::getStaticMemInfo();
+    float memUsed = (float)(memInfo.text + memInfo.data + memInfo.bss) / (float)memInfo.total;
+
+    uint16_t posX = 24;
+    uint16_t posY = 240-24;
+
+    rdpq_set_mode_fill({0,0,0, 0xFF});
+    // make in alternating color at 1Mb marks
+    posX -= 1;
+    for(int i = 0; i < 8; i++) {
+      rdpq_set_fill_color((i % 2 == 0) ? color_t{0x33,0x33,0x33, 0xFF} : color_t{0,0,0, 0xFF});
+      rdpq_fill_rectangle(posX + (barWidth * ((float)i / 8.0f)), posY-1, posX + (barWidth * ((float)(i+1) / 8.0f)), posY + barHeight+1);
+    }
+    posX += 1;
+
+    auto addBarSection = [&](uint64_t bytes, color_t color) {
+      float time = bytesToWidth(bytes);
+      if(time > 0.0f) {
+        rdpq_set_fill_color(color);
+        rdpq_fill_rectangle(posX, posY, posX + time, posY + barHeight);
+        posX += time;
+      }
+    };
+
+    addBarSection(memInfo.text, COLOR_MEM_TEXT);
+    addBarSection(memInfo.data, COLOR_MEM_DATA);
+    addBarSection(memInfo.bss + memInfo.misc, COLOR_MEM_BSS);
+    addBarSection(scene.memObjects, COLOR_MEM_OBJ);
+    addBarSection(heapStats.used - scene.memObjects, COLOR_MEM_HEAP);
   }
+
+  ticksSelf = get_user_ticks() - newTicksSelf;
+  //debugf("Self: %fms\n", (double)TICKS_TO_US(ticksSelf) / 1000.0);
 }
