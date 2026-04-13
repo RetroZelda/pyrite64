@@ -6,6 +6,7 @@
 #include <libdragon.h>
 #include <vector>
 #include <functional>
+#include <unordered_map>
 
 #include "event.h"
 #include "lighting.h"
@@ -140,6 +141,15 @@ namespace P64
       uint64_t ticksGlobalDraw{0};
       uint64_t ticksDraw{0};
       uint32_t memObjects{0};
+
+      struct ComponentTicks
+      {
+        uint64_t update{0u};
+        uint64_t draw{0u};
+        uint64_t count{0u};
+      };
+      std::unordered_map<uint8_t, ComponentTicks> ticksComponents;
+      std::unordered_map<uint8_t, ComponentTicks> ticksScripts;
 
       explicit Scene(uint16_t sceneId, Scene** ref);
       ~Scene();

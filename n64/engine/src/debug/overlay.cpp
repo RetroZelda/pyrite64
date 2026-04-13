@@ -42,6 +42,9 @@ namespace {
   constinit P64::Debug::Menu menuAudio{};
   constinit P64::Debug::Menu menuMemory{};
   constinit P64::Debug::Menu menuCPU{};
+  constinit P64::Debug::Menu menuCPUGeneral{};
+  constinit P64::Debug::Menu menuCPUComponents{};
+  constinit P64::Debug::Menu menuCPUScripts{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
@@ -90,6 +93,13 @@ void P64::Debug::Overlay::init()
   menuAudio.items.clear();
   menuMemory.items.clear();
   menuCPU.items.clear();
+  menuCPUComponents.items.clear();
+  menuCPUScripts.items.clear();
+
+  menuCPU.add("General", menuCPUGeneral)
+         .add("Components", menuCPUComponents)
+         .add("Scripts", menuCPUScripts)
+         .add("Average", useCpuAvg);
 
   menu.add("Scenes", menuScenes)
       .add("CPU", menuCPU)
@@ -115,8 +125,10 @@ void P64::Debug::Overlay::init()
   menuAudio.add("Volume", P64::AudioManager::masterVol, 0.0f, 1.0f, 0.05f);
 
   menuMemory.onDraw = ovlMemory;
-  menuCPU.onDraw = ovlCPU;
-  menuCPU.add("Average", useCpuAvg);
+
+  menuCPUGeneral.onDraw = ovlCPU;
+  menuCPUComponents.onDraw = ovlComponents;
+  menuCPUScripts.onDraw = ovlScripts;
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";

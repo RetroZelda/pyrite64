@@ -25,6 +25,9 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
   std::string graphDecl = "";
   std::string graphSwitch = "";
 
+  std::string scriptNames = "\nnamespace P64::Script {\n";
+  scriptNames += "\tconst char* const scriptNames[] = {\n";
+
   auto scripts = project.getAssets().getTypeEntries(Project::FileType::CODE_OBJ);
   uint32_t idx = 0;
   for (auto &script : scripts)
@@ -75,11 +78,21 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasColl)srcEntries += " .onColl = (FuncObjDataColl)" + uuidStr + "::onCollision,\n";
     srcEntries += "},\n";
 
+    scriptNames += "\t\t[";
+    scriptNames += std::to_string(idx);
+    scriptNames += "] = \"";
+    scriptNames += script.name.substr(0, script.name.size() - 4);
+    scriptNames += "\",\n";
+
     sceneCtx.codeIdxMapUUID[script.getUUID()] = idx;
 
     //Utils::Logger::log("Script: " + uuidStr + " -> " + std::to_string(idx));
     ++idx;
   }
+  scriptNames += "\t};\n";
+  scriptNames += "\tconst size_t numNames = ";
+  scriptNames += std::to_string(idx);
+  scriptNames += ";\n}";
 
   for(auto &graphUUID : sceneCtx.graphFunctions)
   {
@@ -94,6 +107,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
   src = Utils::replaceAll(src, "__CODE_DECL__", srcDecl);
   src = Utils::replaceAll(src, "__GRAPH_SWITCH_CASE__", graphSwitch);
   src = Utils::replaceAll(src, "__GRAPH_DEF__", graphDecl);
+  src += scriptNames;
 
 
   Utils::FS::saveTextFile(pathTable, src);

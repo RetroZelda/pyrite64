@@ -9,7 +9,11 @@
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
 #include "vi/swapChain.h"
+
 #include <array>
+#include <vector>
+#include <algorithm>
+#include <string>
 
 namespace
 {
@@ -101,6 +105,11 @@ namespace
 
   constinit SlidingWindowAvg<uint32_t, AVG_FRAMES> sw_collDet, sw_collRes, sw_updObj, sw_updMisc, sw_drawObj, sw_drawMisc, sw_audio, sw_debug;
   constinit SlidingWindowAvg<uint32_t, AVG_FRAMES> sw_wake, sw_world, sw_intVel, sw_detBody, sw_detMesh, sw_refresh, sw_preSolve, sw_warmStart, sw_velSolve, sw_integrate, sw_posSolve, sw_finalize;
+
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_component_update_map;
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_component_draw_map;
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_update_map;
+  static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_draw_map;
 }
 
 void P64::Debug::Overlay::ovlCPU()
@@ -165,4 +174,162 @@ void P64::Debug::Overlay::ovlCPU()
   };
 
   printTable(DEBUG_CHAR_SQUARE " Collision ", 164, posY, 66, collTimingEntries, sizeof(collTimingEntries) / sizeof(TimeEntry));
+}
+
+void P64::Debug::Overlay::ovlComponents()
+{
+  auto &scene = SceneManager::getCurrent();
+
+  setColor();
+  uint16_t posY = 54;
+
+  // Push new values each frame (only if the component actually ran)
+  for (const auto& [compId, compTick] : scene.ticksComponents)
+  {
+    if (compTick.count > 0)
+    {
+      sw_component_update_map[compId].push(compTick.update / compTick.count);
+      sw_component_draw_map[compId].push(compTick.draw / compTick.count);
+    }
+  }
+
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  auto getComponentLabel = [](uint8_t id) -> const char* {
+    switch (id)
+    {
+      case 0:  return "Code";
+      case 1:  return "Model";
+      case 2:  return "Light";
+      case 3:  return "Camera";
+      case 4:  return "CollMesh";
+      case 5:  return "CollBody";
+      case 6:  return "Audio2D";
+      case 7:  return "Constraint";
+      case 8:  return "Culling";
+      case 9:  return "NodeGraph";
+      case 10: return "AnimModel";
+      case 11: return "RigidBody";
+      
+      default: break;// return "Comp X";
+    }
+
+    static std::unordered_map<uint8_t, std::string> nameCache;
+    auto it = nameCache.find(id);
+    if (it == nameCache.end())
+    {
+      nameCache[id] = "Comp " + std::to_string(id);   // placeholder
+      it = nameCache.find(id);
+    }
+    return it->second.c_str();
+  };
+
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_component_update_map.size());
+
+    for (const auto& [id, sw] : sw_component_update_map)
+    {
+      entries.push_back({getComponentLabel(id), get(sw)});
+    }
+
+    // Sort by time descending (most expensive components first - very useful for profiling)
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Comp Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
+
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_component_draw_map.size());
+
+    for (const auto& [id, sw] : sw_component_draw_map)
+    {
+      entries.push_back({getComponentLabel(id), get(sw)});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Comp Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
+}
+
+namespace P64::Script {
+	extern const char* const scriptNames[];
+    extern const size_t numNames;
+};
+void P64::Debug::Overlay::ovlScripts()
+{
+  auto &scene = SceneManager::getCurrent();
+
+  setColor();
+  uint16_t posY = 54;
+
+  // Push new values each frame (only if the script actually ran)
+  for (const auto& [scriptId, tickData] : scene.ticksScripts)
+  {
+    if (tickData.count > 0)
+    {
+      sw_script_update_map[scriptId].push(tickData.update / tickData.count);
+      sw_script_draw_map[scriptId].push(tickData.draw / tickData.count);
+    }
+  }
+
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  // Script name lookup (add real names to the switch as you discover IDs)
+  auto getScriptLabel = [](uint8_t id) -> const char* {
+    
+    if(id < P64::Script::numNames) return P64::Script::scriptNames[id];
+
+    // fallback to cached "Script X"
+    static std::unordered_map<uint8_t, std::string> nameCache;
+    auto it = nameCache.find(id);
+    if (it == nameCache.end())
+    {
+      nameCache[id] = "Script " + std::to_string(id);
+      it = nameCache.find(id);
+    }
+    return it->second.c_str();
+  };
+
+  // === Script Update Table (left side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_script_update_map.size());
+
+    for (const auto& [id, sw] : sw_script_update_map)
+    {
+      entries.push_back({getScriptLabel(id), get(sw)});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Script Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
+
+  // === Script Draw Table (right side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_script_draw_map.size());
+
+    for (const auto& [id, sw] : sw_script_draw_map)
+    {
+      entries.push_back({getScriptLabel(id), get(sw)});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " Script Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
+  }
 }
