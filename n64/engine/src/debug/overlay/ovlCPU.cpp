@@ -46,9 +46,10 @@ namespace
     const char *label{};
     uint64_t ticks{};
     color_t col{0xFF, 0xFF, 0xFF, 0};
+    uint64_t count{0};
   };
 
-  void printTable(const char* title, uint16_t posX, uint16_t posY, uint16_t txtWidth, const TimeEntry* entries, uint32_t numEntries)
+  void printTable(const char* title, uint16_t posX, uint16_t posY, uint16_t txtWidth, const TimeEntry* entries, uint32_t numEntries, bool splitNameAndTime = false)
   {
     uint64_t timeSum = 0;
     for(size_t i = 0; i < numEntries; ++i) {
@@ -64,34 +65,69 @@ namespace
     P64::Debug::setColor();
     posY += 9;
 
+    char buf[64];
     for(size_t i = 0; i < numEntries; ++i)
     {
       const auto &entry = entries[i];
       auto us = TICKS_TO_US(entry.ticks);
       uint64_t perc = timeSum > 0 ? (us * 100) / timeSum : 0;
 
+      // === Name + Count line ===
       posX = posXStart;
-      if(entry.col.a)P64::Debug::setColor(entry.col);
-      P64::Debug::print(posX, posY, entry.label);
-      if(entry.col.a)P64::Debug::setColor();
-      posX = posXStart + txtWidth;
+      if(entry.col.a) P64::Debug::setColor(entry.col);
 
-      auto numTxt = std::to_string(us);
-      posX += (5 - (numTxt.size())) * 8;
+      if (entry.count > 0)
+        std::snprintf(buf, sizeof(buf), "%s (x%llu)", entry.label, entry.count);
+      else
+        std::snprintf(buf, sizeof(buf), "%s", entry.label);
 
-      posX = P64::Debug::print(posX, posY, numTxt.c_str());
-      P64::Debug::print(posX, posY, DEBUG_CHAR_US);
+      P64::Debug::print(posX, posY, buf);
 
-      posX += 10;
+      if(entry.col.a) P64::Debug::setColor();
 
-      if(perc < 10)posX += 8;
-      auto percTxt = std::to_string(perc);
-      posX = P64::Debug::print(posX, posY, percTxt.c_str());
-      P64::Debug::print(posX, posY, "%");
+      // === Timing line (same X position as before) ===
+      if (splitNameAndTime)
+      {
+        posY += 8;                     // move to next line
+        posX = posXStart + txtWidth;   // same column as before
+
+        auto numTxt = std::to_string(us);
+        posX += (5 - (numTxt.size())) * 8;
+
+        posX = P64::Debug::print(posX, posY, numTxt.c_str());
+        P64::Debug::print(posX, posY, DEBUG_CHAR_US);
+
+        posX += 10;
+        if(perc < 10) posX += 8;
+
+        auto percTxt = std::to_string(perc);
+        posX = P64::Debug::print(posX, posY, percTxt.c_str());
+        P64::Debug::print(posX, posY, "%");
+        posY += 2;
+      }
+      else
+      {
+        // old single-line behavior
+        posX = posXStart + txtWidth;
+
+        auto numTxt = std::to_string(us);
+        posX += (5 - (numTxt.size())) * 8;
+
+        posX = P64::Debug::print(posX, posY, numTxt.c_str());
+        P64::Debug::print(posX, posY, DEBUG_CHAR_US);
+
+        posX += 10;
+        if(perc < 10) posX += 8;
+
+        auto percTxt = std::to_string(perc);
+        posX = P64::Debug::print(posX, posY, percTxt.c_str());
+        P64::Debug::print(posX, posY, "%");
+      }
 
       posY += 9;
     }
 
+    // Total line
     posX = posXStart;
     auto numTxt = std::to_string(timeSum);
     P64::Debug::setColor({0xBB, 0xBB, 0xFF, 0xFF});
@@ -110,6 +146,8 @@ namespace
   static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_component_draw_map;
   static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_update_map;
   static std::unordered_map<uint8_t, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_script_draw_map;
+  static std::unordered_map<std::string, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_user_update_map;
+  static std::unordered_map<std::string, SlidingWindowAvg<uint32_t, AVG_FRAMES>> sw_user_draw_map;
 }
 
 void P64::Debug::Overlay::ovlCPU()
@@ -183,18 +221,22 @@ void P64::Debug::Overlay::ovlComponents()
   setColor();
   uint16_t posY = 54;
 
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  // show per-object average or totals for all
+  auto get_update = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.update : compTick.update / compTick.count;};
+  auto get_draw = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.draw : compTick.draw / compTick.count;};
+
   // Push new values each frame (only if the component actually ran)
   for (const auto& [compId, compTick] : scene.ticksComponents)
   {
     if (compTick.count > 0)
     {
-      sw_component_update_map[compId].push(compTick.update / compTick.count);
-      sw_component_draw_map[compId].push(compTick.draw / compTick.count);
+      sw_component_update_map[compId].push(get_update(compTick));
+      sw_component_draw_map[compId].push(get_draw(compTick));
     }
   }
-
-  // Use average or latest depending on doAvg
-  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
 
   auto getComponentLabel = [](uint8_t id) -> const char* {
     switch (id)
@@ -231,7 +273,7 @@ void P64::Debug::Overlay::ovlComponents()
 
     for (const auto& [id, sw] : sw_component_update_map)
     {
-      entries.push_back({getComponentLabel(id), get(sw)});
+      entries.push_back({getComponentLabel(id), get(sw), {}, scene.ticksComponents[id].count});
     }
 
     // Sort by time descending (most expensive components first - very useful for profiling)
@@ -239,7 +281,7 @@ void P64::Debug::Overlay::ovlComponents()
       [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
 
     if (!entries.empty())
-      printTable(DEBUG_CHAR_SQUARE " Comp Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size());
+      printTable(DEBUG_CHAR_SQUARE " Comp Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size(), true);
   }
 
   {
@@ -248,14 +290,14 @@ void P64::Debug::Overlay::ovlComponents()
 
     for (const auto& [id, sw] : sw_component_draw_map)
     {
-      entries.push_back({getComponentLabel(id), get(sw)});
+      entries.push_back({getComponentLabel(id), get(sw), {}, scene.ticksComponents[id].count});
     }
 
     std::sort(entries.begin(), entries.end(),
       [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
 
     if (!entries.empty())
-      printTable(DEBUG_CHAR_SQUARE " Comp Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
+      printTable(DEBUG_CHAR_SQUARE " Comp Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size(), true);
   }
 }
 
@@ -270,18 +312,22 @@ void P64::Debug::Overlay::ovlScripts()
   setColor();
   uint16_t posY = 54;
 
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  // show per-object average or totals for all
+  auto get_update = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.update : compTick.update / compTick.count;};
+  auto get_draw = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.draw : compTick.draw / compTick.count;};
+
   // Push new values each frame (only if the script actually ran)
   for (const auto& [scriptId, tickData] : scene.ticksScripts)
   {
     if (tickData.count > 0)
     {
-      sw_script_update_map[scriptId].push(tickData.update / tickData.count);
-      sw_script_draw_map[scriptId].push(tickData.draw / tickData.count);
+      sw_script_update_map[scriptId].push(get_update(tickData));
+      sw_script_draw_map[scriptId].push(get_draw(tickData));
     }
   }
-
-  // Use average or latest depending on doAvg
-  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
 
   // Script name lookup (add real names to the switch as you discover IDs)
   auto getScriptLabel = [](uint8_t id) -> const char* {
@@ -306,14 +352,14 @@ void P64::Debug::Overlay::ovlScripts()
 
     for (const auto& [id, sw] : sw_script_update_map)
     {
-      entries.push_back({getScriptLabel(id), get(sw)});
+      entries.push_back({getScriptLabel(id), get(sw), {}, scene.ticksScripts[id].count});
     }
 
     std::sort(entries.begin(), entries.end(),
       [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
 
     if (!entries.empty())
-      printTable(DEBUG_CHAR_SQUARE " Script Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size());
+      printTable(DEBUG_CHAR_SQUARE " Script Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size(), true);
   }
 
   // === Script Draw Table (right side) ===
@@ -323,13 +369,72 @@ void P64::Debug::Overlay::ovlScripts()
 
     for (const auto& [id, sw] : sw_script_draw_map)
     {
-      entries.push_back({getScriptLabel(id), get(sw)});
+      entries.push_back({getScriptLabel(id), get(sw), {}, scene.ticksScripts[id].count});
     }
 
     std::sort(entries.begin(), entries.end(),
       [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
 
     if (!entries.empty())
-      printTable(DEBUG_CHAR_SQUARE " Script Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size());
+      printTable(DEBUG_CHAR_SQUARE " Script Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size(), true);
+  }
+}
+
+void P64::Debug::Overlay::ovlUserGlobals()
+{
+  auto &scene = SceneManager::getCurrent();
+
+  setColor();
+  uint16_t posY = 54;
+
+  // Use average or latest depending on doAvg
+  auto get = [](auto &sw) -> uint64_t { return useCpuAvg ? sw.avg() : sw.latest(); };
+
+  // show per-object average or totals for all
+  auto get_update = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.update : compTick.update / compTick.count;};
+  auto get_draw   = [](auto& compTick) -> uint64_t { return useDetailedTotals ? compTick.draw   : compTick.draw   / compTick.count;};
+
+  for (const auto& [name, tickData] : scene.ticksUserGlobals)
+  {
+    if (tickData.count > 0)
+    {
+      sw_user_update_map[name].push(get_update(tickData));
+      sw_user_draw_map[name].push(get_draw(tickData));
+    }
+  }
+
+  // === User Globals Update Table (left side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_user_update_map.size());
+
+    for (const auto& [name, sw] : sw_user_update_map)
+    {
+      entries.push_back({name.c_str(), get(sw), {}, scene.ticksUserGlobals[name].count});
+    }
+
+    // Sort by time descending (most expensive first)
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " User Update ", 16, posY, 66, entries.data(), (uint32_t)entries.size(), true);
+  }
+
+  // === User Globals Draw Table (right side) ===
+  {
+    std::vector<TimeEntry> entries;
+    entries.reserve(sw_user_draw_map.size());
+
+    for (const auto& [name, sw] : sw_user_draw_map)
+    {
+      entries.push_back({name.c_str(), get(sw), {}, scene.ticksUserGlobals[name].count});
+    }
+
+    std::sort(entries.begin(), entries.end(),
+      [](const TimeEntry& a, const TimeEntry& b) { return a.ticks > b.ticks; });
+
+    if (!entries.empty())
+      printTable(DEBUG_CHAR_SQUARE " User Draw  ", 164, posY, 66, entries.data(), (uint32_t)entries.size(), true);
   }
 }
