@@ -42,6 +42,7 @@ namespace {
   constinit P64::Debug::Menu menuAudio{};
   constinit P64::Debug::Menu menuMemory{};
   constinit P64::Debug::Menu menuCPU{};
+  constinit P64::Debug::Menu menuComponents{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
@@ -90,9 +91,11 @@ void P64::Debug::Overlay::init()
   menuAudio.items.clear();
   menuMemory.items.clear();
   menuCPU.items.clear();
+  menuComponents.items.clear();
 
   menu.add("Scenes", menuScenes)
       .add("CPU", menuCPU)
+      .add("Comps", menuComponents)
       .add("Collision", menuColl)
       .add("Audio", menuAudio)
       .add("Memory", menuMemory)
@@ -117,6 +120,9 @@ void P64::Debug::Overlay::init()
   menuMemory.onDraw = ovlMemory;
   menuCPU.onDraw = ovlCPU;
   menuCPU.add("Average", useCpuAvg);
+
+  menuComponents.onDraw = ovlComponents;
+  menuComponents.add("Average", useCpuAvg);
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";

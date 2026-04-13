@@ -239,6 +239,8 @@ void P64::Scene::update(float deltaTime)
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
 
+  ticksComponents.clear();
+  uint64_t componentTicksStart, componentTicksEnd;
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)
   {
@@ -249,7 +251,14 @@ void P64::Scene::update(float deltaTime)
     for (uint32_t i=0; i<obj->compCount; ++i) {
       const auto &compDef = COMP_TABLE[compRefs[i].type];
       char* dataPtr = (char*)obj + compRefs[i].offset;
+
+      componentTicksStart = get_ticks();
       compDef.update(*obj, dataPtr, deltaTime);
+      componentTicksEnd = get_ticks();
+
+      ComponentTicks& componentTickCounter = ticksComponents[compRefs[i].type];
+      componentTickCounter.update += (componentTicksEnd - componentTicksStart);
+      componentTickCounter.count += 1;
     }
   }
 
@@ -310,6 +319,7 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
   DrawLayer::draw(0);
 
   // 3D Pass, for every active camera
+  uint64_t componentTicksStart, componentTicksEnd;
   for(auto &cam : cameras)
   {
     camMain = cam;
@@ -341,7 +351,12 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
         if(compDef.draw)
         {
           char* dataPtr = (char*)obj + compRefs[i].offset;
+
+          componentTicksStart = get_ticks();
           compDef.draw(*obj, dataPtr, deltaTime);
+          componentTicksEnd = get_ticks();
+          ComponentTicks& componentTickCounter = ticksComponents[compRefs[i].type];
+          componentTickCounter.draw += (componentTicksEnd - componentTicksStart);
         }
       }
 

@@ -1,6 +1,6 @@
 {
   "name": "Cathode Quest 64",
-  "pathEmu": "ares",
+  "pathEmu": "gopher64",
   "pathN64Inst": "",
   "romName": "gj25_cathode_quest",
   "sceneIdLastOpened": 7,
