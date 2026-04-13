@@ -9,9 +9,6 @@ namespace P64
 {
   constexpr uint32_t MAX_EVENT_COUNT = 128;
 
-  constexpr uint16_t EVENT_TYPE_ENABLE = 0xFFFF;
-  constexpr uint16_t EVENT_TYPE_DISABLE = 0xFFFE;
-
   // Safe ranges for user-defined custom events
   constexpr uint16_t EVENT_TYPE_CUSTOM_START = 0x0000;
   constexpr uint16_t EVENT_TYPE_CUSTOM_END   = 0xF000;

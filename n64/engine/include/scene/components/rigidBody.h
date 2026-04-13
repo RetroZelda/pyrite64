@@ -26,7 +26,9 @@ namespace P64::Comp
 
     static void initDelete([[maybe_unused]] Object& obj, RigidBody* data, void* initData);
 
-    static void onEvent(Object& obj, RigidBody* data, const ObjectEvent& event);
+    static void onEnable(Object& obj, RigidBody* data);
+
+    static void onDisable(Object& obj, RigidBody* data);
 
     static void update(Object& obj, RigidBody* data, float deltaTime);
   };

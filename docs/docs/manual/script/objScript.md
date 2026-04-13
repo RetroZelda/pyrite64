@@ -320,7 +320,7 @@ struct ObjectEvent
 };
 ```
 Besides the sender, you will get a type and value.\
-There are a few builtin types (e.g. object disable / enable), so it must be explicitly checked.
+There are a few builtin types, so it must be explicitly checked.
 
 The safe range for user-defined types is from `EVENT_TYPE_CUSTOM_START` to `EVENT_TYPE_CUSTOM_END`.\
 This starts from `0`, whereas builtin types reserve the end of the range. 
@@ -331,11 +331,7 @@ void onEvent(Object& obj, Data *data, const ObjectEvent &event)
 {
   switch(event.type)
   {
-    case EVENT_TYPE_ENABLE: // object got enabled
-    break;
-    case EVENT_TYPE_DISABLE: // object got disabled
-    break;
-    // you can check for your own custom types here too
+    // you can check for your own custom types here
   }
 }
 ```

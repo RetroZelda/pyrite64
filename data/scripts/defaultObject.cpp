@@ -45,17 +45,22 @@ namespace P64::Script::__UUID__
     // Put your drawing code here
   }
 
+  void onEnable(Object& obj, Data *data)
+  {
+    // this is called when the object is enabled and active in scene
+  }
+
+  void onDisable(Object& obj, Data *data)
+  {
+    // this is called when the object is disabled and inactive in scene
+  }
+
   void onEvent(Object& obj, Data *data, const ObjectEvent &event)
   {
     // generic events an object can receive
     switch(event.type)
     {
-      case EVENT_TYPE_ENABLE: // object got enabled
-      break;
-      case EVENT_TYPE_DISABLE: // object got disabled
-      break;
-
-      // you can check for your own custom types here too
+      // you can check for your own custom types here
     }
   }
 

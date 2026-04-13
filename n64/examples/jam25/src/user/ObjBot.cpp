@@ -110,10 +110,6 @@ namespace P64::Script::C4F4D286D6CB0DE3
   {
     switch(event.type)
     {
-      case EVENT_TYPE_ENABLE:
-        break;
-      case EVENT_TYPE_DISABLE:
-        break;
       default: break;
     }
   }

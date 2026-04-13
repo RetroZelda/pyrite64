@@ -26,7 +26,9 @@ namespace P64::Comp
 
     static void initDelete([[maybe_unused]] Object& obj, CollBody* data, void* initData);
 
-    static void onEvent(Object& obj, CollBody* data, const ObjectEvent& event);
+    static void onEnable(Object& obj, CollBody* data);
+    
+    static void onDisable(Object& obj, CollBody* data);
 
     static void update(Object& obj, CollBody* data, float deltaTime);
   };

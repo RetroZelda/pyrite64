@@ -153,6 +153,10 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
     else
     {
       compDef.initDel(*obj, objCompDataPtr, ptrIn + 4);
+
+      if(obj->isEnabled() && compDef.onEnable) {
+        compDef.onEnable(*obj, objCompDataPtr);
+      }
     }
 
     objCompDataPtr += Math::alignUp(compDef.getAllocSize(ptrIn + 4), 8);
@@ -181,6 +185,10 @@ void P64::Scene::runPendingComponentInit()
   {
     const auto &compDef = COMP_TABLE[pending.compId];
     compDef.initDel(*pending.obj, pending.dataPtr, pending.initData);
+
+    if(pending.obj->isEnabled() && compDef.onEnable) {
+      compDef.onEnable(*pending.obj, pending.dataPtr);
+    }
   }
   pendingCompInit.clear();
 }

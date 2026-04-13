@@ -67,20 +67,16 @@ namespace P64::Comp
     if(initData->constrainRotY) constraints = constraints | Coll::Constraint::FreezeRotY;
     if(initData->constrainRotZ) constraints = constraints | Coll::Constraint::FreezeRotZ;
     data->rigid_body.setConstraints(constraints);
-
-    if(obj.isEnabled()) {
-      coll.addRigidBody(&data->rigid_body);
-    }
   }
 
-  void RigidBody::onEvent(Object &obj, RigidBody* data, const ObjectEvent &event)
+  void RigidBody::onEnable(Object& obj, RigidBody* data)
   {
-    if(event.type == EVENT_TYPE_DISABLE) {
-      return obj.getScene().getCollision().removeRigidBody(&data->rigid_body);
-    }
-    if(event.type == EVENT_TYPE_ENABLE) {
-      return obj.getScene().getCollision().addRigidBody(&data->rigid_body);
-    }
+    return obj.getScene().getCollision().addRigidBody(&data->rigid_body);
+  }
+
+  void RigidBody::onDisable(Object& obj, RigidBody* data)
+  {
+    return obj.getScene().getCollision().removeRigidBody(&data->rigid_body);
   }
 
   void RigidBody::update(Object &obj, RigidBody* data, float deltaTime)

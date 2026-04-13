@@ -44,11 +44,7 @@ namespace P64::Comp
     }
 
     static void initDelete(Object& obj, Code* data, uint16_t* initData) {
-      if (initData == nullptr)
-      {
-        if(obj.isEnabled() && (data->usedFunctions & FN_ON_DISABLE)) {
-          data->script->onDisable(obj, data->getCodeData());
-        }
+      if (initData == nullptr) {
 
         if(data->script->destroy) {
           data->script->destroy(obj, data->getCodeData());
@@ -74,10 +70,6 @@ namespace P64::Comp
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
-      }
-
-      if(obj.isEnabled() && (data->usedFunctions & FN_ON_ENABLE)) {
-        data->script->onEnable(obj, data->getCodeData());
       }
     }
 

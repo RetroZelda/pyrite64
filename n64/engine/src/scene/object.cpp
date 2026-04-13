@@ -14,6 +14,11 @@ P64::Object::~Object()
   for (uint32_t i=0; i<compCount; ++i) {
     const auto &compDef = COMP_TABLE[compRefs[i].type];
     char* dataPtr = (char*)this + compRefs[i].offset;
+
+    if(isEnabled() && compDef.onDisable) {
+        compDef.onDisable(*this, dataPtr);
+    }
+
     compDef.initDel(*this, dataPtr, nullptr);
   }
 }
