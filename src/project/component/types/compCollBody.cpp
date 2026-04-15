@@ -134,8 +134,10 @@ namespace Project::Component::CollBody
       }
       ImTable::addObjProp("Offset", data.offset);
       ImTable::addObjProp("Trigger", data.isTrigger);
-      ImTable::addBitMask8("Mask Read", data.maskRead.resolve(obj.propOverrides));
-      ImTable::addBitMask8("Mask Write", data.maskWrite.resolve(obj.propOverrides));
+
+      ImTable::addMultiSelectMask8("Reacts to", data.maskRead.resolve(obj), ctx.project->conf.collLayerNames, "<Nothing>");
+      ImTable::addMultiSelectMask8("Is Affecting", data.maskWrite.resolve(obj), ctx.project->conf.collLayerNames, "<Nothing>");
+
       auto &friction = data.friction.resolve(obj.propOverrides);
       if(ImTable::add("Friction", friction)) {
         friction = std::clamp(friction, 0.0f, 1.0f);

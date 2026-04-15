@@ -19,6 +19,7 @@
       -9.8100004196167,
       0.0
     ],
+    "interpolatePhysicsTransforms": true,
     "layers2D": [
       {
         "blender": 0,

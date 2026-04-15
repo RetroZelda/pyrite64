@@ -278,7 +278,7 @@ void Editor::Scene::draw()
   }
 
   if (projectSettingsOpen) {
-    ImVec2 windowSize{500_px,300_px};
+    ImVec2 windowSize{600_px,400_px};
     auto screenSize = ImGui::GetMainViewport()->WorkSize;
     ImGui::SetNextWindowPos({(screenSize.x - windowSize.x) / 2, (screenSize.y - windowSize.y) / 2}, ImGuiCond_Appearing, {0.0f, 0.0f});
     ImGui::SetNextWindowSize(windowSize, ImGuiCond_Appearing);
@@ -286,7 +286,10 @@ void Editor::Scene::draw()
     // Thick borders
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0_px);
     ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    ImGui::Begin(ICON_MDI_FILE_COG_OUTLINE " Project Settings", &projectSettingsOpen, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking);
+    ImGui::Begin(ICON_MDI_FILE_COG_OUTLINE " Project Settings", &projectSettingsOpen,
+      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+    );
     if (projectSettings.draw()) {
       projectSettingsOpen = false;
     }

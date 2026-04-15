@@ -455,6 +455,20 @@ namespace ImTable
     if(disabled)ImGui::EndDisabled();
   }
 
+  /**
+   * Select that allows multiple options to be active.
+   * The indices are stored in a bitmask, so up to 8 entries can be used here.
+   * @param name display name
+   * @param valueMask bitmask of selected options
+   * @param values display names of the options, empty strings are not offered as options
+   */
+  void addMultiSelectMask8(
+    const std::string &name,
+    uint32_t &valueMask,
+    const std::array<std::string, 8> &values,
+    const std::string &valueEmpty = "<None>"
+  );
+
   inline void addBitMask8(const std::string &name, uint32_t &value)
   {
     add(name);

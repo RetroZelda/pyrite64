@@ -53,6 +53,58 @@ bool ImGui::rotationInput(glm::quat &quat) {
   return true;
 }
 
+void ImTable::addMultiSelectMask8(
+  const std::string &name,
+  uint32_t &valueMask,
+  const std::array<std::string, 8> &values,
+  const std::string &valueEmpty
+) {
+    add(name);
+    bool disabled = isPrefabLocked();
+    if (disabled) ImGui::BeginDisabled();
+    std::string labelHidden = "##" + name;
+
+    // Build preview string of selected options
+    std::string preview;
+    for (int i = 0; i < 8; ++i) {
+        if (valueMask & (1 << i)) {
+            if (!preview.empty()) preview += "  |  ";
+            preview += values[i].empty() ? "??" : values[i];
+        }
+    }
+    bool isEmpty = preview.empty();
+    if (isEmpty) {
+      preview = valueEmpty;
+      ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    }
+
+    auto open = ImGui::BeginCombo(labelHidden.c_str(), preview.c_str(), ImGuiComboFlags_None);
+    if(isEmpty) ImGui::PopStyleColor();
+
+    if (open) {
+        for (int i = 0; i < 8; ++i) {
+            if (values[i].empty()) continue;
+            bool selected = (valueMask & (1 << i)) != 0;
+            auto valText = std::string{selected
+              ? ICON_MDI_CHECKBOX_MARKED " "
+              : ICON_MDI_CHECKBOX_BLANK_OUTLINE " "
+            } + values[i] + "##" + std::to_string(i);
+
+            if (ImGui::Selectable(valText.c_str(), selected, ImGuiSelectableFlags_DontClosePopups)) {
+                selected = !selected;
+                if (selected) {
+                    valueMask |= (1 << i);
+                } else {
+                    valueMask &= ~(1 << i);
+                }
+                Editor::UndoRedo::getHistory().markChanged("Edit " + name);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (disabled) ImGui::EndDisabled();
+}
+
 bool ImTable::addKeybind(const std::string &name, ImGuiKeyChord &chord, ImGuiKeyChord defaultValue, bool isChord) {
   add(name);
   ImGui::PushID(name.c_str());
