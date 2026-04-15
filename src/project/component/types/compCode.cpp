@@ -184,8 +184,8 @@ namespace Project::Component::Code
             ImTable::addObjProp(name, prop);
           }
         }
-        ImTable::end();
       }
+      ImTable::end();
     }
   }
 }
