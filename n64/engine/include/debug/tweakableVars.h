@@ -7,7 +7,7 @@
 #include "debug/menu.h"   // contains MenuItemType
 
 // TODO: Tie to __DEBUG via makefile
-#define DEBUG_MENU_ENABLED 1
+//#define DEBUG_MENU_ENABLED 1
 
 #if DEBUG_MENU_ENABLED
     #define TWEAKABLE static
