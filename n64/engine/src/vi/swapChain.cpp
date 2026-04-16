@@ -116,10 +116,19 @@ float P64::VI::SwapChain::getFPS()
   return avgFps;
 }
 
-void P64::VI::SwapChain::nextFrame() {
+void P64::VI::SwapChain::nextFrame()
+{
+  auto kirq = kirq_begin_wait_vi();
   for (uint32_t __t = TICKS_READ() + TICKS_FROM_MS(200);; __rsp_check_assert(__FILE__, __LINE__, __func__))
   {
-    if(fbFreeCount && !blockNewFrame)break;
+    if(fbFreeCount && !blockNewFrame) {
+      break;
+    }
+
+    if(!fbFreeCount) {
+      kirq_wait(&kirq);
+    }
+
     if(!TICKS_BEFORE(TICKS_READ(), __t)) {
       //rsp_crashf("wait loop timed out (%d ms)", 200);
       Log::error("RSP time-out, force new buffer");
@@ -135,10 +144,10 @@ void P64::VI::SwapChain::nextFrame() {
   uint64_t ticksDiff = newTicks - lastTicks;
 
   float newDelta = (float)((double)TICKS_TO_US(ticksDiff) * (1.0/1e6));
-  if(newDelta > (1.0f / 20.0f)) { // @TODO: somtimes this gets huge values in the thousands
+  if(newDelta > (1.0f / 5.0f)) { // @TODO: somtimes this gets huge values in the thousands
     //debugf("DELTA-TIME: %.4f (%lld - %lld)\n", newDelta, lastTicks, newTicks);
     Log::warn("invalid delta time!");
-    newDelta = (1.0f / 60.0f);
+    newDelta = (1.0f / 5.0f);
   }
 
   lastTicks = newTicks;
