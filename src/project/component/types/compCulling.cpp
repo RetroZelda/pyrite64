@@ -94,11 +94,11 @@ namespace Project::Component::Culling
 
     if(type == TYPE_BOX)
     {
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol);
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
     } else if(type == TYPE_SPHERE)
     {
-      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, aabbCol);
+      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
     }
   }
 }

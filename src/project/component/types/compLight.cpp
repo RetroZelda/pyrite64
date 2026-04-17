@@ -112,18 +112,18 @@ namespace Project::Component::Light
 
     constexpr float BOX_SIZE = 0.125f;
     constexpr float LINE_LEN = 75.0f;
-    glm::u8vec4 col = data.color.resolve(obj.propOverrides) * 255.0f;
+    glm::vec4 col = data.color.resolve(obj.propOverrides);
 
     bool isSelected = ctx.isObjectSelected(obj.uuid);
 
     auto pos = obj.pos.resolve(obj.propOverrides);
     if(isSelected)
     {
-      Utils::Mesh::addLineBox(*vp.getLines(), pos, {BOX_SIZE, BOX_SIZE, BOX_SIZE}, col);
+      Utils::Mesh::addLineBox(*vp.getLines(), pos, {BOX_SIZE, BOX_SIZE, BOX_SIZE}, col, {1, 0, 0, 0}, ctx.prefs.lightLineThickness);
       if(data.type.resolve(obj.propOverrides) == LIGHT_TYPE_DIRECTIONAL)
       {
         glm::vec3 dir = rotToDir(obj);
-        Utils::Mesh::addLine(*vp.getLines(), pos, pos + (dir * -LINE_LEN), col);
+        Utils::Mesh::addLine(*vp.getLines(), pos, pos + (dir * -LINE_LEN), col, ctx.prefs.lightLineThickness);
       }
       col = Utils::Colors::kSelectionTint;
     }

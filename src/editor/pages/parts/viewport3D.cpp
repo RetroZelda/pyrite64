@@ -171,7 +171,7 @@ Editor::Viewport3D::Viewport3D()
   });
 
   meshGrid = std::make_shared<Renderer::Mesh>();
-  Utils::Mesh::generateGrid(*meshGrid, 20);
+  Utils::Mesh::generateGrid(*meshGrid, 20, ctx.prefs.gridLineThickness);
   meshGrid->recreate(*ctx.scene);
   objGrid.setMesh(meshGrid);
   objGrid.setScale(50);

@@ -157,22 +157,22 @@ namespace Project::Component::Camera
     glm::vec3 fbr = fc - (up * (farHeight/2.0f)) + (right * (farWidth/2.0f));
 
     // Draw frustum edges
-    glm::u8vec4 col = isSelected ? Utils::Colors::kSelectionTint : glm::u8vec4{0xFF};
+    glm::u8vec4 col = isSelected ? ctx.prefs.cameraLineColorSelected : ctx.prefs.cameraLineColor;
     // Near plane
-    Utils::Mesh::addLine(*vp.getLines(), ntl, ntr, col);
-    Utils::Mesh::addLine(*vp.getLines(), ntr, nbr, col);
-    Utils::Mesh::addLine(*vp.getLines(), nbr, nbl, col);
-    Utils::Mesh::addLine(*vp.getLines(), nbl, ntl, col);
+    Utils::Mesh::addLine(*vp.getLines(), ntl, ntr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), ntr, nbr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), nbr, nbl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), nbl, ntl, col, ctx.prefs.cameraLineThickness);
     // Far plane
-    Utils::Mesh::addLine(*vp.getLines(), ftl, ftr, col);
-    Utils::Mesh::addLine(*vp.getLines(), ftr, fbr, col);
-    Utils::Mesh::addLine(*vp.getLines(), fbr, fbl, col);
-    Utils::Mesh::addLine(*vp.getLines(), fbl, ftl, col);
+    Utils::Mesh::addLine(*vp.getLines(), ftl, ftr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), ftr, fbr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), fbr, fbl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), fbl, ftl, col, ctx.prefs.cameraLineThickness);
     // Connect near and far
-    Utils::Mesh::addLine(*vp.getLines(), ntl, ftl, col);
-    Utils::Mesh::addLine(*vp.getLines(), ntr, ftr, col);
-    Utils::Mesh::addLine(*vp.getLines(), nbl, fbl, col);
-    Utils::Mesh::addLine(*vp.getLines(), nbr, fbr, col);
+    Utils::Mesh::addLine(*vp.getLines(), ntl, ftl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), ntr, ftr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), nbl, fbl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), nbr, fbr, col, ctx.prefs.cameraLineThickness);
 
 
     // little triangle marker on top of the upper edge of the far plane
@@ -182,17 +182,17 @@ namespace Project::Component::Camera
     glm::vec3 triLeft = triCenter - (right * 30.0f);
     glm::vec3 triRight = triCenter + (right * 30.0f);
     triCenter += up * 30.0f;
-    Utils::Mesh::addLine(*vp.getLines(), triCenter, triLeft, col);
-    Utils::Mesh::addLine(*vp.getLines(), triCenter, triRight, col);
-    Utils::Mesh::addLine(*vp.getLines(), triLeft, triRight, col);
+    Utils::Mesh::addLine(*vp.getLines(), triCenter, triLeft, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), triCenter, triRight, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), triLeft, triRight, col, ctx.prefs.cameraLineThickness);
 
 
     // Connect near plane and camera pos
     col = glm::u8vec4{0xCC, 0xAA, 0xAA, 0xFF};
-    Utils::Mesh::addLine(*vp.getLines(), camPos, ntl, col);
-    Utils::Mesh::addLine(*vp.getLines(), camPos, ntr, col);
-    Utils::Mesh::addLine(*vp.getLines(), camPos, nbl, col);
-    Utils::Mesh::addLine(*vp.getLines(), camPos, nbr, col);
+    Utils::Mesh::addLine(*vp.getLines(), camPos, ntl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), camPos, ntr, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), camPos, nbl, col, ctx.prefs.cameraLineThickness);
+    Utils::Mesh::addLine(*vp.getLines(), camPos, nbr, col, ctx.prefs.cameraLineThickness);
 
     auto spriteCol = isSelected ? Utils::Colors::kSelectionTint : glm::u8vec4{0xFF};
     Utils::Mesh::addSprite(*vp.getSprites(), pos, obj.uuid, 3, spriteCol);

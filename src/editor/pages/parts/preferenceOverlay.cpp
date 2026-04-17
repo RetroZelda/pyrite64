@@ -51,6 +51,28 @@ bool Editor::PreferenceOverlay::draw()
     ImTable::end();
   }
 
+  if (ImGui::CollapsingHeader("Lines", ImGuiTreeNodeFlags_DefaultOpen)) 
+  {
+    ImTable::start("Lines");
+    ImTable::add("Grid Line Thickness", ctx.prefs.gridLineThickness);
+    ImTable::add("AABB Line Thickness", ctx.prefs.aabbLineThickness);
+    ImTable::add("Collider Line Thickness", ctx.prefs.colliderLineThickness);
+    ImTable::add("Mesh Line Thickness", ctx.prefs.meshLineThickness);
+    ImTable::add("Camera Line Thickness", ctx.prefs.cameraLineThickness);
+    ImTable::add("Culled Line Thickness", ctx.prefs.culledLineThickness);
+    ImTable::add("Light Line Thickness", ctx.prefs.lightLineThickness);
+
+    ImTable::add("AABB Line Color", ctx.prefs.aabbLineColor);
+    ImTable::add("Collider Line Color", ctx.prefs.colliderLineColor);
+    ImTable::add("Mesh Line Color", ctx.prefs.meshLineColor);
+    ImTable::add("Mesh Line Color(Selected)", ctx.prefs.meshLineColorSelected);
+    ImTable::add("Camera Line Color", ctx.prefs.cameraLineColor);
+    ImTable::add("Camera Line Color(Selected)", ctx.prefs.cameraLineColorSelected);
+    ImTable::add("Culled Line Color", ctx.prefs.culledLineColor);
+    
+    ImTable::end();
+  }
+
   if (ImGui::CollapsingHeader("Keymap", ImGuiTreeNodeFlags_DefaultOpen)) {
     ImTable::start("Keymap");
     if (ImTable::addComboBox("Preset", (int&)ctx.prefs.keymapPreset, { "Blender", "Industry Compatible" })) {

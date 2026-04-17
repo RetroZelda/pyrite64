@@ -115,8 +115,8 @@ Coll::Raycast ray = Coll::Raycast::create(origin, direction, maxDistance, collid
 ```
 To actually cast the ray into the collision scene do:
 ```cpp
-auto collScene = SceneManager::getCurrent().getCollision();
-Coll:RaycastHit hit;
+auto &collScene = SceneManager::getCurrent().getCollision();
+Coll::RaycastHit hit;
 collScene.raycast(ray, hit);
 ```
 Then the `hit` object will contain information about the raycast result.
