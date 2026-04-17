@@ -168,13 +168,13 @@ namespace Project::Component::AnimModel
       auto center = obj.pos.resolve(obj.propOverrides) + (aabb.getCenter() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF);
       auto halfExt = aabb.getHalfExtend() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF;
 
-      glm::u8vec4 aabbCol{0xAA,0xAA,0xAA,0xFF};
+      glm::u8vec4 aabbCol = ctx.prefs.meshLineColor;
       if (isSelected) {
-        aabbCol = {0xFF,0xAA,0x00,0xFF};
+        aabbCol = ctx.prefs.meshLineColorSelected;
       }
 
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol);
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol, {1, 0, 0, 0}, ctx.prefs.meshLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol, {1, 0, 0, 0}, ctx.prefs.meshLineThickness);
     }
   }
 

@@ -167,29 +167,27 @@ namespace Project::Component::CollBody
 
     if(type == TYPE_BOX) // Box
     {
-      glm::vec4 aabbCol{0.0f, 1.0f, 1.0f, 1.0f};
-
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol, objRot);
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol, objRot);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.aabbLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, ctx.prefs.colliderLineColor, objRot, ctx.prefs.aabbLineThickness);
     } else if(type == TYPE_SPHERE) // Sphere
     {
-      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, objRot);
+      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.colliderLineThickness);
     }
     else if(type == TYPE_CYLINDER) // Cylinder
     {
-      Utils::Mesh::addLineCylinder(*vp.getLines(), center, halfExt, glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, objRot);
+      Utils::Mesh::addLineCylinder(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.colliderLineThickness);
     }
     else if(type == TYPE_CAPSULE) // Capsule
     {
-      Utils::Mesh::addLineCapsule(*vp.getLines(), center, halfExt, glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, objRot);
+      Utils::Mesh::addLineCapsule(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.colliderLineThickness);
     }
     else if(type == TYPE_CONE) // Cone
     {
-      Utils::Mesh::addLineCone(*vp.getLines(), center, halfExt, glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, objRot);
+      Utils::Mesh::addLineCone(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.colliderLineThickness);
     }
     else if(type == TYPE_PYRAMID) // Pyramid
     {
-      Utils::Mesh::addLinePyramid(*vp.getLines(), center, halfExt, glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, objRot);
+      Utils::Mesh::addLinePyramid(*vp.getLines(), center, halfExt, ctx.prefs.colliderLineColor, objRot, ctx.prefs.colliderLineThickness);
     }
   }
 }

@@ -52,7 +52,7 @@ Renderer::Scene::Scene()
 
   pipelineLines = std::make_unique<Pipeline>(Pipeline::Info{
     .shader = *shaderLines,
-    .prim = SDL_GPU_PRIMITIVETYPE_LINELIST,
+    .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
     .useDepth = true,
     .drawsObjID = false,
     .vertPitch = sizeof(LineVertex),
