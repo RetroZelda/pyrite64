@@ -49,7 +49,7 @@ void Renderer::Camera::apply(UniformGlobal &uniGlobal)
 {
   float aspect = screenSize.x / screenSize.y;
   float near = 10.0f;
-  float far = 10'000.0f;
+  float far = 90'000.0f;
   float fov = glm::radians(FOV);
 
   if(isOrtho)
