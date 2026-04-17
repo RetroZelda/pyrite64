@@ -51,12 +51,20 @@ void P64::Object::setEnabled(bool isEnabled)
   SceneManager::getCurrent().setGroupEnabled(id, isEnabledNow);
 }
 
-void P64::Object::remove()
+void P64::Object::remove(bool keepChildren)
 {
   if(flags & ObjectFlags::PENDING_REMOVE)return;
   flags |= ObjectFlags::PENDING_REMOVE;
   flags &= ~ObjectFlags::ACTIVE;
   SceneManager::getCurrent().removeObject(*this);
+
+  if(!keepChildren)
+  {
+    iterChildren([keepChildren](Object* child)
+    {
+        if(child) child->remove(keepChildren);
+    });
+  }
 }
 
 fm_vec3_t P64::Object::intoLocalSpace(const fm_vec3_t &p) const

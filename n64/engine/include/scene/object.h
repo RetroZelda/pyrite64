@@ -137,8 +137,9 @@ namespace P64
        * Removes the given object from the scene.
        * This is a shortcut for SceneManager::getCurrent().removeObject(obj);
        * Note: deletion is deferred until the end of the frame.
+       * @param keepChildren if true, children will recursivly be removed, else children will remain with undefined/invalid group
        */
-      void remove();
+      void remove(bool keepChildren = false);
 
       static Scene& getScene()
       {
