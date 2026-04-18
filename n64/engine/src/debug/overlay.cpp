@@ -8,6 +8,7 @@
 
 #include "debug/debugDraw.h"
 #include "debug/debugMenu.h"
+#include "debug/tweakableVars.h"
 #include "scene/scene.h"
 #include "vi/swapChain.h"
 #include "audio/audioManager.h"
@@ -70,6 +71,12 @@ namespace {
 void P64::Debug::Overlay::toggle()
 {
   isVisible = !isVisible;
+
+  int32_t saveOffset = Debug::TweakableVars::getAutomaticSaveOffset();
+  if(saveOffset >= 0)
+  {
+    (isVisible ? Debug::TweakableVars::loadVariables : Debug::TweakableVars::saveVariables)(saveOffset);
+  }
 }
 
 namespace fs = std::filesystem;
