@@ -894,7 +894,7 @@ namespace P64::Coll {
 
             RigidBody *rbB = findRigidBodyByOwner(collB->owner_);
             if(collideDetectObjectToObject(collider, body, collB, rbB)) {
-              debugf("CCD substep %d/%d: body %u hit body %u", k, substeps, collider->owner_->id, collB->owner_->id);
+              debugf("CCD substep %d/%d: body %u hit body %u\n", k, substeps, collider->owner_->id, collB->owner_->id);
             }
           }
         }
@@ -907,7 +907,7 @@ namespace P64::Coll {
             if(!collider->readsMeshCollider(mesh) && !mesh->readsCollider(collider)) continue;
             if(!aabbOverlap(collider->worldAabb_, mesh->worldAabb_)) continue;
             if(collideDetectObjectToMesh(collider, body, *mesh)) {
-              debugf("CCD substep %d/%d: body %u hit mesh %u", k, substeps, collider->owner_->id, mesh->owner_ ? static_cast<unsigned>(mesh->owner_->id) : 0u);
+              debugf("CCD substep %d/%d: body %u hit mesh %u\n", k, substeps, collider->owner_->id, mesh->owner_ ? static_cast<unsigned>(mesh->owner_->id) : 0u);
             }
           }
         }
