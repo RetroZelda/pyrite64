@@ -33,7 +33,7 @@
 #include "scene/componentTable.h"
 #include "script/globalScript.h"
 
-#include "scene/components/code.h"
+#include "lib/animController.h"
 
 namespace
 {
@@ -83,6 +83,7 @@ P64::Scene::Scene(uint16_t sceneId, Scene** ref)
   if(ref)*ref = this;
   Debug::init();
   Debug::Overlay::init();
+  AnimController::init();
 
   loadSceneConfig();
   P64::AudioManager::init(conf.audioFreq);
@@ -156,6 +157,7 @@ P64::Scene::~Scene()
   MatrixManager::reset();
   AssetManager::freeAll();
   Debug::destroy();
+  AnimController::destroy();
 
   delete renderPipeline;
 }
@@ -163,6 +165,8 @@ P64::Scene::~Scene()
 void P64::Scene::update(float deltaTime)
 {
   accumulator_ticks += TICKS_FROM_US((uint32_t)(deltaTime * 1000000.0f));
+  AnimController::update(deltaTime);
+  
   joypad_poll();
   auto pressed = joypad_get_buttons_pressed(JOYPAD_PORT_1);
   auto held = joypad_get_buttons_held(JOYPAD_PORT_1);

@@ -13,6 +13,8 @@
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
 
+#include "lib/animController.h"
+
 namespace
 {
   struct InitData
@@ -131,11 +133,16 @@ namespace P64::Comp
   }
 
   void AnimModel::update(Object&obj, AnimModel* data, float deltaTime) {
+    uint8_t framesSinceUpdate = AnimController::canAnimUpdate(*data);
+    if(framesSinceUpdate ==0) return; // not time to update yet
+
+    const float deltaTimeAdjusted = deltaTime * static_cast<float>(framesSinceUpdate);
+
     if (data->animIdxMain >= 0) {
-      t3d_anim_update(&data->anims[data->animIdxMain], deltaTime);
+      t3d_anim_update(&data->anims[data->animIdxMain], deltaTimeAdjusted);
     }
     if (data->animIdxBlend >= 0) {
-      t3d_anim_update(&data->anims[data->animIdxBlend], deltaTime);
+      t3d_anim_update(&data->anims[data->animIdxBlend], deltaTimeAdjusted);
 
       t3d_skeleton_blend(
         &data->skelMain,
