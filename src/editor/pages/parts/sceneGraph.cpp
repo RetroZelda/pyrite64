@@ -241,12 +241,15 @@ void Editor::SceneGraph::draw()
 
   if(dragDropTask.sourceUUID && dragDropTask.targetUUID) {
     //printf("dragDropTarget %08X -> %08X (%d)\n", dragDropTask.sourceUUID, dragDropTask.targetUUID, dragDropTask.isInsert);
-    UndoRedo::getHistory().markChanged("Move Object");
-    scene->moveObject(
+    bool moved = scene->moveObject(
       dragDropTask.sourceUUID,
       dragDropTask.targetUUID,
       dragDropTask.isInsert
     );
+
+    // Could move --> Add to history
+    if (moved)
+      UndoRedo::getHistory().markChanged("Move Object");
   }
 
   if (deleteSelection || deleteObj) {

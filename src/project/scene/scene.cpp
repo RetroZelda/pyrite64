@@ -19,6 +19,29 @@
 namespace
 {
   constexpr float DEF_MODEL_SCALE = 1.0f;
+
+  /**
+   * Checks whether a target object belongs to the subtree of a given ancestor.
+   *
+   * @param allegedDescendant Object to check if is a descendant.
+   * @param allegedAncestorUUID UUID of the node that may be an ancestor of target.
+   * @return True when target is the ancestor itself or one of its descendants.
+   */
+  bool isDescendantOf(const Project::Object* allegedDescendant, uint32_t allegedAncestorUUID)
+  {
+    const Project::Object* current = allegedDescendant;
+
+    // Walk from the target up to the root looking for the ancestor UUID
+    while (current) {
+      // Found the ancestor in the parent chain
+      if (current->uuid == allegedAncestorUUID)
+        return true;
+      // Jump up to the parent
+      current = current->parent;
+    }
+    // Reached the root without finding the ancestor
+    return false;
+  }
 }
 
 nlohmann::json Project::SceneConf::serialize() const {
@@ -152,7 +175,7 @@ void Project::Scene::removeAllObjects() {
 bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool asChild)
 {
   if(uuidObject == uuidTarget) {
-    return true;
+    return false;
   }
 
   auto objIt = objectsMap.find(uuidObject);
@@ -164,6 +187,10 @@ bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool a
 
   auto obj = objIt->second;
   auto target = targetIsRoot ? std::shared_ptr<Object>{} : targetIt->second;
+
+  // Moving object into descendant --> Disallow
+  if (!targetIsRoot && isDescendantOf(target.get(), uuidObject))
+    return false;
 
   // Remove from current parent
   if (obj->parent) {
