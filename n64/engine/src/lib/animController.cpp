@@ -3,12 +3,14 @@
 #include "scene/components/animModel.h"
 
 #include <unordered_map>
+#include <algorithm>
+#include <vector>
 
 namespace
 {
   struct AnimData{
+    uint64_t frameLastUpdated{0};
     uint8_t staggerRate{1};
-    uint8_t frameLastUpdated{0};
   };
     
   constinit std::unordered_map<const P64::Comp::AnimModel*, AnimData>* animDataMap = nullptr;
@@ -30,24 +32,50 @@ namespace P64 {
     void update([[maybe_unused]] float deltaTime){
       ++globalFrameCounter;
     }
-  
-    void setAnimStagger(const P64::Comp::AnimModel &anim, uint8_t staggerRate){
-      if(staggerRate == 0) animDataMap->erase(&anim);
-      else (*animDataMap)[&anim].staggerRate = staggerRate;
+
+    void draw_registered(){
+      float posY = 54.0f;
+      float stepY = 8.0f;
+      rdpq_text_printf(nullptr, 1, 10, posY, "Animation(x%u) frame: %llu", animDataMap->size(), globalFrameCounter);
+      posY += stepY;
+      for(const auto& pair : *animDataMap)
+      {                
+          const P64::Comp::AnimModel* anim = pair.first;
+          const AnimData& data = pair.second;
+          rdpq_text_printf(nullptr, 1, 15, posY, "%p: Rate = %d, Last Update = %llu", anim, data.staggerRate, globalFrameCounter - data.frameLastUpdated);
+          posY += stepY;
+      }
     }
   
-    uint8_t canAnimUpdate(const P64::Comp::AnimModel &anim){
+    void setAnimStagger(const P64::Comp::AnimModel &anim, uint8_t staggerRate){
+      (*animDataMap)[&anim].staggerRate = staggerRate;
+      (*animDataMap)[&anim].frameLastUpdated = globalFrameCounter > staggerRate ? globalFrameCounter - staggerRate : 0;
+    }
+    
+    void clearAnimStagger(const P64::Comp::AnimModel &anim){
+      animDataMap->erase(&anim);
+    }
+  
+    bool canAnimUpdate(const P64::Comp::AnimModel &anim, uint8_t &framesSinceUpdate){
       auto it = animDataMap->find(&anim);
-      if(it == animDataMap->end()) return 1; // not found, means no staggering for this anim
+      if(it == animDataMap->end()) {
+        // not found means the animation is not staggered, so it can update every frame
+        framesSinceUpdate = 1;
+        return true; 
+      }
   
       AnimData &data = it->second;
-      uint8_t framesSinceLastUpdate = globalFrameCounter - data.frameLastUpdated;
-  
-      if(framesSinceLastUpdate >= data.staggerRate) {
-          data.frameLastUpdated = globalFrameCounter;
-          return framesSinceLastUpdate;
+      if(data.staggerRate == 0) {
+        framesSinceUpdate = 0;
+        return false; // explicitly disabled
       }
-      return 0;
+
+      uint8_t framesSinceLastUpdate = globalFrameCounter - data.frameLastUpdated;  
+      if(framesSinceLastUpdate >= data.staggerRate) {
+            framesSinceUpdate = framesSinceLastUpdate;
+            data.frameLastUpdated = globalFrameCounter;
+      } else framesSinceUpdate = 0;
+      return true;
     }
 
   } // AnimController

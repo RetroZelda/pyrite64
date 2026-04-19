@@ -169,7 +169,6 @@ P64::Scene::~Scene()
 void P64::Scene::update(float deltaTime)
 {
   accumulator_ticks += TICKS_FROM_US((uint32_t)(deltaTime * 1000000.0f));
-  AnimController::update(deltaTime);
   
   joypad_poll();
   auto pressed = joypad_get_buttons_pressed(JOYPAD_PORT_1);
@@ -243,6 +242,8 @@ void P64::Scene::update(float deltaTime)
 
   ticksGlobalUpdate = get_user_ticks();
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
+
+  AnimController::update(deltaTime);
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
 
   ticksActorUpdate = get_ticks();

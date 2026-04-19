@@ -19,6 +19,7 @@
 #include "../../include/debug/menu.h"
 #include "../audio/audioManagerPrivate.h"
 #include "lib/memory.h"
+#include "lib/animController.h"
 
 namespace P64::SceneManager
 {
@@ -42,6 +43,9 @@ namespace {
   constinit P64::Debug::Menu menuAudio{};
   constinit P64::Debug::Menu menuMemory{};
   constinit P64::Debug::Menu menuCPU{};
+
+  constinit P64::Debug::Menu menuAnim{};
+  constinit P64::Debug::Menu menuAnimControllerRegistered{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
@@ -91,9 +95,13 @@ void P64::Debug::Overlay::init()
   menuMemory.items.clear();
   menuCPU.items.clear();
 
+  menuAnim.items.clear();
+  menuAnimControllerRegistered.items.clear();
+
   menu.add("Scenes", menuScenes)
       .add("CPU", menuCPU)
       .add("Collision", menuColl)
+      .add("Animation", menuAnim)
       .add("Audio", menuAudio)
       .add("Memory", menuMemory)
       .add("Bar CPU", showBarCPU)
@@ -110,6 +118,11 @@ void P64::Debug::Overlay::init()
     .add("Interp.", scene.getConf().interpolatePhysicsTransforms)
   ;
 
+  menuAnim
+  // TODO: add some anim-related options here, like showing total anim count, drawing bones, etc
+    .add("Controller Map", menuAnimControllerRegistered)
+  ;
+
   menuAudio.onDraw = ovlAudio;
   menuAudio.add("Freq.", scene.getConf().audioFreq, 8000, 48000, 0);
   menuAudio.add("Volume", P64::AudioManager::masterVol, 0.0f, 1.0f, 0.05f);
@@ -117,6 +130,10 @@ void P64::Debug::Overlay::init()
   menuMemory.onDraw = ovlMemory;
   menuCPU.onDraw = ovlCPU;
   menuCPU.add("Average", useCpuAvg);
+
+  menuAnimControllerRegistered.onDraw = [](){
+    AnimController::draw_registered();
+  };
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";

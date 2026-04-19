@@ -133,11 +133,15 @@ namespace P64::Comp
   }
 
   void AnimModel::update(Object&obj, AnimModel* data, float deltaTime) {
-    uint8_t framesSinceUpdate = AnimController::canAnimUpdate(*data);
-    if(framesSinceUpdate ==0) return; // not time to update yet
+    uint8_t framesSinceUpdate;
+    if(!AnimController::canAnimUpdate(*data, framesSinceUpdate)) {
+        data->flags |= 1; // mark as not updated, can be used by other systems to skip processing
+        return; // not updating
+    }
+    data->flags &= ~(1); // mark as updated
+    //if(framesSinceUpdate == 0) return;
 
     const float deltaTimeAdjusted = deltaTime * static_cast<float>(framesSinceUpdate);
-
     if (data->animIdxMain >= 0) {
       t3d_anim_update(&data->anims[data->animIdxMain], deltaTimeAdjusted);
     }
@@ -157,6 +161,10 @@ namespace P64::Comp
 
   void AnimModel::draw(Object &obj, AnimModel* data, float deltaTime)
   {
+    if(data->flags & (1)) {
+      // animation was not updated this frame by request, so lets not even bother drawing it.
+      return;
+    }
     auto mat = data->matFP.getNext();
     t3d_mat4fp_from_srt(mat, obj.scale, obj.rot, obj.pos);
 
