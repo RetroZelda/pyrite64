@@ -33,6 +33,7 @@
 #include "scene/componentTable.h"
 #include "script/globalScript.h"
 
+#include "scene/components/code.h"
 #include "lib/animController.h"
 
 namespace
