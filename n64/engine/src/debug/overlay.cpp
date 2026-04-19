@@ -20,6 +20,7 @@
 #include "../../include/debug/menu.h"
 #include "../audio/audioManagerPrivate.h"
 #include "lib/memory.h"
+#include "lib/animController.h"
 
 namespace P64::SceneManager
 {
@@ -48,6 +49,9 @@ namespace {
   constinit P64::Debug::Menu menuCPUComponents{};
   constinit P64::Debug::Menu menuCPUScripts{};
   constinit P64::Debug::Menu menuCPUUserGlobals{};
+
+  constinit P64::Debug::Menu menuAnim{};
+  constinit P64::Debug::Menu menuAnimControllerRegistered{};
 
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
@@ -112,9 +116,13 @@ void P64::Debug::Overlay::init()
          .add("UserGlobals", menuCPUUserGlobals)
          .add("Average", useCpuAvg);
 
+  menuAnim.items.clear();
+  menuAnimControllerRegistered.items.clear();
+
   menu.add("Scenes", menuScenes)
       .add("CPU", menuCPU)
       .add("Collision", menuColl)
+      .add("Animation", menuAnim)
       .add("Audio", menuAudio)
       .add("Memory", menuMemory)
       .add("Bar CPU", showBarCPU)
@@ -129,6 +137,11 @@ void P64::Debug::Overlay::init()
     .add("Iter. Pos", scene.getConf().positionSolverIterations, 1, 20, 1)
     .add("Iter. Vel", scene.getConf().velocitySolverIterations, 1, 20, 1)
     .add("Interp.", scene.getConf().interpolatePhysicsTransforms)
+  ;
+
+  menuAnim
+  // TODO: add some anim-related options here, like showing total anim count, drawing bones, etc
+    .add("Controller Map", menuAnimControllerRegistered)
   ;
 
   menuAudio.onDraw = ovlAudio;
@@ -148,6 +161,10 @@ void P64::Debug::Overlay::init()
   menuCPUUserGlobals.onDraw = ovlUserGlobals;
   menuCPUUserGlobals.add("Show Totals", useDetailedTotals);
 
+
+  menuAnimControllerRegistered.onDraw = [](){
+    AnimController::draw_registered();
+  };
 
   dir_t dir{};
   const char* const BASE_DIR = "rom:/p64";
