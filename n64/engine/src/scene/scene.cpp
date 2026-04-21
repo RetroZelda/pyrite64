@@ -39,22 +39,6 @@ namespace
   constexpr uint32_t MAX_PHYSICS_STEPS = 5;
   constexpr float SEC_TO_USEC = 1000000.0f;
 
-  void dispatchObjectEnabledEvent(P64::Object &obj, bool enabled)
-  {
-    auto compRefs = obj.getCompRefs();
-    for (uint32_t i=0; i<obj.compCount; ++i) {
-      const auto &compDef = P64::COMP_TABLE[compRefs[i].type];
-      if(!compDef.onEvent) continue;
-
-      char* dataPtr = (char*)&obj + compRefs[i].offset;
-      compDef.onEvent(obj, dataPtr, {
-        .senderId = 0,
-        .type = enabled ? P64::EVENT_TYPE_ENABLE : P64::EVENT_TYPE_DISABLE,
-        .value = 0
-      });
-    }
-  }
-
   P64::Object* collisionEventSelfObject(const P64::Coll::CollEvent &event)
   {
     if(event.selfCollider) return event.selfCollider->ownerObject();
@@ -185,6 +169,10 @@ void P64::Scene::update(float deltaTime)
   camMain = cameras.empty() ? nullptr : cameras[0];
   //debugf("cam %p: %d | %f\n", camMain, cameras.size(), (double)camMain->pos.z);
 
+  ticksGlobalUpdate = get_user_ticks();
+  GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
+  ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
+
   for(auto data : objectsToAdd) {
     loadObject((uint8_t*&)data.prefabData, [&](Object &obj)
     {
@@ -197,8 +185,21 @@ void P64::Scene::update(float deltaTime)
   }
 
   runPendingComponentInit();
-
   objectsToAdd.clear();
+
+  // transition active/inactive state of objects
+  //auto t = get_ticks();
+  if(needsObjStateUpdate)
+  {
+    for(const auto obj : objects) {
+      updateChildObjectStates(nullptr, *obj);
+    }
+    needsObjStateUpdate = false;
+  }
+  //t = get_ticks() - t;
+  //debugf("State Change Time: %llu us\n", TICKS_TO_US(t));
+
+  runPendingEvents();
 
   // ======== Run the Physics and fixed Update Callbacks in a fixed Deltatime Loop ======== //
   uint16_t physicsTickRate = conf.physicsTickRate > 0 ? conf.physicsTickRate : 50;
@@ -235,10 +236,6 @@ void P64::Scene::update(float deltaTime)
     applyRenderInterpolation(remainderSec);
   }
 
-  ticksGlobalUpdate = get_user_ticks();
-  GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
-  ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
-
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)
   {
@@ -273,31 +270,7 @@ void P64::Scene::update(float deltaTime)
   }
   pendingObjDelete.clear();
 
-  // events, switch now to prevent infinite loops for objects that push events in response to events
-  auto &evQueue = eventQueue[eventQueueIdx];
-  eventQueueIdx = (eventQueueIdx + 1) % 2;
-  for(uint32_t e=0; e<evQueue.eventCount; ++e)
-  {
-    auto &entry = evQueue.events[e];
-    auto obj = getObjectById(entry.targetId);
-    if(obj)
-    {
-      auto compRefs = obj->getCompRefs();
-      for (uint32_t i=0; i<obj->compCount; ++i) {
-        const auto &compDef = COMP_TABLE[compRefs[i].type];
-        if(compDef.onEvent)
-        {
-          char* dataPtr = (char*)obj + compRefs[i].offset;
-          compDef.onEvent(*obj, dataPtr, entry.event);
-        }
-      }
-    }
-  }
-  evQueue.clear();
-
   AudioManager::update();
-
-
   VI::SwapChain::nextFrame();
 }
 
@@ -384,6 +357,30 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
 #endif
 }
 
+void P64::Scene::runPendingEvents()
+{
+  // events, switch now to prevent infinite loops for objects that push events in response to events
+  auto &evQueue = eventQueue[eventQueueIdx];
+  eventQueueIdx = (eventQueueIdx + 1) % 2;
+  for(const auto &entry : evQueue.events)
+  {
+    auto obj = getObjectById(entry.targetId);
+    if(obj)
+    {
+      auto compRefs = obj->getCompRefs();
+      for (uint32_t i=0; i<obj->compCount; ++i) {
+        const auto &compDef = COMP_TABLE[compRefs[i].type];
+        if(compDef.onEvent)
+        {
+          char* dataPtr = (char*)obj + compRefs[i].offset;
+          compDef.onEvent(*obj, dataPtr, entry.event);
+        }
+      }
+    }
+  }
+  evQueue.clear();
+}
+
 void P64::Scene::applyRenderInterpolation(float dt)
 {
   auto &rigidBodies = Coll::collisionSceneGetInstance()->getRigidBodies();
@@ -467,28 +464,26 @@ P64::Object* P64::Scene::getObjectById(uint16_t objId) const
   return nullptr;
 }
 
-void P64::Scene::setGroupEnabled(uint16_t groupId, bool enabled) const
+void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
 {
-  if(groupId == 0)return;
+  if(!parent && obj.group) {
+    parent = getObjectById(obj.group);
+  }
 
-  std::function<void(uint16_t, bool)> applyToChildren = [&](uint16_t parentId, bool parentsActive) {
-    for(auto obj : objects)
-    {
-      if(obj->group != parentId) continue;
+  const auto wasEnabledBefore = obj.isEnabled();
+  obj.setFlag(ObjectFlags::PARENTS_ACTIVE, parent ? parent->isEnabled() : true);
+  if(!obj.performStateChange() && !parent) {
+    return; // without a parent, no cascading change can happen if the own state didn't change
+  }
 
-      const bool wasEnabled = obj->isEnabled();
-      obj->setFlag(ObjectFlags::PARENTS_ACTIVE, parentsActive);
-      const bool isEnabledNow = obj->isEnabled();
+  if(wasEnabledBefore == obj.isEnabled()) {
+    return;
+  }
 
-      if(wasEnabled != isEnabledNow) {
-        dispatchObjectEnabledEvent(*obj, isEnabledNow);
-      }
-
-      applyToChildren(obj->id, isEnabledNow);
-    }
-  };
-
-  applyToChildren(groupId, enabled);
+  sendEvent(obj.id, 0, obj.isEnabled() ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE, 0);
+  iterObjectChildren(obj.id, [&](Object* child) {
+    updateChildObjectStates(&obj, *child);
+  });
 }
 
 P64::Lighting & P64::Scene::startLightingOverride(bool copyExisting)

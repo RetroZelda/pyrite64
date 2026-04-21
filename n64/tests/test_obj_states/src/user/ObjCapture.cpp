@@ -1,7 +1,8 @@
 #include "script/userScript.h"
 #include "scene/sceneManager.h"
+#include "./globals.h"
 
-namespace P64::Script::__UUID__
+namespace P64::Script::CB7F8F3EFD4E4EBF
 {
   P64_DATA(
     // Put your arguments and runtime values bound to an object here.
@@ -21,40 +22,43 @@ namespace P64::Script::__UUID__
 
   void init(Object& obj, Data *data)
   {
-    // initialization, this is called once when the object spawns
+    //debugf("Object %d got INIT (s:%d p:%d)\n", obj.id, obj.flags & 0b01, obj.flags & 0b10);
+    User::addEvent(obj, User::EvType::INIT);
   }
 
   void destroy(Object& obj, Data *data)
   {
-    // clean-up, this is called when the object gets deleted
+    User::addEvent(obj, User::EvType::DESTROY);
   }
 
   void update(Object& obj, Data *data, float deltaTime)
   {
-    // this is called once every frame, put your main logic here
+    User::addEvent(obj, User::EvType::UPDATE);
   }
 
   void fixedUpdate(Object& obj, Data *data, float fixedDeltaTime)
   {
-    // this is called on the fixed physics timestep before collision/physics are stepped
+    User::addEvent(obj, User::EvType::FIXED_UPDATE);
   }
 
   void draw(Object& obj, Data *data, float deltaTime)
   {
-    // this is called once every frame, and for every active camera.
-    // Put your drawing code here
+    User::addEvent(obj, User::EvType::DRAW);
   }
 
   void onEvent(Object& obj, Data *data, const ObjectEvent &event)
   {
-    // generic events an object can receive
     switch(event.type)
     {
       case EVENT_TYPE_READY: // object is fully initialized, no update call has happened yet
+        //debugf("Object %d got READY event (s:%d p:%d)\n", obj.id, obj.flags & 0b01, obj.flags & 0b10);
+        User::addEvent(obj, User::EvType::EV_READY, event.value);
       break;
       case EVENT_TYPE_ENABLE: // object got enabled
+        User::addEvent(obj, User::EvType::EV_ENABLE, event.value);
       break;
       case EVENT_TYPE_DISABLE: // object got disabled
+        User::addEvent(obj, User::EvType::EV_DISABLE, event.value);
       break;
 
       // you can check for your own custom types here too
@@ -63,6 +67,6 @@ namespace P64::Script::__UUID__
 
   void onCollision(Object& obj, Data *data, const Coll::CollEvent& event)
   {
-    // collision callbacks, only used if any collider is attached
+    
   }
 }
