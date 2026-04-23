@@ -100,6 +100,15 @@ namespace P64
         uint8_t* initData{};
       };
       std::vector<PendingCompInit> pendingCompInit{};
+      
+      struct PendingCompReady
+      {
+        Object* obj{};
+        char* dataPtr{};
+        uint8_t compId{};
+      };
+      std::vector<PendingCompReady> pendingCompReady{};
+
 
       // create a direct lookup table for the first few IDs
       // most scene probably don't exceed that much anyway
@@ -131,7 +140,11 @@ namespace P64
       void loadSceneConfig();
       Object* loadObject(uint8_t* &objFile, std::function<void(Object&)> callback = {}, bool deferComponentInit = false);
       void runPendingComponentInit();
+      void runPendingComponentReady();
+      void runPendingEvents();
       void loadScene();
+
+      void updateChildObjectStates(const Object* parent, Object& obj);
 
     public:
       uint64_t ticksActorUpdate{0};
@@ -139,6 +152,7 @@ namespace P64
       uint64_t ticksGlobalDraw{0};
       uint64_t ticksDraw{0};
       uint32_t memObjects{0};
+      bool needsObjStateUpdate{false};
 
       explicit Scene(uint16_t sceneId, Scene** ref);
       ~Scene();
@@ -234,8 +248,6 @@ namespace P64
           f(o);
         }
       }
-
-      void setGroupEnabled(uint16_t groupId, bool enabled) const;
 
       [[nodiscard]] Lighting& getLighting() { return lighting; }
 

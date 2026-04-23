@@ -55,6 +55,11 @@ namespace P64::Script::__UUID__
     // this is called when the object is disabled and inactive in scene
   }
 
+  void onReady(Object& obj, Data *data)
+  {
+    // object is fully initialized, no update call has happened yet
+  }
+
   void onEvent(Object& obj, Data *data, const ObjectEvent &event)
   {
     // generic events an object can receive

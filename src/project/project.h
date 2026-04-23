@@ -21,6 +21,8 @@ namespace Project
     uint32_t sceneIdOnReset{1};
     uint32_t sceneIdLastOpened{1};
 
+    std::array<std::string, 8> collLayerNames{};
+
     std::string serialize() const;
   };
 

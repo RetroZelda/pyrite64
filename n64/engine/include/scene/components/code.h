@@ -24,6 +24,7 @@ namespace P64::Comp
     static constexpr uint32_t FN_FIXED_UPDATE = 1 << 4;
     static constexpr uint32_t FN_ON_ENABLE    = 1 << 5;
     static constexpr uint32_t FN_ON_DISABLE   = 1 << 6;
+    static constexpr uint32_t FN_ON_READY     = 1 << 7;
 
     // store direct pointer to avoid lookup each time
     Script::ScriptEntry *script;
@@ -67,6 +68,7 @@ namespace P64::Comp
       if(data->script->fixedUpdate) data->usedFunctions |= FN_FIXED_UPDATE;
       if(data->script->onEnable) data->usedFunctions |= FN_ON_ENABLE;
       if(data->script->onDisable) data->usedFunctions |= FN_ON_DISABLE;
+      if(data->script->onReady) data->usedFunctions |= FN_ON_READY;
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
@@ -82,6 +84,12 @@ namespace P64::Comp
     static void onDisable(Object& obj, Code* data) {
       if(data->usedFunctions & FN_ON_DISABLE) {
         data->script->onDisable(obj, data->getCodeData());
+      }
+    }
+
+    static void onReady(Object& obj, Code* data) {
+      if(data->usedFunctions & FN_ON_READY) {
+        data->script->onReady(obj, data->getCodeData());
       }
     }
 

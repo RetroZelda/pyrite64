@@ -111,6 +111,7 @@ namespace Project::Component::Code
           ImGui::Text("(None)");
         }
 
+        const bool isInstanceMode = ImTable::isPrefabLocked(&obj);
         for (auto &field : script->params.fields)
         {
           std::string name{};
@@ -123,42 +124,67 @@ namespace Project::Component::Code
             data.args[field.name].id = Utils::Hash::randomU64();
           }
 
-          if(field.type == Utils::DataType::ASSET_SPRITE)
+          auto &prop = data.args[field.name];
+          if(field.type == Utils::DataType::ASSET_SPRITE ||
+             field.type == Utils::DataType::OBJECT_REF ||
+             field.type == Utils::DataType::PREFAB)
           {
-            const auto &assets = ctx.project->getAssets().getTypeEntries(FileType::IMAGE);
-            uint64_t uuid = Utils::parseU64(data.args[field.name].value);
-            ImTable::addAssetVecComboBox(name, assets, uuid, [&](uint64_t newId) {
-              data.args[field.name].value = std::to_string(newId);
-            });
-          } else if(field.type == Utils::DataType::OBJECT_REF) {
-            // @TODO: do this in scene itself
-            auto &map = ctx.project->getScenes().getLoadedScene()->objectsMap;
-            std::vector<ImTable::ComboEntry> objList;
-            objList.push_back({0, "<None>"});
+            ImGui::PushID(static_cast<int>(prop.id & 0xFFFFFFFFULL));
+            ImTable::add(name);
+            
+            bool isOverridden = obj.propOverrides.find(prop.id) != obj.propOverrides.end();
+            
+            // Lock toggle button
+            if (isInstanceMode)
+            {
+              if (ImGui::IconToggle(isOverridden, ICON_MDI_LOCK_OPEN, ICON_MDI_LOCK, ImVec2{16,16})) {
+                if (isOverridden) {
+                  obj.addPropOverride(prop);
+                } else {
+                  obj.removePropOverride(prop);
+                }
+              }
+              ImGui::SetItemTooltip(isOverridden ? "Disable Override" : "Enable Override");
+              ImGui::SameLine();
+            }
+            
+            ImTable::PrefabEditScope prefabScope(isOverridden);
+            std::string resolved = prop.resolve(obj.propOverrides);
+            uint64_t uuid = resolved.empty() ? 0 : Utils::parseU64(resolved);
+            auto validationFunc = [&](uint64_t newId) {
+                if (isInstanceMode && obj.propOverrides.find(prop.id) == obj.propOverrides.end()) {
+                  obj.addPropOverride(prop);
+                }
+                prop.resolve(obj.propOverrides) = std::to_string(newId);
+              };
+            
+            if(field.type == Utils::DataType::ASSET_SPRITE) {
+              const auto &assets = ctx.project->getAssets().getTypeEntries(FileType::IMAGE);
+              ImTable::addAssetVecComboBox("", assets, uuid, validationFunc);
+            } else if(field.type == Utils::DataType::OBJECT_REF) {
+              // @TODO: do this in scene itself
+              auto &map = ctx.project->getScenes().getLoadedScene()->objectsMap;
+              std::vector<ImTable::ComboEntry> objList;
+              objList.push_back({0, "<None>"});
 
-            for (auto &[id, object] : map) {
-              objList.push_back({
+              for (auto &[id, object] : map) {
+                objList.push_back({
                 .value = object->uuid,
                 .name = object->name,
-              });
-            }
+                });
+              }
 
-            uint32_t uuid = static_cast<uint32_t>(Utils::parseU64(data.args[field.name].value));
-            ImTable::addObjectVecComboBox(name, objList, uuid, [&](uint32_t newId) {
-              data.args[field.name].value = std::to_string(newId);
-            });
-          } else if(field.type == Utils::DataType::PREFAB) {
-            const auto &prefabs = ctx.project->getAssets().getTypeEntries(FileType::PREFAB);
-            uint64_t uuid = Utils::parseU64(data.args[field.name].value);
-            ImTable::addAssetVecComboBox(name, prefabs, uuid, [&](uint64_t newId) {
-              data.args[field.name].value = std::to_string(newId);
-            });
+              ImTable::addObjectVecComboBox("", objList, uuid, validationFunc);
+            } else if(field.type == Utils::DataType::PREFAB) {
+              const auto &prefabs = ctx.project->getAssets().getTypeEntries(FileType::PREFAB);
+              ImTable::addAssetVecComboBox("", prefabs, uuid, validationFunc);
+            }
+            ImGui::PopID();
           } else {
-            ImTable::addObjProp(name, data.args[field.name]);
+            ImTable::addObjProp(name, prop);
           }
         }
       }
-
       ImTable::end();
     }
   }

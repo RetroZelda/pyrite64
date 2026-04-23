@@ -4,6 +4,7 @@
 */
 #pragma once
 #include <libdragon.h>
+#include <vector>
 
 namespace P64
 {
@@ -28,24 +29,27 @@ namespace P64
 
   struct ObjectEventQueue
   {
-    ObjectEventWrapper events[MAX_EVENT_COUNT]{};
-    uint32_t eventCount{0};
+    static constexpr uint32_t DEF_EVENT_SIZE = 64;
+
+    std::vector<ObjectEventWrapper> events{};
+
+    ObjectEventQueue() {
+      events.reserve(DEF_EVENT_SIZE);
+    }
 
     void add(uint16_t targetId, uint16_t senderId, uint16_t type, uint32_t value) {
-      if (eventCount < MAX_EVENT_COUNT) {
-        events[eventCount].targetId = targetId;
-        events[eventCount].event =
-        {
-          .senderId = senderId,
-          .type = type,
-          .value = value
-        };
-        eventCount++;
-      }
+      events.emplace_back(ObjectEvent{
+        .senderId = senderId,
+        .type = type,
+        .value = value
+      }, targetId);
     }
 
     void clear() {
-      eventCount = 0;
+      events.clear();
+      if(events.capacity() > DEF_EVENT_SIZE) {
+        events.shrink_to_fit();
+      }
     }
   };
 }

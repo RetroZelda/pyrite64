@@ -19,6 +19,7 @@ namespace P64
   typedef void(*FuncInitDel)(Object&, void*, void*);
   typedef void(*FuncEnabled)(Object&, void*);
   typedef void(*FuncDisabled)(Object&, void*);
+  typedef void(*FuncReady)(Object&, void*);
   typedef void(*FuncUpdate)(Object&, void*, float deltaTime);
   typedef void(*FuncFixedUpdate)(Object&, void*, float fixedDeltaTime);
   typedef void(*FuncDraw)(Object&, void*, float deltaTime);
@@ -30,6 +31,7 @@ namespace P64
     FuncInitDel initDel{};
     FuncEnabled onEnable{};
     FuncDisabled onDisable{};
+    FuncReady onReady{};
     FuncUpdate update{};
     FuncFixedUpdate fixedUpdate{};
     FuncDraw draw{};

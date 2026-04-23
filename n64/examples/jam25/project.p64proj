@@ -1,4 +1,12 @@
 {
+  "collLayer0": "Solid",
+  "collLayer1": "Hurt",
+  "collLayer2": "Layer 2",
+  "collLayer3": "Layer 3",
+  "collLayer4": "",
+  "collLayer5": "",
+  "collLayer6": "",
+  "collLayer7": "",
   "name": "Cathode Quest 64",
   "pathEmu": "ares",
   "pathN64Inst": "",
