@@ -182,6 +182,8 @@ void P64::Scene::update(float deltaTime)
   camMain = cameras.empty() ? nullptr : cameras[0];
   //debugf("cam %p: %d | %f\n", camMain, cameras.size(), (double)camMain->pos.z);
 
+  runPendingComponentReady();
+  
   ticksGlobalUpdate = get_user_ticks();
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
@@ -198,7 +200,6 @@ void P64::Scene::update(float deltaTime)
   }
 
   runPendingComponentInit();
-  runPendingComponentReady();
   objectsToAdd.clear();
 
   // transition active/inactive state of objects
