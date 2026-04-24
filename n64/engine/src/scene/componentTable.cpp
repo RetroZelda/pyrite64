@@ -36,6 +36,7 @@ namespace
 {
   HAS_FUNC_TPL(has_enable, get_on_enable,  onEnable  )
   HAS_FUNC_TPL(has_disable,get_on_disable, onDisable )
+  HAS_FUNC_TPL(has_ready,get_on_ready, onReady )
   HAS_FUNC_TPL(has_draw,   get_draw,    draw   )
   HAS_FUNC_TPL(has_update, get_update,  update )
   HAS_FUNC_TPL(has_fixed_update, get_fixed_update, fixedUpdate)
@@ -48,6 +49,7 @@ namespace
     .initDel = reinterpret_cast<FuncInitDel>(Comp::NAME::initDelete), \
     .onEnable = (FuncEnabled)get_on_enable<Comp::NAME>(), \
     .onDisable = (FuncDisabled)get_on_disable<Comp::NAME>(), \
+    .onReady = (FuncReady)get_on_ready<Comp::NAME>(), \
     .update = (FuncUpdate)get_update<Comp::NAME>(), \
     .fixedUpdate = (FuncFixedUpdate)get_fixed_update<Comp::NAME>(), \
     .draw   = (FuncDraw)(get_draw<Comp::NAME>()), \

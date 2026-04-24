@@ -157,10 +157,19 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
       if(obj->isEnabled() && compDef.onEnable) {
         compDef.onEnable(*obj, objCompDataPtr);
       }
+
+      if(compDef.onReady) {
+        pendingCompReady.push_back({
+          .obj = obj,
+          .dataPtr = objCompDataPtr,
+          .compId = compId
+        });
+      }
     }
 
     objCompDataPtr += Math::alignUp(compDef.getAllocSize(ptrIn + 4), 8);
     ptrIn += argSize;
+
   }
 
   /*debugf("Object: id=%d | group=%d | flags=0x%04X | pos=(%f,%f,%f) | comp: %d\n",
@@ -189,8 +198,26 @@ void P64::Scene::runPendingComponentInit()
     if(pending.obj->isEnabled() && compDef.onEnable) {
       compDef.onEnable(*pending.obj, pending.dataPtr);
     }
+
+    if(compDef.onReady) {
+      pendingCompReady.push_back({
+        .obj = pending.obj,
+        .dataPtr = pending.dataPtr,
+        .compId = pending.compId
+      });
+    }
   }
   pendingCompInit.clear();
+}
+
+void P64::Scene::runPendingComponentReady()
+{
+  for(auto &pending : pendingCompReady)
+  {
+    const auto &compDef = COMP_TABLE[pending.compId];
+    if(compDef.onReady) compDef.onReady(*pending.obj, pending.dataPtr);
+  }
+  pendingCompReady.clear();
 }
 
 void P64::Scene::loadScene() {
@@ -210,19 +237,21 @@ void P64::Scene::loadScene() {
       loadObject(objFile, {}, true);
     }
 
-    // Resolve effective active state for the full hierarchy before deferred
-    // component init so disabled parents/groups do not register physics data.
-    std::function<void(uint16_t, bool)> applyHierarchyActiveState = [&](uint16_t parentId, bool parentsActive) {
-      for(auto obj : objects)
-      {
-        if(obj->group != parentId) continue;
-
-        obj->setFlag(ObjectFlags::PARENTS_ACTIVE, parentsActive);
-        applyHierarchyActiveState(obj->id, obj->isEnabled());
-      }
+    std::function<void(const Object* parent, Object& obj)> updateStates = [&](const Object* parent, Object& obj)
+    {
+      obj.setFlag(ObjectFlags::PARENTS_ACTIVE, parent ? parent->isEnabled() : true);
+      iterObjectChildren(obj.id, [&](Object* child) {
+        updateStates(&obj, *child);
+      });
     };
 
-    applyHierarchyActiveState(0, true);
+    // Resolve effective active state for the full hierarchy before deferred
+    // component init so disabled parents/groups do not register physics data.
+    for(auto obj : objects)
+    {
+      if(obj->group != 0)continue;
+      updateStates(nullptr, *obj);
+    }
 
     // run component init only after all objects are registered in the scene
     runPendingComponentInit();

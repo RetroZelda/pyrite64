@@ -22,6 +22,7 @@ namespace P64::Script
     FuncObjInit destroy;
     FuncObjInit onEnable;
     FuncObjInit onDisable;
+    FuncObjInit onReady;
     FuncObjDataDelta update;
     FuncObjDataDelta fixedUpdate;
     FuncObjDataDelta draw;

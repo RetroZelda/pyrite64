@@ -25,30 +25,12 @@ P64::Object::~Object()
 
 void P64::Object::setEnabled(bool isEnabled)
 {
-  auto oldFlags = flags;
-  const bool wasEnabled = this->isEnabled();
-  if(isEnabled) {
-    flags |= ObjectFlags::SELF_ACTIVE;
+  if(isEnabled != this->isSelfEnabled()) {
+    flags |= ObjectFlags::PENDING_ACTIVE_CHG;
+    SceneManager::getCurrent().needsObjStateUpdate = true;
   } else {
-    flags &= ~ObjectFlags::SELF_ACTIVE;
+    flags &= ~ObjectFlags::PENDING_ACTIVE_CHG;
   }
-
-  if(oldFlags == flags)return;
-
-  const bool isEnabledNow = this->isEnabled();
-
-  if(wasEnabled != isEnabledNow) {
-    auto compRefs = getCompRefs();
-    for (uint32_t i=0; i<compCount; ++i) {
-      const auto &compDef = COMP_TABLE[compRefs[i].type];
-      char* dataPtr = (char*)this + compRefs[i].offset;
-      
-      if(isEnabledNow && compDef.onEnable) compDef.onEnable(*this, dataPtr);
-      else if(!isEnabledNow && compDef.onDisable) compDef.onDisable(*this, dataPtr);
-    }
-  }
-
-  SceneManager::getCurrent().setGroupEnabled(id, isEnabledNow);
 }
 
 void P64::Object::remove(bool keepChildren)
