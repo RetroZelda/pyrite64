@@ -1694,14 +1694,6 @@ namespace P64::Coll {
         body->worldAabb_ = aabbUnion(body->worldAabb_, collider->worldAabb_);
       }
 
-      // Snapshot the fully-corrected transform for sleep evaluation.
-      // This must happen AFTER the position solver and split impulse push so that
-      // solver corrections (penetration resolution) do not register as "movement"
-      // in the sleep threshold check.
-      body->previousStepPosition_ = body->position_;
-      body->previousStepRotation_ = body->rotation_;
-      body->previousStepScale_ = body->owner_->scale;
-
       // Sync visual object with physics position
       body->owner_->pos = body->position_ * getGfxScale();
       body->owner_->rot = body->rotation_;
@@ -1709,6 +1701,19 @@ namespace P64::Coll {
 
     // Update RigidBody sleep states
     updateSleepStates();
+
+   for(RigidBody *body : rigidBodies_) {
+        if(!body || !body->owner_) continue;
+        //update Transform snapshot after final positions are applied
+        if(!body->isSleeping_) {
+            // We only update this while the body is awake, so slow cumulative movement
+            // will eventually exceed the sleep threshold
+            body->previousStepPosition_ = body->position_;
+            body->previousStepRotation_ = body->rotation_;
+            body->previousStepScale_ = body->owner_->scale;
+          }
+      }
+
     ticksFinalize = get_ticks() - stageStart;
 
     ticksTotal = get_ticks() - totalStart;

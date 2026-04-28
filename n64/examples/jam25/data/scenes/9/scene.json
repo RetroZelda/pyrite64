@@ -16,7 +16,7 @@
     "frameLimit": 0,
     "gravity": [
       0.0,
-      -9.8100004196167,
+      -1.5679999589920044,
       0.0
     ],
     "interpolatePhysicsTransforms": true,
