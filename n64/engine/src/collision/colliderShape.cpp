@@ -1,11 +1,11 @@
 /**
  * @file collider_shape.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Defines the Basic (non-mesh) Colliders (see collider_shape.h)
+ * @brief Defines the Basic (non-mesh) Colliders (see colliderShape.h)
  */
-#include "collision/collider_shape.h"
-#include "collision/gfx_scale.h"
-#include "collision/mesh_collider.h"
+#include "collision/colliderShape.h"
+#include "collision/gfxScale.h"
+#include "collision/meshCollider.h"
 #include "scene/object.h"
 
 using namespace P64::Coll;

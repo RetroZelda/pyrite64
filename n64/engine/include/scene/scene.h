@@ -10,7 +10,7 @@
 #include "event.h"
 #include "lighting.h"
 #include "object.h"
-#include "collision/collision_scene.h"
+#include "collision/collisionScene.h"
 #include "lib/types.h"
 #include "renderer/drawLayer.h"
 #include "renderer/pipeline.h"

@@ -1,11 +1,11 @@
 /**
  * @file mesh_collider.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Mesh Collider definitions and functions (see mesh_collider.h)
+ * @brief Mesh Collider definitions and functions (see meshCollider.h)
  */
-#include "collision/gfx_scale.h"
-#include "collision/mesh_collider.h"
-#include "collision/collider_shape.h"
+#include "collision/gfxScale.h"
+#include "collision/meshCollider.h"
+#include "collision/colliderShape.h"
 #include "scene/object.h"
 #include "collision/epa.h"
 

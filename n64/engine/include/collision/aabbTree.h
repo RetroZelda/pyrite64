@@ -1,11 +1,11 @@
 /**
- * @file aabb_tree.h
+ * @file aabbTree.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Dynamic AABB tree BVH Implementation
  */
 #pragma once
 
-#include "vec_math.h"
+#include "vecMath.h"
 #include "shapes.h"
 #include <cstdint>
 #include <cassert>

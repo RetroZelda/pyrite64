@@ -5,8 +5,8 @@
  */
 #pragma once
 
-#include "rigid_body.h"
-#include "mesh_collider.h"
+#include "rigidBody.h"
+#include "meshCollider.h"
 #include "epa.h"
 
 namespace P64::Coll {

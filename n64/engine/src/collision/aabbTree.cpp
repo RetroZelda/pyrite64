@@ -1,9 +1,9 @@
 /**
  * @file aabb_tree.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Dynamic AABB tree BVH Implementation (see aabb_tree.h)
+ * @brief Dynamic AABB tree BVH Implementation (see aabbTree.h)
  */
-#include "collision/aabb_tree.h"
+#include "collision/aabbTree.h"
 
 #include <algorithm>
 #include <cmath>

@@ -1,13 +1,13 @@
 /**
- * @file mesh_collider.h
+ * @file meshCollider.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Mesh Collider definitions and functions
  */
 #pragma once
 
-#include "vec_math.h"
+#include "vecMath.h"
 #include "matrix3x3.h"
-#include "aabb_tree.h"
+#include "aabbTree.h"
 #include <cstdint>
 
 namespace P64 { class Object; }

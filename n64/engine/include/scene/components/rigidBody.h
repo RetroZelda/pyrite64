@@ -8,7 +8,7 @@
 #include "scene/object.h"
 #include "assets/assetManager.h"
 #include <t3d/t3dmodel.h>
-#include "collision/rigid_body.h"
+#include "collision/rigidBody.h"
 
 
 namespace P64::Comp

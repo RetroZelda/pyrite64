@@ -1,15 +1,15 @@
 /**
- * @file collision_scene.h
+ * @file collisionScene.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Defines the Collision Scene which keeps track of physics participants and updates them
  */
 #pragma once
 
-#include "rigid_body.h"
-#include "collider_shape.h"
-#include "mesh_collider.h"
+#include "rigidBody.h"
+#include "colliderShape.h"
+#include "meshCollider.h"
 #include "contact.h"
-#include "aabb_tree.h"
+#include "aabbTree.h"
 #include "raycast.h"
 #include <array>
 #include <deque>

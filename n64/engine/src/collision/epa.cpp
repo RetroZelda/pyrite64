@@ -4,7 +4,7 @@
  * @brief Expanding Polytope Algorithm (EPA) implementation for collision detection. (see epa.h)
  */
 #include "collision/epa.h"
-#include "collision/collision_scene.h"
+#include "collision/collisionScene.h"
 
 #include <cassert>
 

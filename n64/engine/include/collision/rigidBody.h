@@ -1,14 +1,14 @@
 /**
- * @file rigid_body.h
+ * @file rigidBody.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Contains the rigidBody definition, constants and related functions
  */
 #pragma once
 
-#include "vec_math.h"
+#include "vecMath.h"
 #include "matrix3x3.h"
-#include "collider_shape.h"
-#include "aabb_tree.h"
+#include "colliderShape.h"
+#include "aabbTree.h"
 #include "contact.h"
 #include <cstdint>
 #include <vector>

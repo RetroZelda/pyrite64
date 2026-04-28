@@ -1,4 +1,4 @@
-#include "collision/gfx_scale.h"
+#include "collision/gfxScale.h"
 
 namespace P64::Coll {
     constexpr float DEFAULT_GFX_SCALE = 100.0f;

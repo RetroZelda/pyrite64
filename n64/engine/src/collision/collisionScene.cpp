@@ -1,12 +1,12 @@
 /**
  * @file collision_scene.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Defines the Collision Scene which keeps track of physics participants and updates them (see collision_scene.h)
+ * @brief Defines the Collision Scene which keeps track of physics participants and updates them (see collisionScene.h)
  */
-#include "collision/collision_scene.h"
+#include "collision/collisionScene.h"
 #include "collision/collide.h"
-#include "collision/contact_utils.h"
-#include "collision/gfx_scale.h"
+#include "collision/contactUtils.h"
+#include "collision/gfxScale.h"
 #include "collision/gjk.h"
 #include "scene/scene.h"
 

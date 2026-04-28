@@ -2,7 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
-#include "collision/gfx_scale.h"
+#include "collision/gfxScale.h"
 
 #include "scene/components/collBody.h"
 

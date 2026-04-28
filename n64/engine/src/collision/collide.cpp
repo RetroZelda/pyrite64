@@ -4,8 +4,8 @@
  * @brief Functions to detect collisions between different shapes and objects and record them (see collide.h)
  */
 #include "collision/collide.h"
-#include "collision/collision_scene.h"
-#include "collision/contact_utils.h"
+#include "collision/collisionScene.h"
+#include "collision/contactUtils.h"
 #include "collision/gjk.h"
 #include "scene/scene.h"
 

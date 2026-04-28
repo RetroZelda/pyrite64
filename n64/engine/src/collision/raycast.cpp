@@ -5,7 +5,7 @@
  */
 #include "collision/raycast.h"
 #include "scene/object.h"
-#include "collision/collider_shape.h"
+#include "collision/colliderShape.h"
 
 namespace P64::Coll {
 

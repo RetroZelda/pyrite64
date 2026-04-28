@@ -1,11 +1,11 @@
 /**
  * @file rigid_body.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Contains the rigidBody definition, constants and related functions (see rigid_body.h)
+ * @brief Contains the rigidBody definition, constants and related functions (see rigidBody.h)
  */
-#include "collision/gfx_scale.h"
-#include "collision/rigid_body.h"
-#include "collision/collision_scene.h"
+#include "collision/gfxScale.h"
+#include "collision/rigidBody.h"
+#include "collision/collisionScene.h"
 #include <cassert>
 #include <cmath>
 

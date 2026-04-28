@@ -1,5 +1,5 @@
 /**
- * @file collider_shape.h
+ * @file colliderShape.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Defines the Basic (non-mesh) Colliders 
  */
@@ -9,8 +9,8 @@
 #include "types.h"
 #include "shapes.h"
 #include "matrix3x3.h"
-#include "aabb_tree.h"
-#include "gfx_scale.h"
+#include "aabbTree.h"
+#include "gfxScale.h"
 
 namespace P64
 {
