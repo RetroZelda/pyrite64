@@ -396,6 +396,11 @@ namespace P64::Coll {
     if(isSleeping_) wake();
   }
 
+  void RigidBody::applyLinearForce(const fm_vec3_t &force) {
+    if(isKinematic_) return;
+    accelerate(force * inverseMass_);
+  }
+
   void RigidBody::applyLinearImpulse(const fm_vec3_t &impulse) {
     if(isKinematic_) return;
     fm_vec3_t deltaV = constrainLinearWorld(impulse * inverseMass_);

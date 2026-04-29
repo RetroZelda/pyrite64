@@ -127,6 +127,7 @@ namespace P64::Coll {
 
     void accelerate(const fm_vec3_t &accel);
     void setVelocity(const fm_vec3_t &vel);
+    void applyLinearForce(const fm_vec3_t &force);
     void applyLinearImpulse(const fm_vec3_t &impulse);
     void applyTorque(const fm_vec3_t &torque);
     void applyAngularImpulse(const fm_vec3_t &angImpulse);
