@@ -917,9 +917,7 @@ namespace P64::Coll {
         if (hit) break;
       }
 
-      if (hit) {
-        body->setVelocity(VEC3_ZERO);
-      } else {
+      if (!hit) {
         // Restore original position and sync colliders back
         body->position_ = originalPos;
         for(Collider *collider : *ownerColliders) {
