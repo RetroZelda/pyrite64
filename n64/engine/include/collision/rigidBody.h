@@ -106,12 +106,17 @@ namespace P64::Coll {
     bool isSleeping() const { return isSleeping_; }
 
     bool compoundPropertiesDirty() const { return compoundPropertiesDirty_; }
-    const fm_vec3_t &getCenterOffset() const { return centerOffset_; }
+    const fm_vec3_t &getLocalCenterOfMass() const { return localCenterOfMass_; }
+    const fm_vec3_t &getLocalCenterOfMassOffset() const { return localCenterOfMassOffset_; }
+    void setLocalCenterOfMassOffset(const fm_vec3_t &offset) {
+      localCenterOfMassOffset_ = offset;
+      markCompoundPropertiesDirty();
+    }
     const fm_vec3_t &getLocalInertiaTensor() const { return localInertiaTensor_; }
     const fm_vec3_t &getDefaultLocalInertiaTensor() const { return defaultLocalInertiaTensor_; }
     const fm_vec3_t &getCompoundScale() const { return compoundScale_; }
     void markCompoundPropertiesDirty() { compoundPropertiesDirty_ = true; }
-    void applyCompoundProperties(const fm_vec3_t &centerOffset, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale);
+    void applyCompoundProperties(const fm_vec3_t &localCenterOfMass, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale);
     void setKinematic(bool newIsKinematic) { isKinematic_ = newIsKinematic; }
 
     fm_vec3_t constrainLinearWorld(const fm_vec3_t &worldLinear) const;
@@ -190,7 +195,8 @@ namespace P64::Coll {
 
     float mass_{1.0f};
     Constraint constraints_{Constraint::None};
-    fm_vec3_t centerOffset_{};
+    fm_vec3_t localCenterOfMass_{};
+    fm_vec3_t localCenterOfMassOffset_{};
     fm_vec3_t localInertiaTensor_{};
     fm_vec3_t invLocalInertiaTensor_{};
     fm_vec3_t defaultLocalInertiaTensor_{};

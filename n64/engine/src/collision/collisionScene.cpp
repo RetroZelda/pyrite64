@@ -196,7 +196,7 @@ namespace P64::Coll {
 
     const std::vector<Collider *> *ownerColliders = findCollidersForOwner(rigidBody->owner_);
     if(!ownerColliders || ownerColliders->empty()) {
-      rigidBody->applyCompoundProperties(VEC3_ZERO, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(rigidBody->localCenterOfMassOffset_, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
@@ -209,18 +209,18 @@ namespace P64::Coll {
     }
 
     if(count <= 0) {
-      rigidBody->applyCompoundProperties(VEC3_ZERO, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(rigidBody->localCenterOfMassOffset_, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
     const float invCount = 1.0f / static_cast<float>(count);
-    const fm_vec3_t worldCenter = worldCenterSum * invCount;
+    const fm_vec3_t worldCenter = (worldCenterSum * invCount) + (rigidBody->rotation_ * rigidBody->localCenterOfMassOffset_);
 
-    fm_vec3_t localCenterOffset = worldCenter - rigidBody->position_;
-    localCenterOffset = quatConjugate(rigidBody->rotation_) * localCenterOffset;
+    fm_vec3_t localCenterOfMass = worldCenter - rigidBody->position_;
+    localCenterOfMass = quatConjugate(rigidBody->rotation_) * localCenterOfMass;
 
     if(rigidBody->getMass() <= FM_EPSILON) {
-      rigidBody->applyCompoundProperties(localCenterOffset, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(localCenterOfMass, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
@@ -245,7 +245,7 @@ namespace P64::Coll {
       compoundInertia = compoundInertia + colliderInertia;
     }
 
-    rigidBody->applyCompoundProperties(localCenterOffset, compoundInertia, rigidBody->owner_->scale);
+    rigidBody->applyCompoundProperties(localCenterOfMass, compoundInertia, rigidBody->owner_->scale);
   }
 
   void CollisionScene::syncCompoundProperties(RigidBody *rigidBody) const {

@@ -153,7 +153,8 @@ namespace P64::Coll {
     angularVelocity_ = VEC3_ZERO;
     acceleration_ = VEC3_ZERO;
     torqueAccumulator_ = VEC3_ZERO;
-    centerOffset_ = VEC3_ZERO;
+    localCenterOfMass_ = VEC3_ZERO;
+    localCenterOfMassOffset_ = VEC3_ZERO;
     compoundScale_ = object->scale;
     compoundPropertiesDirty_ = true;
 
@@ -191,8 +192,8 @@ namespace P64::Coll {
     angularVelocity_ = constrainAngularWorld(angularVelocity_);
   }
 
-  void RigidBody::applyCompoundProperties(const fm_vec3_t &centerOffset, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale) {
-    centerOffset_ = centerOffset;
+  void RigidBody::applyCompoundProperties(const fm_vec3_t &localCenterOfMass, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale) {
+    localCenterOfMass_ = localCenterOfMass;
     localInertiaTensor_ = localInertiaTensor;
     invLocalInertiaTensor_ = diagonalInverse(localInertiaTensor_);
     compoundScale_ = compoundScale;
@@ -374,13 +375,13 @@ namespace P64::Coll {
     previousStepRotation_ = rotation_;
 
     // Store old world center of mass for offset correction
-    fm_vec3_t oldWorldCOM = position_ + (rotation_ * centerOffset_);
+    fm_vec3_t oldWorldCOM = position_ + (rotation_ * localCenterOfMass_);
 
     rotation_ = quatApplyAngularVelocity(rotation_, angularVelocity_, dt);
 
     // Correct position so that the center of mass stays in place
-    if(!vec3IsZero(centerOffset_)) {
-      fm_vec3_t newWorldCOM = position_ + (rotation_ * centerOffset_);
+    if(!vec3IsZero(localCenterOfMass_)) {
+      fm_vec3_t newWorldCOM = position_ + (rotation_ * localCenterOfMass_);
       fm_vec3_t correction = oldWorldCOM - newWorldCOM;
       position_ += correction;
     }
@@ -454,7 +455,7 @@ namespace P64::Coll {
     const Matrix3x3 localInv = diagonalMatrix(invLocalInertiaTensor_);
     Matrix3x3 newInvWorldInertiaTensor = matrix3Mul(matrix3Mul(newRotationMatrix, localInv), matrix3Transpose(newRotationMatrix));
 
-    const fm_vec3_t worldOffset = matrix3Vec3Mul(newRotationMatrix, centerOffset_);
+    const fm_vec3_t worldOffset = matrix3Vec3Mul(newRotationMatrix, localCenterOfMass_);
     const fm_vec3_t newWorldCenterOfMass = position_ + worldOffset;
     const bool transformChanged = !matrix3Equals(rotationMatrix_, newRotationMatrix) ||
                     !matrix3Equals(inverseRotationMatrix_, newInverseRotationMatrix) ||
