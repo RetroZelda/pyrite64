@@ -19,20 +19,20 @@ namespace P64::Coll {
   class CollisionScene;
 
   // Constants
-  constexpr float TERMINAL_SPEED = 100.0f; // Units per second, scaled by physicsScale when applied
-  constexpr float TERMINAL_ANGULAR_SPEED = 50.0f; // Radians per second
+  constexpr float TERMINAL_SPEED = 10000.0f; // Units per second, scaled by physicsScale when applied
+  constexpr float TERMINAL_ANGULAR_SPEED = 500.0f; // Radians per second
   constexpr float TERMINAL_ANGULAR_SPEED_SQ = TERMINAL_ANGULAR_SPEED * TERMINAL_ANGULAR_SPEED;
-  constexpr float POS_SLEEP_THRESHOLD = 0.01f; // Units moved, scaled by physicsScale when used
+  constexpr float POS_SLEEP_THRESHOLD = 1.0f; // Units moved, scaled by physicsScale when used
   constexpr float POS_SLEEP_THRESHOLD_SQ = POS_SLEEP_THRESHOLD * POS_SLEEP_THRESHOLD;
-  constexpr float SPEED_SLEEP_THRESHOLD = 0.8f; // Units per second, scaled by physicsScale when used
+  constexpr float SPEED_SLEEP_THRESHOLD = 8.0f; // Units per second, scaled by physicsScale when used
   constexpr float SPEED_SLEEP_THRESHOLD_SQ = SPEED_SLEEP_THRESHOLD * SPEED_SLEEP_THRESHOLD;
   constexpr float ROT_SIMILARITY_SLEEP_THRESHOLD = 0.9999988f;
-  constexpr float ANGULAR_SLEEP_THRESHOLD = 1.0f; // Radians per second, not scaled by physicsScale
+  constexpr float ANGULAR_SLEEP_THRESHOLD = 10.0f; // Radians per second, not scaled by physicsScale
   constexpr float ANGULAR_SLEEP_THRESHOLD_SQ = ANGULAR_SLEEP_THRESHOLD * ANGULAR_SLEEP_THRESHOLD;
-  constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD = 0.015f; // Radians per second, below this angular velocity, amplification is applied to damping
+  constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD = 1.5f; // Radians per second, below this angular velocity, amplification is applied to damping
   constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD_SQ = AMPLIFY_ANG_DAMPING_THRESHOLD * AMPLIFY_ANG_DAMPING_THRESHOLD;
   constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD_SQ_INV = 1.0f / AMPLIFY_ANG_DAMPING_THRESHOLD_SQ;
-  constexpr int SLEEP_STEPS = 120; // Number of consecutive steps an object must be below the sleep thresholds before it goes to sleep
+  constexpr int SLEEP_STEPS = 30; // Number of consecutive steps an object must be below the sleep thresholds before it goes to sleep
 
   /// @brief Defines the different positional and rotational constraints that can be imposed on a rigidbody
   enum class Constraint : uint16_t {
