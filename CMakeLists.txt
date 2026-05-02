@@ -278,6 +278,9 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/assets/textureEditor.cpp
         src/editor/pages/parts/assets/matInstanceEditor.h
         src/editor/pages/parts/assets/matInstanceEditor.cpp
+        src/renderer/storageBuffer.cpp
+        src/renderer/skeleton.h
+        src/renderer/skeleton.cpp
 )
 
 target_include_directories(pyrite64 PRIVATE

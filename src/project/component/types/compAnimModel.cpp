@@ -19,6 +19,7 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "../../../editor/pages/parts/assets/matInstanceEditor.h"
+#include "../../../renderer/skeleton.h"
 #include "glm/gtx/matrix_decompose.hpp"
 
 #include "../shared/meshFilter.h"
@@ -31,6 +32,7 @@ namespace Project::Component::AnimModel
     PROP_S32(layerIdx);
 
     Shared::MaterialInstance material{};
+    std::shared_ptr<Renderer::Skeleton> skeleton{nullptr};
 
     Renderer::Object obj3D{};
     Utils::AABB aabb{};
@@ -129,6 +131,7 @@ namespace Project::Component::AnimModel
         }
         data.aabb = asset->mesh3D->getAABB();
         data.obj3D.setMesh(asset->mesh3D);
+        data.skeleton = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model);
       }
     }
 
