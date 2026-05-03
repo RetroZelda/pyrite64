@@ -42,7 +42,7 @@ void Renderer::StorageBuffer::setData(char* data, uint32_t dataSize)
 
 // @TODO: store vert/indices in one single buffer
 
-  auto buff = (Vertex*)SDL_MapGPUTransferBuffer(gpuDevice, bufferTrans, false);
+  auto buff = SDL_MapGPUTransferBuffer(gpuDevice, bufferTrans, true);
   SDL_memcpy(buff, data, dataSize);
   SDL_UnmapGPUTransferBuffer(gpuDevice, bufferTrans);
 
@@ -60,7 +60,14 @@ void Renderer::StorageBuffer::upload(SDL_GPUCopyPass &pass) {
   region.buffer = buffer;
   region.size = currByteSize;
   region.offset = 0;
-
   SDL_UploadToGPUBuffer(&pass, &location, &region, true);
   needsUpload = false;
+}
+
+void Renderer::StorageBuffer::bind(SDL_GPURenderPass* pass)
+{
+  if(buffer) {
+    SDL_GPUBuffer* buffers[] = {buffer};
+    SDL_BindGPUVertexStorageBuffers(pass, 0, buffers, 1);
+  }
 }

@@ -26,6 +26,7 @@ namespace Renderer { class Scene; }
 struct Context
 {
   // Globals
+  bool debugMode{false};
   Utils::Toolchain toolchain{};
   Project::Project *project{nullptr};
   Renderer::Scene *scene{nullptr};

@@ -120,6 +120,14 @@ namespace Project::Component::AnimModel
     }
   }
 
+  void drawCopyPass(Object& obj, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass* pass)
+  {
+    Data &data = *static_cast<Data*>(entry.data.get());
+    if(data.skeleton) {
+      data.skeleton->update(*pass);
+    }
+  }
+
   void draw3D(Object& obj, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass)
   {
     Data &data = *static_cast<Data*>(entry.data.get());
@@ -131,7 +139,7 @@ namespace Project::Component::AnimModel
         }
         data.aabb = asset->mesh3D->getAABB();
         data.obj3D.setMesh(asset->mesh3D);
-        data.skeleton = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model);
+        data.skeleton = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model, asset->conf.baseScale);
       }
     }
 
@@ -157,6 +165,7 @@ namespace Project::Component::AnimModel
       return;
     }
 
+    data.skeleton->use(pass);
     data.obj3D.draw(pass, cmdBuff, {
       .partsIndices = {},
       .model = &asset->model,

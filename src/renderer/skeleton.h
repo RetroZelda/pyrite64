@@ -8,6 +8,11 @@
 #include "glm/vec3.hpp"
 #include "glm/gtc/quaternion.hpp"
 
+namespace T3DM
+{
+  struct Bone;
+}
+
 namespace Project::Assets
 {
   struct Model3D;
@@ -20,7 +25,6 @@ namespace Renderer
     public:
       struct Bone
       {
-        glm::mat4 mat{};
         glm::vec3 pos{};
         glm::quat rot{};
         glm::vec3 scale{};
@@ -30,11 +34,26 @@ namespace Renderer
     private:
       StorageBuffer storageBuff;
       std::vector<Bone> bones{};
+      std::vector<glm::mat4> boneMats{};
+      float importScale{1.0f};
+
+      void readBone(const T3DM::Bone &bone, uint32_t parentIdx);
 
     public:
       explicit Skeleton(
         SDL_GPUDevice* device,
-        const Project::Assets::Model3D &model
+        const Project::Assets::Model3D &model,
+        float importScale_
       );
+
+      explicit Skeleton(SDL_GPUDevice* device);
+
+      void update(SDL_GPUCopyPass& pass);
+      void use(SDL_GPURenderPass *pass);
+
+      Bone* getBone(uint32_t idx) {
+        if (idx >= bones.size())return nullptr;
+        return &bones[idx];
+      }
   };
 }

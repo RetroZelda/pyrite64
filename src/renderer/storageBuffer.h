@@ -31,13 +31,6 @@ namespace Renderer
       void setData(char* data, uint32_t dataSize);
 
       void upload(SDL_GPUCopyPass& pass);
-
-      void addBindings(SDL_GPUBufferBinding binding[]) const {
-        binding[0].buffer = buffer;
-        binding[0].offset = 0;
-
-        //binding[1].buffer = bufferIdx;
-        //binding[1].offset = 0;
-      }
+      void bind(SDL_GPURenderPass *pass);
   };
 }

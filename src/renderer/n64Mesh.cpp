@@ -57,7 +57,8 @@ void Renderer::N64Mesh::fromT3DM(const Project::Assets::Model3D &model3d, Projec
           {vert.pos[0], vert.pos[1], vert.pos[2]},
           vert.norm,
           {r,g,b,a},
-          glm::ivec2(vert.s, vert.t)
+          glm::ivec2(vert.s, vert.t),
+          {(int16_t)vert.boneIndex, 0},
         });
         /*printf("v: %d,%d,%d norm: %d uv: %d,%d col: %08X\n",
           vert.pos[0], vert.pos[1], vert.pos[2],
@@ -183,8 +184,6 @@ void Renderer::N64Mesh::draw(
     }
 
     SDL_BindGPUFragmentSamplers(pass, 0, part.texBindings, 2);
-    SDL_BindGPUVertexSamplers(pass, 0, part.texBindings, 2); // needed?
-
     SDL_PushGPUVertexUniformData(cmdBuff, 1, &uniforms, sizeof(uniforms));
     SDL_PushGPUFragmentUniformData(cmdBuff, 0, &uniforms, sizeof(uniforms));
 
