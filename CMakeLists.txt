@@ -281,6 +281,8 @@ add_executable(pyrite64 src/main.cpp
         src/renderer/storageBuffer.cpp
         src/renderer/skeleton.h
         src/renderer/skeleton.cpp
+        src/renderer/animation.h
+        src/renderer/animation.cpp
 )
 
 target_include_directories(pyrite64 PRIVATE

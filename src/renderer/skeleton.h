@@ -8,6 +8,9 @@
 #include "glm/vec3.hpp"
 #include "glm/gtc/quaternion.hpp"
 
+#include <string>
+#include <tiny3d/tools/gltf_importer/src/math/quat.h>
+
 namespace T3DM
 {
   struct Bone;
@@ -29,6 +32,10 @@ namespace Renderer
         glm::quat rot{};
         glm::vec3 scale{};
         uint32_t parentIdx{};
+
+        void setRot(const Quat &r) {
+          this->rot = {r.x(), r.y(), r.z(), r.w()};
+        }
       };
 
     private:
@@ -55,5 +62,7 @@ namespace Renderer
         if (idx >= bones.size())return nullptr;
         return &bones[idx];
       }
+
+      float getImportScale() const { return importScale; }
   };
 }

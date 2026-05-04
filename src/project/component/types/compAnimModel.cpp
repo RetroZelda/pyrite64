@@ -19,6 +19,7 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "../../../editor/pages/parts/assets/matInstanceEditor.h"
+#include "../../../renderer/animation.h"
 #include "../../../renderer/skeleton.h"
 #include "glm/gtx/matrix_decompose.hpp"
 
@@ -30,9 +31,11 @@ namespace Project::Component::AnimModel
   {
     PROP_U64(model);
     PROP_S32(layerIdx);
+    PROP_STRING(previewAnimName);
 
     Shared::MaterialInstance material{};
     std::shared_ptr<Renderer::Skeleton> skeleton{nullptr};
+    Renderer::Animation anim{};
 
     Renderer::Object obj3D{};
     Utils::AABB aabb{};
@@ -48,6 +51,7 @@ namespace Project::Component::AnimModel
     return Utils::JSON::Builder{}
       .set(data.model)
       .set(data.layerIdx)
+      .set(data.previewAnimName)
       .set("material", data.material.serialize())
       .doc;
   }
@@ -55,6 +59,7 @@ namespace Project::Component::AnimModel
   std::shared_ptr<void> deserialize(nlohmann::json &doc) {
     auto data = std::make_shared<Data>();
     Utils::JSON::readProp(doc, data->layerIdx);
+    Utils::JSON::readProp(doc, data->previewAnimName);
     Utils::JSON::readProp(doc, data->model);
 
     data->material.deserialize(
@@ -112,6 +117,27 @@ namespace Project::Component::AnimModel
           return ImGui::Combo("##", layer, layerNames.data(), layerNames.size());
         }, nullptr);
 
+      auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
+      if (asset && asset->mesh3D)
+      {
+          int selIdx = 0;
+          std::vector<const char*> animNames{};
+          animNames.push_back("<Default Pose>");
+          for(auto &anim : asset->model.t3dm.animations) {
+            if(selIdx == 0 && anim.name == data.previewAnimName.value) {
+              selIdx = animNames.size();
+            }
+            animNames.push_back(anim.name.c_str());
+          }
+
+          ImTable::add("Preview Anim.");
+
+          ImGui::Combo("##", &selIdx, animNames.data(), animNames.size());
+          if(selIdx < animNames.size()) {
+            data.previewAnimName.value = animNames[selIdx];
+          }
+      }
+
 
       ImTable::end();
 
@@ -163,6 +189,15 @@ namespace Project::Component::AnimModel
     auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
     if (!asset || !asset->mesh3D) {
       return;
+    }
+
+    for(auto &anim : asset->model.t3dm.animations)
+    {
+      if(anim.name == data.previewAnimName.value) {
+        float deltaTime = ImGui::GetIO().DeltaTime;
+        data.anim.update(anim, data.skeleton, deltaTime);
+        break;
+      }
     }
 
     data.skeleton->use(pass);
