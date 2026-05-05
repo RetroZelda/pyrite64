@@ -13,7 +13,7 @@
 #include <malloc.h>
 
 #include "scene/globalState.h"
-#include "collision/mesh_collider.h"
+#include "collision/meshCollider.h"
 #include "vi/swapChain.h"
 #include "lib/memory.h"
 #include "lib/logger.h"
@@ -139,7 +139,7 @@ P64::Scene::Scene(uint16_t sceneId, Scene** ref)
     conf.gravity,
     conf.velocitySolverIterations,
     conf.positionSolverIterations,
-    conf.physicsScale
+    conf.visualUnitsPerMeter
   );
   loadScene();
 

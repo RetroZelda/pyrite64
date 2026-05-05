@@ -179,6 +179,15 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
     nameMap["onGameInit"] += " wav64_init_compression(3); \n";
   }
 
+  // Auto-initialize canvas view bindings if any canvas assets exist.
+  // Extra declarations go outside P64::GlobalScript namespace, so use __EXTRA_DECL__.
+  std::string srcExtraDecl = "";
+  if(sceneCtx.hasCanvases) {
+    srcExtraDecl += "namespace P64::UI { void init(); void destroy(); }\n";
+    srcExtraDecl += "namespace P64::UI::Generated { void uiInitializeBindings(); }\n";
+
+  }
+
   std::string srcHook = "";
   for (auto &pair : nameMap)
   {
@@ -190,6 +199,7 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
   }
 
   auto src = Utils::FS::loadTextFile("data/scripts/globalScriptTable.cpp");
+  src = Utils::replaceAll(src, "__EXTRA_DECL__", srcExtraDecl);
   src = Utils::replaceAll(src, "__CODE_DECL__", srcDecl);
   src = Utils::replaceAll(src, "__CODE_HOOKS__", srcHook);
   Utils::FS::saveTextFile(pathTable, src);

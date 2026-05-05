@@ -1,8 +1,8 @@
 #pragma once
 
 #include "contact.h"
-#include "rigid_body.h"
-#include "mesh_collider.h"
+#include "rigidBody.h"
+#include "meshCollider.h"
 
 namespace P64::Coll {
 

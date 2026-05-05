@@ -14,6 +14,17 @@ using FileType = Project::FileType;
 
 int Selecteditem  = 0;
 
+namespace
+{
+  uint32_t countChildBones(const T3DM::Bone &node) {
+    uint32_t count = node.children.size();
+    for (const auto &child : node.children) {
+      count += countChildBones(*child);
+    }
+    return count;
+  };
+}
+
 Editor::AssetInspector::AssetInspector() {
 }
 
@@ -126,7 +137,7 @@ void Editor::AssetInspector::draw() {
 
       uint32_t boneCount = 0;
       for(auto &skel : asset->model.t3dm.skeletons) {
-        boneCount += skel.children.size();
+        boneCount += countChildBones(skel);
       }
 
       ImGui::BeginTable("ModelInfo", 2);

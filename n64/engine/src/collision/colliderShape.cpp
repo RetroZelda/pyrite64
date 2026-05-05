@@ -1,10 +1,11 @@
 /**
  * @file collider_shape.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Defines the Basic (non-mesh) Colliders (see collider_shape.h)
+ * @brief Defines the Basic (non-mesh) Colliders (see colliderShape.h)
  */
-#include "collision/collider_shape.h"
-#include "collision/mesh_collider.h"
+#include "collision/colliderShape.h"
+#include "collision/gfxScale.h"
+#include "collision/meshCollider.h"
 #include "scene/object.h"
 
 using namespace P64::Coll;
@@ -65,8 +66,9 @@ bool Collider::hasOwnerTransformChanged() const {
   if(!owner_) return false;
   if(!hasCachedOwnerTransform_) return true;
 
-  if(fm_vec3_distance2(&owner_->pos, &lastOwnerPosition_) > FM_EPSILON * FM_EPSILON) return true;
-  if(fm_vec3_distance2(&owner_->scale, &lastOwnerScale_) > FM_EPSILON * FM_EPSILON) return true;
+  fm_vec3_t ownerPhysicsPos = owner_->pos * getInvGfxScale();
+  if(fm_vec3_distance2(&ownerPhysicsPos, &lastOwnerPosition_) > FM_EPSILON * FM_EPSILON ) return true;
+  if(fm_vec3_distance2(&owner_->scale, &lastOwnerScale_) > FM_EPSILON * FM_EPSILON ) return true;
 
   const float rotSim = fabsf(quatDot(owner_->rot, lastOwnerRotation_));
   return rotSim < (1.0f - FM_EPSILON);
@@ -78,7 +80,7 @@ void Collider::syncOwnerTransform() {
     lastOwnerRotation_ = QUAT_IDENTITY;
     lastOwnerScale_ = fm_vec3_t{{1.0f, 1.0f, 1.0f}};
   } else {
-    lastOwnerPosition_ = owner_->pos;
+    lastOwnerPosition_ = owner_->pos * getInvGfxScale();
     lastOwnerRotation_ = owner_->rot;
     lastOwnerScale_ = owner_->scale;
   }
@@ -86,6 +88,32 @@ void Collider::syncOwnerTransform() {
   rotationMatrix_ = quatToMatrix3(lastOwnerRotation_);
   inverseRotationMatrix_ = quatToMatrix3(quatConjugate(lastOwnerRotation_));
   hasCachedOwnerTransform_ = true;
+}
+
+bool Collider::syncFromRigidBody(const fm_vec3_t& rbPosition, const fm_quat_t& rbRotation) {
+  if(hasCachedOwnerTransform_) {
+    const float posDeltaSq = fm_vec3_distance2(&rbPosition, &lastOwnerPosition_);
+    const float rotSim = fabsf(quatDot(rbRotation, lastOwnerRotation_));
+    if(posDeltaSq <= FM_EPSILON * FM_EPSILON && rotSim >= 1.0f - FM_EPSILON) {
+      return false;
+    }
+  }
+
+  lastOwnerPosition_ = rbPosition;
+  lastOwnerRotation_ = rbRotation;
+  lastOwnerScale_ = owner_ ? owner_->scale : fm_vec3_t{{1,1,1}};
+  rotationMatrix_ = quatToMatrix3(lastOwnerRotation_);
+  inverseRotationMatrix_ = quatToMatrix3(quatConjugate(lastOwnerRotation_));
+  hasCachedOwnerTransform_ = true;
+
+  worldCenter_ = lastOwnerPosition_ + matrix3Vec3Mul(rotationMatrix_, parentOffset_ * lastOwnerScale_);
+
+  const AABB local = boundingBox(&lastOwnerRotation_);
+  worldAabb_.min = local.min + worldCenter_;
+  worldAabb_.max = local.max + worldCenter_;
+  ++worldStateVersion_;
+
+  return true;
 }
 
 bool Collider::syncWorldState() {

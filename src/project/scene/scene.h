@@ -23,6 +23,7 @@ namespace Project
     PROP_VEC4(fogColor);
     PROP_FLOAT(fogMin);
     PROP_FLOAT(fogMax);
+    PROP_S32(lightMode);
   };
 
   struct SceneConf
@@ -40,7 +41,7 @@ namespace Project
     PROP_S32(audioFreq);
     PROP_S32(physicsTickRate);
     PROP_VEC3(gravity);
-    PROP_FLOAT(physicsScale);
+    PROP_FLOAT(visualUnitsPerMeter);
     PROP_S32(velocitySolverIterations);
     PROP_S32(positionSolverIterations);
     PROP_BOOL(interpolatePhysicsTransforms);

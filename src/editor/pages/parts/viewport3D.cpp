@@ -167,6 +167,7 @@ namespace
 }
 
 Editor::Viewport3D::Viewport3D()
+  : dummySkeleton{ctx.gpu}
 {
   if(spritesRefCount == 0) {
     sprites = std::make_shared<Renderer::Texture>(ctx.gpu, "data/img/icons/sprites.png");
@@ -178,6 +179,7 @@ Editor::Viewport3D::Viewport3D()
     onRenderPass(cmdBuff, renderScene);
   });
   ctx.scene->addCopyPass(passId, [this](SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass *copyPass) {
+    dummySkeleton.update(*copyPass);
     onCopyPass(cmdBuff, copyPass);
   });
   ctx.scene->addPostRenderCallback(passId, [this](Renderer::Scene& renderScene) {
@@ -283,10 +285,14 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
   );
   renderScene.getPipeline("n64").bind(renderPass3D);
 
+  dummySkeleton.use(renderPass3D);
+
   camera.apply(uniGlobal);
   uniGlobal.screenSize = glm::vec2{(float)fb.getWidth(), (float)fb.getHeight()};
   SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
   auto &rootObj = scene->getRootObject();
+
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Objects");
 
   bool hadDraw = false;
   iterateObjects(rootObj, [&](Project::Object &obj, Project::Component::Entry *comp) {
@@ -327,9 +333,12 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
     }
   });
 
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
+
   meshLines->recreate(renderScene);
   meshSprites->recreate(renderScene);
 
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Lines");
   renderScene.getPipeline("lines").bind(renderPass3D);
 
   if(showGrid)objGrid.draw(renderPass3D, cmdBuff);
@@ -348,17 +357,39 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
     uniGlobal.projMat[2] = oldMat;
     SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
   }
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
+
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Sprites");
 
   renderScene.getPipeline("sprites").bind(renderPass3D);
 
   sprites->bind(renderPass3D);
   objSprites.draw(renderPass3D, cmdBuff);
 
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
+
   SDL_EndGPURenderPass(renderPass3D);
 }
 
 void Editor::Viewport3D::onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass *copyPass) {
   //vertBuff->upload(*copyPass);
+
+  if(!ctx.project)return;
+  auto scene = ctx.project->getScenes().getLoadedScene();
+  if (!scene)return;
+
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "Object Copy-Pass");
+
+  auto &rootObj = scene->getRootObject();
+  iterateObjects(rootObj, [&](Project::Object &obj, Project::Component::Entry *comp) {
+    if(!comp)return;
+    auto &def = Project::Component::TABLE[comp->id];
+    if(def.funcDrawCopyPass) {
+      def.funcDrawCopyPass(obj, *comp, *this, cmdBuff, copyPass);
+    }
+  });
+
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
 }
 
 void Editor::Viewport3D::onPostRender(Renderer::Scene &renderScene) {

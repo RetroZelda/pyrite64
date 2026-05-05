@@ -28,6 +28,8 @@ namespace
     {Build::buildFontAssets,    "Font"},
     {Build::buildTextureAssets, "Texture"},
     {Build::buildAudioAssets,   "Audio"},
+    // Canvas: code-gen only, must run before scripts so UISceneTypes.h is available
+    {Build::buildCanvasAssets,  "Canvas"},
     // must be last: (@TODO: handle prefab referencing prefab, [not in the editor yet])
     {Build::buildPrefabAssets,  "Prefab"},
   });
@@ -102,6 +104,7 @@ bool Build::buildProject(const std::string &configPath)
       if (entry.conf.exclude || entry.type == Project::FileType::UNKNOWN
         || entry.type == Project::FileType::CODE_OBJ
         || entry.type == Project::FileType::CODE_GLOBAL
+        || entry.type == Project::FileType::CANVAS  // code-gen only, no ROM binary
       ) continue;
       sceneCtx.addAsset(entry);
     }

@@ -1,17 +1,19 @@
 /**
- * @file rigid_body.h
+ * @file rigidBody.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Contains the rigidBody definition, constants and related functions
  */
 #pragma once
 
-#include "vec_math.h"
+#include "vecMath.h"
 #include "matrix3x3.h"
-#include "collider_shape.h"
-#include "aabb_tree.h"
+#include "colliderShape.h"
+#include "aabbTree.h"
 #include "contact.h"
 #include <cstdint>
 #include <vector>
+
+#include "lib/types.h"
 #include "scene/object.h"
 
 namespace P64::Coll {
@@ -59,13 +61,16 @@ namespace P64::Coll {
   }
 
   struct RigidBody {
+    CLASS_NO_COPY_MOVE(RigidBody);
+    RigidBody() = default;
+
     void init(P64::Object *object, float m);
 
     P64::Object *ownerObject() const { return owner_; }
-    fm_vec3_t *positionPtr() { return position_; }
-    const fm_vec3_t *positionPtr() const { return position_; }
-    fm_quat_t *rotationPtr() { return rotation_; }
-    const fm_quat_t *rotationPtr() const { return rotation_; }
+    const fm_vec3_t &position() const { return position_; }
+    const fm_quat_t &rotation() const { return rotation_; }
+    void setPosition(const fm_vec3_t &pos) { position_ = pos; }
+    void setRotation(const fm_quat_t &rot) { rotation_ = rot; }
 
     const fm_vec3_t &linearVelocity() const { return linearVelocity_; }
     const fm_vec3_t &angularVelocity() const { return angularVelocity_; }
@@ -96,17 +101,22 @@ namespace P64::Coll {
 
     bool hasLinearConstraints() const { return hasLinearConstraints_; }
     bool hasAngularConstraints() const { return hasAngularConstraints_; }
-    bool canApplyAngularResponse() const { return !isKinematic_ && rotation_ && !hasFlag(constraints_, Constraint::FreezeRotAll); }
+    bool canApplyAngularResponse() const { return !isKinematic_ && !hasFlag(constraints_, Constraint::FreezeRotAll); }
     bool isKinematic() const { return isKinematic_; }
     bool isSleeping() const { return isSleeping_; }
 
     bool compoundPropertiesDirty() const { return compoundPropertiesDirty_; }
-    const fm_vec3_t &getCenterOffset() const { return centerOffset_; }
+    const fm_vec3_t &getLocalCenterOfMass() const { return localCenterOfMass_; }
+    const fm_vec3_t &getLocalCenterOfMassOffset() const { return localCenterOfMassOffset_; }
+    void setLocalCenterOfMassOffset(const fm_vec3_t &offset) {
+      localCenterOfMassOffset_ = offset;
+      markCompoundPropertiesDirty();
+    }
     const fm_vec3_t &getLocalInertiaTensor() const { return localInertiaTensor_; }
     const fm_vec3_t &getDefaultLocalInertiaTensor() const { return defaultLocalInertiaTensor_; }
     const fm_vec3_t &getCompoundScale() const { return compoundScale_; }
     void markCompoundPropertiesDirty() { compoundPropertiesDirty_ = true; }
-    void applyCompoundProperties(const fm_vec3_t &centerOffset, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale);
+    void applyCompoundProperties(const fm_vec3_t &localCenterOfMass, const fm_vec3_t &localInertiaTensor, const fm_vec3_t &compoundScale);
     void setKinematic(bool newIsKinematic) { isKinematic_ = newIsKinematic; }
 
     fm_vec3_t constrainLinearWorld(const fm_vec3_t &worldLinear) const;
@@ -122,6 +132,7 @@ namespace P64::Coll {
 
     void accelerate(const fm_vec3_t &accel);
     void setVelocity(const fm_vec3_t &vel);
+    void applyLinearForce(const fm_vec3_t &force);
     void applyLinearImpulse(const fm_vec3_t &impulse);
     void applyTorque(const fm_vec3_t &torque);
     void applyAngularImpulse(const fm_vec3_t &angImpulse);
@@ -157,8 +168,8 @@ namespace P64::Coll {
     friend class CollisionScene;
 
     P64::Object *owner_{nullptr};
-    fm_vec3_t *position_{nullptr};
-    fm_quat_t *rotation_{nullptr};
+    fm_vec3_t position_{};
+    fm_quat_t rotation_{};
     Matrix3x3 invWorldInertiaTensor_{};
     Matrix3x3 rotationMatrix_{};
     Matrix3x3 inverseRotationMatrix_{};
@@ -184,7 +195,8 @@ namespace P64::Coll {
 
     float mass_{1.0f};
     Constraint constraints_{Constraint::None};
-    fm_vec3_t centerOffset_{};
+    fm_vec3_t localCenterOfMass_{};
+    fm_vec3_t localCenterOfMassOffset_{};
     fm_vec3_t localInertiaTensor_{};
     fm_vec3_t invLocalInertiaTensor_{};
     fm_vec3_t defaultLocalInertiaTensor_{};

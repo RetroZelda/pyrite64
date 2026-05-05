@@ -26,6 +26,7 @@ namespace Renderer { class Scene; }
 struct Context
 {
   // Globals
+  bool debugMode{false};
   Utils::Toolchain toolchain{};
   Project::Project *project{nullptr};
   Renderer::Scene *scene{nullptr};
@@ -55,6 +56,7 @@ struct Context
   uint64_t timeCpuTotal{};
 
   // Editor state
+  uint64_t openedCanvasUUID{0};  // UUID of the currently open canvas (0 = none)
   uint64_t selAssetUUID{0};
   uint32_t selObjectUUID{0}; // The "primary" selected object (for single selection or the most recently selected in multi-selection)
   std::vector<uint32_t> selObjectUUIDs{}; // All selected object UUIDs (for multi-selection, includes selObjectUUID as the last element)

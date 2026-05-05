@@ -56,6 +56,7 @@ nlohmann::json Project::SceneConf::serialize() const {
     b.set(layer.fogColor);
     b.set(layer.fogMin);
     b.set(layer.fogMax);
+    b.set(layer.lightMode);
   };
 
   Utils::JSON::Builder builder{};
@@ -72,7 +73,7 @@ nlohmann::json Project::SceneConf::serialize() const {
     .set(audioFreq)
     .set(physicsTickRate)
     .set(gravity)
-    .set(physicsScale)
+    .set(visualUnitsPerMeter)
     .set(velocitySolverIterations)
     .set(positionSolverIterations)
     .set(interpolatePhysicsTransforms)
@@ -327,7 +328,7 @@ void Project::Scene::deserialize(const std::string &data)
     Utils::JSON::readProp(docConf, conf.audioFreq, 32000);
     Utils::JSON::readProp(docConf, conf.physicsTickRate, 50);
     Utils::JSON::readProp(docConf, conf.gravity, glm::vec3{0.0f, -9.81f, 0.0f});
-    Utils::JSON::readProp(docConf, conf.physicsScale, 16.0f);
+    Utils::JSON::readProp(docConf, conf.visualUnitsPerMeter, 100.0f);
     Utils::JSON::readProp(docConf, conf.velocitySolverIterations, 7);
     Utils::JSON::readProp(docConf, conf.positionSolverIterations, 6);
     Utils::JSON::readProp(docConf, conf.interpolatePhysicsTransforms, true);
@@ -343,7 +344,7 @@ void Project::Scene::deserialize(const std::string &data)
       Utils::JSON::readProp(dom, layer.fogColor);
       Utils::JSON::readProp(dom, layer.fogMin, 0.0f);
       Utils::JSON::readProp(dom, layer.fogMax, 0.0f);
-
+      Utils::JSON::readProp(dom, layer.lightMode, 0);
 
       return layer;
     };

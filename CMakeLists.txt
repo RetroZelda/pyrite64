@@ -132,6 +132,8 @@ add_executable(pyrite64 src/main.cpp
         src/editor/actions.cpp
         src/editor/undoRedo.h
         src/editor/undoRedo.cpp
+        src/editor/canvasHistory.h
+        src/editor/canvasHistory.cpp
         src/editor/selectionUtils.h
         src/editor/selectionUtils.cpp
         src/editor/window.h
@@ -242,6 +244,19 @@ add_executable(pyrite64 src/main.cpp
         src/project/component/types/compAudio2d.cpp
         src/editor/pages/parts/layerInspector.cpp
         src/build/prefabBuilder.cpp
+        src/build/canvasBuilder.cpp
+        src/project/canvas/canvas.h
+        src/project/canvas/canvas.cpp
+        src/editor/pages/parts/canvasSettings.h
+        src/editor/pages/parts/canvasSettings.cpp
+        src/editor/pages/parts/canvasVariables.h
+        src/editor/pages/parts/canvasVariables.cpp
+        src/editor/pages/parts/canvasGraph.h
+        src/editor/pages/parts/canvasGraph.cpp
+        src/editor/pages/parts/canvasObjectInspector.h
+        src/editor/pages/parts/canvasObjectInspector.cpp
+        src/editor/pages/parts/canvasViewport.h
+        src/editor/pages/parts/canvasViewport.cpp
         src/project/component/types/compConstraint.cpp
         src/project/component/types/compCulling.cpp
         src/editor/pages/parts/nodeEditor.cpp
@@ -278,6 +293,11 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/assets/textureEditor.cpp
         src/editor/pages/parts/assets/matInstanceEditor.h
         src/editor/pages/parts/assets/matInstanceEditor.cpp
+        src/renderer/storageBuffer.cpp
+        src/renderer/skeleton.h
+        src/renderer/skeleton.cpp
+        src/renderer/animation.h
+        src/renderer/animation.cpp
 )
 
 target_include_directories(pyrite64 PRIVATE

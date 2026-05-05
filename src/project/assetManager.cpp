@@ -3,6 +3,7 @@
 * @license MIT
 */
 #include "assetManager.h"
+#include "canvas/canvas.h"
 #include "../context.h"
 #include <filesystem>
 #include <format>
@@ -22,6 +23,9 @@
 #include "tiny3d/tools/gltf_importer/src/parser.h"
 
 namespace fs = std::filesystem;
+
+// Defined here so Canvas is complete when shared_ptr<Canvas> destructs
+Project::AssetManagerEntry::~AssetManagerEntry() = default;
 
 namespace
 {
@@ -131,6 +135,9 @@ namespace
     } else if (ext == ".p64graph") {
       type = Project::FileType::NODE_GRAPH;
       outPath = changeExt(outPath, ".pg");
+    } else if (ext == ".canvas") {
+      type = Project::FileType::CANVAS;
+      outPath = ""; // code-gen only — no ROM binary output
     }
 
     if (type == Project::FileType::UNKNOWN) {
@@ -138,7 +145,8 @@ namespace
     }
 
     auto romPath = outPath;
-    romPath.replace(0, std::string{"filesystem/"}.length(), "rom:/");
+    if (!outPath.empty())
+      romPath.replace(0, std::string{"filesystem/"}.length(), "rom:/");
 
     entry = Project::AssetManagerEntry{
       .name = path.filename().string(),
@@ -149,36 +157,41 @@ namespace
     };
 
     entry.conf.baseScale = 16;
-    auto pathMeta = path;
-    pathMeta += ".conf";
-    if (fs::exists(pathMeta)) {
-      deserialize(entry.conf, pathMeta);
-    }
 
-    bool forceSave = false;
-    if (entry.conf.uuid == 0) {
-      entry.conf.uuid = Utils::Hash::randomU64();
-      forceSave = true;
-    }
-
-    if (type == Project::FileType::IMAGE) {
-      if (entry.path.ends_with(".bci.png")) {
-        entry.conf.format = (int)Utils::TexFormat::BCI_256;
+    // Canvas files store their UUID inside the canvas JSON itself — no .conf needed.
+    if (type != Project::FileType::CANVAS)
+    {
+      auto pathMeta = path;
+      pathMeta += ".conf";
+      if (fs::exists(pathMeta)) {
+        deserialize(entry.conf, pathMeta);
       }
-    }
 
-    if (type == Project::FileType::FONT && entry.conf.fontCharset.value.empty()) {
-      entry.conf.fontCharset.value =
-        " !\"#$%&\'()*+,-./"                 "\n"
-        "0123456789:;<=>?@"                  "\n"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"  "\n"
-        "abcdefghijklmnopqrstuvwxyz{|}~";
-    }
+      bool forceSave = false;
+      if (entry.conf.uuid == 0) {
+        entry.conf.uuid = Utils::Hash::randomU64();
+        forceSave = true;
+      }
 
-    // if this is the first time the asset is seen, we must save the config
-    // otherwise any UUID relations may be messed up
-    if(forceSave) {
-      Utils::FS::saveTextFile(pathMeta, entry.conf.serialize());
+      if (type == Project::FileType::IMAGE) {
+        if (entry.path.ends_with(".bci.png")) {
+          entry.conf.format = (int)Utils::TexFormat::BCI_256;
+        }
+      }
+
+      if (type == Project::FileType::FONT && entry.conf.fontCharset.value.empty()) {
+        entry.conf.fontCharset.value =
+          " !\"#$%&\'()*+,-./"                 "\n"
+          "0123456789:;<=>?@"                  "\n"
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"  "\n"
+          "abcdefghijklmnopqrstuvwxyz{|}~";
+      }
+
+      // if this is the first time the asset is seen, we must save the config
+      // otherwise any UUID relations may be messed up
+      if(forceSave) {
+        Utils::FS::saveTextFile(pathMeta, entry.conf.serialize());
+      }
     }
     return true;
   }
@@ -291,6 +304,14 @@ void Project::AssetManager::reloadEntry(AssetManagerEntry &entry, const std::str
       entry.prefab->deserialize(Utils::FS::loadTextFile(path));
     } break;
 
+    case FileType::CANVAS:
+    {
+      entry.canvas = std::make_shared<Canvas>();
+      entry.canvas->load(path);
+      if (entry.canvas->uuid != 0)
+        entry.conf.uuid = entry.canvas->uuid;
+    } break;
+
     case FileType::MODEL_3D:
     {
       try{
@@ -378,6 +399,10 @@ void Project::AssetManager::reload() {
         if (assetEntry.prefab) {
           assetEntry.conf.uuid = assetEntry.prefab->uuid.value;
         }
+      }
+
+      if (assetEntry.type == FileType::CANVAS) {
+        reloadEntry(assetEntry, path.string());
       }
 
       entries[(int)assetEntry.type].push_back(assetEntry);

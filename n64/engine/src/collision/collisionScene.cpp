@@ -1,11 +1,12 @@
 /**
  * @file collision_scene.cpp
  * @author Kevin Reier <https://github.com/Byterset>
- * @brief Defines the Collision Scene which keeps track of physics participants and updates them (see collision_scene.h)
+ * @brief Defines the Collision Scene which keeps track of physics participants and updates them (see collisionScene.h)
  */
-#include "collision/collision_scene.h"
+#include "collision/collisionScene.h"
 #include "collision/collide.h"
-#include "collision/contact_utils.h"
+#include "collision/contactUtils.h"
+#include "collision/gfxScale.h"
 #include "collision/gjk.h"
 #include "scene/scene.h"
 
@@ -95,14 +96,14 @@ namespace P64::Coll {
   }
 
   bool CollisionScene::shouldTrackSleepState(const RigidBody *rigidBody) {
-    return rigidBody && !rigidBody->isKinematic_ && rigidBody->position_;
+    return rigidBody && !rigidBody->isKinematic_;
   }
 
   bool CollisionScene::rigidBodyVelocitiesExceededSleepThreshold(const RigidBody *rigidBody) {
     if(!shouldTrackSleepState(rigidBody)) return false;
 
     const float speedSq = fm_vec3_len2(&rigidBody->linearVelocity_);
-    if(speedSq > SPEED_SLEEP_THRESHOLD_SQ * (g_scene.physicsScale_ * g_scene.physicsScale_)) return true;
+    if(speedSq > SPEED_SLEEP_THRESHOLD_SQ) return true;
 
     const float angSpeedSq = fm_vec3_len2(&rigidBody->angularVelocity_);
     return angSpeedSq > ANGULAR_SLEEP_THRESHOLD_SQ;
@@ -111,17 +112,15 @@ namespace P64::Coll {
   bool CollisionScene::rigidBodyTransformExceededSleepThreshold(const RigidBody *rigidBody) {
     if(!shouldTrackSleepState(rigidBody)) return false;
 
-    const float posDeltaSq = fm_vec3_distance2(rigidBody->position_, &rigidBody->previousStepPosition_);
-    if(posDeltaSq > POS_SLEEP_THRESHOLD_SQ * (g_scene.physicsScale_ * g_scene.physicsScale_)) return true;
+    const float posDeltaSq = fm_vec3_distance2(&rigidBody->position_, &rigidBody->previousStepPosition_);
+    if(posDeltaSq > POS_SLEEP_THRESHOLD_SQ) return true;
 
-    if(rigidBody->rotation_) {
-      const float rotSim = fabsf(quatDot(*rigidBody->rotation_, rigidBody->previousStepRotation_));
-      if(rotSim < ROT_SIMILARITY_SLEEP_THRESHOLD) return true;
-    }
+    const float rotSim = fabsf(quatDot(rigidBody->rotation_, rigidBody->previousStepRotation_));
+    if(rotSim < ROT_SIMILARITY_SLEEP_THRESHOLD) return true;
 
     if(rigidBody->owner_) {
       const float scaleDeltaSq = fm_vec3_distance2(&rigidBody->owner_->scale, &rigidBody->previousStepScale_);
-      if(scaleDeltaSq > POS_SLEEP_THRESHOLD_SQ * (g_scene.physicsScale_ * g_scene.physicsScale_)) return true;
+      if(scaleDeltaSq > POS_SLEEP_THRESHOLD_SQ) return true;
     }
 
     return false;
@@ -191,13 +190,13 @@ namespace P64::Coll {
   }
 
   void CollisionScene::updateCompoundProperties(RigidBody *rigidBody) const {
-    if(!rigidBody || !rigidBody->owner_ || !rigidBody->position_) return;
+    if(!rigidBody || !rigidBody->owner_) return;
 
     const fm_vec3_t fallbackInertia = rigidBody->getDefaultLocalInertiaTensor();
 
     const std::vector<Collider *> *ownerColliders = findCollidersForOwner(rigidBody->owner_);
     if(!ownerColliders || ownerColliders->empty()) {
-      rigidBody->applyCompoundProperties(VEC3_ZERO, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(rigidBody->localCenterOfMassOffset_, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
@@ -210,20 +209,18 @@ namespace P64::Coll {
     }
 
     if(count <= 0) {
-      rigidBody->applyCompoundProperties(VEC3_ZERO, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(rigidBody->localCenterOfMassOffset_, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
     const float invCount = 1.0f / static_cast<float>(count);
-    const fm_vec3_t worldCenter = worldCenterSum * invCount;
+    const fm_vec3_t worldCenter = (worldCenterSum * invCount) + (rigidBody->rotation_ * rigidBody->localCenterOfMassOffset_);
 
-    fm_vec3_t localCenterOffset = worldCenter - *rigidBody->position_;
-    if(rigidBody->rotation_) {
-      localCenterOffset = quatConjugate(*rigidBody->rotation_) * localCenterOffset;
-    }
+    fm_vec3_t localCenterOfMass = worldCenter - rigidBody->position_;
+    localCenterOfMass = quatConjugate(rigidBody->rotation_) * localCenterOfMass;
 
     if(rigidBody->getMass() <= FM_EPSILON) {
-      rigidBody->applyCompoundProperties(localCenterOffset, fallbackInertia, rigidBody->owner_->scale);
+      rigidBody->applyCompoundProperties(localCenterOfMass, fallbackInertia, rigidBody->owner_->scale);
       return;
     }
 
@@ -235,9 +232,7 @@ namespace P64::Coll {
 
       fm_vec3_t colliderInertia = collider->inertiaTensor(massPerCollider);
       fm_vec3_t r = collider->worldCenter_ - worldCenter;
-      if(rigidBody->rotation_) {
-        r = quatConjugate(*rigidBody->rotation_) * r;
-      }
+      r = quatConjugate(rigidBody->rotation_) * r;
 
       const float x2 = r.x * r.x;
       const float y2 = r.y * r.y;
@@ -250,7 +245,7 @@ namespace P64::Coll {
       compoundInertia = compoundInertia + colliderInertia;
     }
 
-    rigidBody->applyCompoundProperties(localCenterOffset, compoundInertia, rigidBody->owner_->scale);
+    rigidBody->applyCompoundProperties(localCenterOfMass, compoundInertia, rigidBody->owner_->scale);
   }
 
   void CollisionScene::syncCompoundProperties(RigidBody *rigidBody) const {
@@ -270,7 +265,7 @@ namespace P64::Coll {
 
     rigidBody->markCompoundPropertiesDirty();
     syncCompoundProperties(rigidBody);
-    const fm_vec3_t worldPos = rigidBody->position_ ? *rigidBody->position_ : VEC3_ZERO;
+    const fm_vec3_t worldPos = rigidBody->position_;
     rigidBody->worldAabb_ = AABB{worldPos, worldPos};
   }
 
@@ -399,10 +394,10 @@ namespace P64::Coll {
     }
   }
 
-  void CollisionScene::configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations, float physicsScale) {
+  void CollisionScene::configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations, float gfxScale) {
     fixedDt_ = fixedDt > 0.0f ? fixedDt : DEFAULT_FIXED_DT;
-    physicsScale_ = physicsScale > FM_EPSILON ? physicsScale : DEFAULT_PHYSICS_SCALE;
-    gravity_ = gravity * physicsScale;
+    setGfxScale(gfxScale);
+    gravity_ = gravity;
     velocitySolverIterations_ = std::max<uint8_t>(1, velocityIterations);
     positionSolverIterations_ = std::max<uint8_t>(1, positionIterations);
   }
@@ -774,7 +769,7 @@ namespace P64::Coll {
         refreshContactPointWorldState(cp, cc);
 
         // Deactivate if too separated
-        if(cp.penetration < -(0.1f * physicsScale_)) {
+        if(cp.penetration < -0.001f) {
           cp.active = false;
         }
       }
@@ -824,7 +819,7 @@ namespace P64::Coll {
     candidates.resize(colliders_.size());
 
     for(RigidBody *body : rigidBodies_) {
-      if(!body || body->isSleeping_ || body->isKinematic_ || !body->position_) continue;
+      if(!body || body->isSleeping_ || body->isKinematic_) continue;
 
       const float dt = fixedDt_ * body->timeScale_;
       if(dt <= 0.0f) continue;
@@ -857,19 +852,20 @@ namespace P64::Coll {
         MAX_CCD_SUBSTEPS);
       if(substeps <= 1) continue;
 
-      const fm_vec3_t originalPos = *body->position_;
+      const fm_vec3_t originalPos = body->position_;
+      bool hit = false;
 
       // Test at intermediate substep positions along the predicted trajectory.
       // k=0 is the current position (handled by normal detection afterwards).
       for(int k = 1; k < substeps; ++k) {
         const float fraction = static_cast<float>(k) / static_cast<float>(substeps);
-        *body->position_ = originalPos + (displacement * fraction);
+        body->position_ = originalPos + (displacement * fraction);
 
         // Sync this body's colliders at the substep position
         for(Collider *collider : *ownerColliders) {
           if(!collider) continue;
           const fm_vec3_t prevCenter = collider->worldCenter_;
-          if(!collider->syncWorldState()) continue;
+          if(!collider->syncFromRigidBody(body->position_, body->rotation_)) continue;
           const fm_vec3_t disp = collider->worldCenter_ - prevCenter;
           if(collider->aabbTreeNodeId_ != NULL_NODE) {
             colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, disp);
@@ -893,11 +889,15 @@ namespace P64::Coll {
             if(!collider->readsCollider(collB) && !collB->readsCollider(collider)) continue;
 
             RigidBody *rbB = findRigidBodyByOwner(collB->owner_);
-            if(collideDetectObjectToObject(collider, body, collB, rbB)) {
-              // debugf("CCD substep %d/%d: body %u hit body %u\n", k, substeps, collider->owner_->id, collB->owner_->id);
+            if(collideDetectObjectToObject(collider, body, collB, rbB, false)) {
+              //debugf("CCD substep %d/%d: body %u hit body %u", k, substeps, collider->owner_->id, collB->owner_->id);
+              hit = true;
+              break;
             }
           }
+          if (hit) break;
         }
+        if (hit) break;
 
         // Broadphase + narrowphase against mesh colliders
         for(MeshCollider *mesh : meshColliders_) {
@@ -906,22 +906,28 @@ namespace P64::Coll {
             if(!collider || !collider->owner_) continue;
             if(!collider->readsMeshCollider(mesh) && !mesh->readsCollider(collider)) continue;
             if(!aabbOverlap(collider->worldAabb_, mesh->worldAabb_)) continue;
-            if(collideDetectObjectToMesh(collider, body, *mesh)) {
-              // debugf("CCD substep %d/%d: body %u hit mesh %u\n", k, substeps, collider->owner_->id, mesh->owner_ ? static_cast<unsigned>(mesh->owner_->id) : 0u);
+            if(collideDetectObjectToMesh(collider, body, *mesh, false)) {
+              //debugf("CCD substep %d/%d: body %u hit mesh %u", k, substeps, collider->owner_->id, mesh->owner_ ? static_cast<unsigned>(mesh->owner_->id) : 0u);
+              hit = true;
+              break;
             }
           }
+          if (hit) break;
         }
+        if (hit) break;
       }
 
-      // Restore original position and sync colliders back
-      *body->position_ = originalPos;
-      for(Collider *collider : *ownerColliders) {
-        if(!collider) continue;
-        const fm_vec3_t prevCenter = collider->worldCenter_;
-        if(!collider->syncWorldState()) continue;
-        const fm_vec3_t disp = collider->worldCenter_ - prevCenter;
-        if(collider->aabbTreeNodeId_ != NULL_NODE) {
-          colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, disp);
+      if (!hit) {
+        // Restore original position and sync colliders back
+        body->position_ = originalPos;
+        for(Collider *collider : *ownerColliders) {
+          if(!collider) continue;
+          const fm_vec3_t prevCenter = collider->worldCenter_;
+          if(!collider->syncFromRigidBody(body->position_, body->rotation_)) continue;
+          const fm_vec3_t disp = collider->worldCenter_ - prevCenter;
+          if(collider->aabbTreeNodeId_ != NULL_NODE) {
+            colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, disp);
+          }
         }
       }
     }
@@ -990,7 +996,7 @@ namespace P64::Coll {
               continue;
             }
           }
-          collideDetectObjectToObject(collider, rbA, collB, rbB);
+          collideDetectObjectToObject(collider, rbA, collB, rbB, true);
         }
       }
     }
@@ -1027,7 +1033,7 @@ namespace P64::Coll {
         //prevent perpetural collision checks of sleeping objects with meshes
         if(!mesh->transformChanged_ && rigidBodyA && rigidBodyA->isSleeping_ && !collA->isTrigger_)
           continue;
-        collideDetectObjectToMesh(collA, rigidBodyA, *mesh);
+        collideDetectObjectToMesh(collA, rigidBodyA, *mesh, true);
       }
 
     }
@@ -1040,7 +1046,7 @@ namespace P64::Coll {
   // ── Pre-solve ─────────────────────────────────────────────────────
 
   void CollisionScene::preSolveContacts() {
-    const float restitutionSlop = 0.5f * physicsScale_;
+    const float restitutionSlop = 0.5f;
 
     for(ContactConstraint *constraint : solverConstraints_) {
       ContactConstraint &cc = *constraint;
@@ -1215,7 +1221,7 @@ namespace P64::Coll {
     constexpr float VELOCITY_SOLVER_EARLY_OUT_THRESHOLD = 1e-4f;
     constexpr float VELOCITY_SOLVER_NORMAL_ERROR_THRESHOLD_PER_SCALE = 1e-3f;
     constexpr uint8_t MIN_NORMAL_SOLVER_ITERATIONS = 6;
-    const float velocitySolverNormalErrorThreshold = VELOCITY_SOLVER_NORMAL_ERROR_THRESHOLD_PER_SCALE * physicsScale_;
+    const float velocitySolverNormalErrorThreshold = VELOCITY_SOLVER_NORMAL_ERROR_THRESHOLD_PER_SCALE;
 
     const auto solveFrictionPass = [&]() {
       for(ContactConstraint *constraint : solverConstraints_) {
@@ -1360,9 +1366,9 @@ namespace P64::Coll {
   // ── Position constraint solver ────────────────────────────────────
 
   bool CollisionScene::solvePositionConstraints() {
-    const float slop = 0.01f * physicsScale_;
-    const float steering = 0.3f;
-    const float maxCorrection = 0.04f * physicsScale_;
+    const float slop = 0.005f;
+    const float steering = 0.2f;
+    const float maxCorrection = 0.2f;
     bool appliedCorrection = false;
 
     for(ContactConstraint *constraint : solverConstraints_) {
@@ -1409,10 +1415,10 @@ namespace P64::Coll {
         appliedCorrection = true;
 
         // Apply linear + angular corrections to A
-        if(a && !a->isKinematic_ && a->position_) {
+        if(a && !a->isKinematic_) {
           if(invMassA > 0.0f) {
             fm_vec3_t corrA = constrainLinearWorld(a, cc.normal * (correctionMag * invMassA));
-            *a->position_ = *a->position_ + corrA;
+            a->position_ += corrA;
           }
           if(aCanRotate) {
             fm_vec3_t angImpulse;
@@ -1423,17 +1429,17 @@ namespace P64::Coll {
               fm_vec3_t axis = rotChange / angle;
               fm_quat_t dq;
               fm_quat_from_axis_angle(&dq, &axis, angle);
-              *a->rotation_ = dq * *a->rotation_;
-              fm_quat_norm(a->rotation_, a->rotation_);
+              a->rotation_ = dq * a->rotation_;
+              fm_quat_norm(&a->rotation_, &a->rotation_);
             }
           }
         }
 
         // Apply linear + angular corrections to B
-        if(b && !b->isKinematic_ && b->position_) {
+        if(b && !b->isKinematic_) {
           if(invMassB > 0.0f) {
             fm_vec3_t corrB = constrainLinearWorld(b, cc.normal * (correctionMag * invMassB));
-            *b->position_ = *b->position_ - corrB;
+            b->position_ -= corrB;
           }
           if(bCanRotate) {
             fm_vec3_t angImpulse;
@@ -1445,8 +1451,8 @@ namespace P64::Coll {
               fm_vec3_t axis = rotChange / angle;
               fm_quat_t dq;
               fm_quat_from_axis_angle(&dq, &axis, angle);
-              *b->rotation_ = dq * *b->rotation_;
-              fm_quat_norm(b->rotation_, b->rotation_);
+              b->rotation_ = dq * b->rotation_;
+              fm_quat_norm(&b->rotation_, &b->rotation_);
             }
           }
         }
@@ -1579,7 +1585,12 @@ namespace P64::Coll {
       if(!collider) continue;
 
       const fm_vec3_t previousCenter = collider->worldCenter_;
-      if(!collider->syncWorldState() || collider->aabbTreeNodeId_ == NULL_NODE) continue;
+
+      RigidBody *rb = findRigidBodyByOwner(collider->owner_);
+      const bool changed = rb ? collider->syncFromRigidBody(rb->position_, rb->rotation_)
+                              : collider->syncWorldState();
+
+      if(!changed || collider->aabbTreeNodeId_ == NULL_NODE) continue;
 
       const fm_vec3_t displacement = collider->worldCenter_ - previousCenter;
       colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, displacement);
@@ -1667,25 +1678,40 @@ namespace P64::Coll {
       if(!ownerColliders || ownerColliders->empty()) continue;
 
       body->worldAabb_ = AABB {.min = body->worldCenterOfMass_, .max = body->worldCenterOfMass_};
-      fm_vec3_t displacement = *body->position_ - body->previousStepPosition_;
       for (Collider *collider : *ownerColliders)
       {
         if (!collider) continue;
+
+        const fm_vec3_t previousCenter = collider->worldCenter_;
+
+        if (collider->syncFromRigidBody(body->position_, body->rotation_)) {
+          const fm_vec3_t displacement = collider->worldCenter_ - previousCenter;
+          colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, displacement);
+        }
+
         body->worldAabb_ = aabbUnion(body->worldAabb_, collider->worldAabb_);
-        colliderAABBTree.moveNode(collider->aabbTreeNodeId_, collider->worldAabb_, displacement);
       }
 
-      // Snapshot the fully-corrected transform for sleep evaluation.
-      // This must happen AFTER the position solver and split impulse push so that
-      // solver corrections (penetration resolution) do not register as "movement"
-      // in the sleep threshold check.
-      if(body->position_) body->previousStepPosition_ = *body->position_;
-      if(body->rotation_) body->previousStepRotation_ = *body->rotation_;
-      if(body->owner_)    body->previousStepScale_ = body->owner_->scale;
+      // Sync visual object with physics position
+      body->owner_->pos = body->position_ * getGfxScale();
+      body->owner_->rot = body->rotation_;
     }
 
     // Update RigidBody sleep states
     updateSleepStates();
+
+   for(RigidBody *body : rigidBodies_) {
+        if(!body || !body->owner_) continue;
+        //update Transform snapshot after final positions are applied
+        if(!body->isSleeping_) {
+            // We only update this while the body is awake, so slow cumulative movement
+            // will eventually exceed the sleep threshold
+            body->previousStepPosition_ = body->position_;
+            body->previousStepRotation_ = body->rotation_;
+            body->previousStepScale_ = body->owner_->scale;
+          }
+      }
+
     ticksFinalize = get_ticks() - stageStart;
 
     ticksTotal = get_ticks() - totalStart;
@@ -1722,7 +1748,7 @@ namespace P64::Coll {
           {
             scaled = rot * scaled;
           }
-          return scaled + pos;
+          return (scaled + pos) * getGfxScale();
         };
 
         for (uint16_t t = 0; t < meshCollider->triangleCount_; ++t)
@@ -1762,46 +1788,46 @@ namespace P64::Coll {
           {
           case ShapeType::Sphere:
             if (!isSleepingBody) col = color_t{0xFF, 0x00, 0x00, 0xFF};
-            Debug::drawSphere(collider->worldCenter_, collider->sphere_.radius, col);
+            Debug::drawSphere(collider->worldCenter_ * getGfxScale(), collider->sphere_.radius * getGfxScale(), col);
             break;
           case ShapeType::Box:
             if (!isSleepingBody) col = color_t{0x00, 0xFF, 0xFF, 0xFF};
-            Debug::drawOBB(collider->worldCenter_, collider->box_.halfSize, collider->owner_->rot, col);
+            Debug::drawOBB(collider->worldCenter_ * getGfxScale(), collider->box_.halfSize * getGfxScale(), collider->owner_->rot, col);
             break;
           case ShapeType::Capsule:
             if (!isSleepingBody) col = color_t{0x00, 0x80, 0xFF, 0xFF};
             Debug::drawCapsule(
-                collider->worldCenter_,
-                collider->capsule_.radius,
-                collider->capsule_.innerHalfHeight,
+                collider->worldCenter_ * getGfxScale(),
+                collider->capsule_.radius * getGfxScale(),
+                collider->capsule_.innerHalfHeight * getGfxScale(),
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Cylinder:
             if (!isSleepingBody) col = color_t{0xFF, 0x80, 0x00, 0xFF};
             Debug::drawCylinder(
-                collider->worldCenter_,
-                collider->cylinder_.radius,
-                collider->cylinder_.halfHeight,
+                collider->worldCenter_ * getGfxScale(),
+                collider->cylinder_.radius * getGfxScale(),
+                collider->cylinder_.halfHeight * getGfxScale(),
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Cone:
             if (!isSleepingBody) col = color_t{0xFF, 0x40, 0xA0, 0xFF};
             Debug::drawCone(
-                collider->worldCenter_,
-                collider->cone_.radius,
-                collider->cone_.halfHeight,
+                collider->worldCenter_ * getGfxScale(),
+                collider->cone_.radius * getGfxScale(),
+                collider->cone_.halfHeight * getGfxScale(),
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Pyramid:
             if (!isSleepingBody) col = color_t{0xB0, 0xFF, 0x40, 0xFF};
             Debug::drawPyramid(
-                collider->worldCenter_,
-                collider->pyramid_.baseHalfWidthX,
-                collider->pyramid_.baseHalfWidthZ,
-                collider->pyramid_.halfHeight,
+                collider->worldCenter_ * getGfxScale(),
+                collider->pyramid_.baseHalfWidthX * getGfxScale(),
+                collider->pyramid_.baseHalfWidthZ * getGfxScale(),
+                collider->pyramid_.halfHeight * getGfxScale(),
                 collider->owner_->rot,
                 col);
             break;

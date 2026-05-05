@@ -20,6 +20,7 @@
 namespace Project
 {
   class Project;
+  struct Canvas;  // forward declaration — full type in canvas/canvas.h
 
   enum class ComprTypes : int
   {
@@ -42,6 +43,7 @@ namespace Project
     PREFAB,
     NODE_GRAPH,
     MUSIC_XM,
+    CANVAS,
 
     _SIZE
   };
@@ -80,8 +82,12 @@ namespace Project
     Assets::Model3D model{};
     std::shared_ptr<Renderer::N64Mesh> mesh3D{};
     std::shared_ptr<Prefab> prefab{nullptr};
+    std::shared_ptr<Canvas> canvas{nullptr};
     AssetConf conf{};
     Utils::CPP::Struct params{};
+
+    // Destructor defined in assetManager.cpp (where Canvas is complete)
+    ~AssetManagerEntry();
 
     uint64_t getUUID() const { return conf.uuid; }
 

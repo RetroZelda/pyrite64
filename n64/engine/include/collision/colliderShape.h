@@ -1,5 +1,5 @@
 /**
- * @file collider_shape.h
+ * @file colliderShape.h
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Defines the Basic (non-mesh) Colliders 
  */
@@ -9,7 +9,8 @@
 #include "types.h"
 #include "shapes.h"
 #include "matrix3x3.h"
-#include "aabb_tree.h"
+#include "aabbTree.h"
+#include "gfxScale.h"
 
 namespace P64
 {
@@ -54,7 +55,7 @@ namespace P64::Coll {
     }
     P64::Object *ownerObject() const { return owner_; }
 
-    void setParentOffset(const fm_vec3_t &newParentOffset) { parentOffset_ = newParentOffset; }
+    void setParentOffset(const fm_vec3_t &newParentOffset) { parentOffset_ = newParentOffset * getInvGfxScale(); }
     const fm_vec3_t &parentOffset() const { return parentOffset_; }
 
     void setBounce(float newBounce) { bounce_ = newBounce; }
@@ -87,6 +88,7 @@ namespace P64::Coll {
     fm_vec3_t rotateToLocal(const fm_vec3_t &worldDir) const;
     bool hasOwnerTransformChanged() const;
     void syncOwnerTransform();
+    bool syncFromRigidBody(const fm_vec3_t& rbPosition, const fm_quat_t& rbRotation);
     bool syncWorldState();
     bool readsCollider(const Collider *other) const;
     bool readsMeshCollider(const MeshCollider *other) const;

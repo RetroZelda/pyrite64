@@ -14,6 +14,9 @@
 #include "systems/sprites.h"
 #include "script/nodeGraph.h"
 #include "debug/debugMenu.h"
+#include "ui/UI.h"
+
+namespace P64::UI::Generated { void uiInitializeBindings(); }
 
 namespace P64::User
 {
@@ -93,6 +96,7 @@ namespace P64::GlobalScript::C4F4D286D6CBAAAA
     User::Sprites::init();
     User::Fonts::init();
     User::Dialog::init();
+    P64::UI::init();
     User::ctx.forceBars = false;
   }
 
@@ -107,6 +111,9 @@ namespace P64::GlobalScript::C4F4D286D6CBAAAA
       .add("Bars",    User::ctx.forceBars)
       .add("Fade-In", [](auto &m){ User::ScreenFade::fadeIn(0, 1.0f); })
       .add("Fade-Out",[](auto &m){ User::ScreenFade::fadeOut(0, 1.0f); });
+
+    P64::UI::Generated::uiInitializeBindings();
+    P64::UI::addDebugMenu();
   }
 
   void onScenePostUnload()
@@ -115,6 +122,7 @@ namespace P64::GlobalScript::C4F4D286D6CBAAAA
     User::Sprites::destroy();
     User::Fonts::destroy();
     User::Dialog::destroy();
+    P64::UI::destroy();
   }
 
   void onSceneUpdate()
@@ -143,6 +151,8 @@ namespace P64::GlobalScript::C4F4D286D6CBAAAA
     User::Sprites::reset();
 
     if(User::Dialog::update())User::ctx.isCutscene = true;
+
+    P64::UI::update(1.0f / 60.0f);
   }
 
   void onScenePreDraw()
@@ -182,6 +192,7 @@ namespace P64::GlobalScript::C4F4D286D6CBAAAA
 
   void onSceneDraw2D()
   {
+    P64::UI::draw_2D();
     //User::Marker::draw();
     User::Dialog::draw();
     User::ScreenFade::draw();

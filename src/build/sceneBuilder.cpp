@@ -154,7 +154,7 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
   ctx.fileScene.write<float>(gravity.x);
   ctx.fileScene.write<float>(gravity.y);
   ctx.fileScene.write<float>(gravity.z);
-  ctx.fileScene.write<float>(std::max(sc->conf.physicsScale.value, 0.001f));
+  ctx.fileScene.write<float>(std::max(sc->conf.visualUnitsPerMeter.value, 0.001f));
 
   ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.velocitySolverIterations.value, 1, 32));
   ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.positionSolverIterations.value, 1, 32));
@@ -180,8 +180,7 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
     ctx.fileScene.write<float>(layer.fogMin.value);
     ctx.fileScene.write<float>(layer.fogMax.value);
     ctx.fileScene.write<uint8_t>(fogMode);
-
-    ctx.fileScene.write<uint8_t>(0); // padding
+    ctx.fileScene.write<uint8_t>(layer.lightMode.value);
     ctx.fileScene.write<uint8_t>(0); // padding
     ctx.fileScene.write<uint8_t>(0); // padding
   };

@@ -172,6 +172,12 @@ int main(int argc, char** argv)
     ctx.hasNewerVersion = !ctx.newerVersion.empty();
   });
 
+  //ctx.debugMode = true; // DEBUG
+  if(ctx.debugMode) {
+    printf("Debug mode enabled\n");
+    SDL_SetHint(SDL_HINT_RENDER_VULKAN_DEBUG, "1");
+  }
+
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
   {
     printf("Error: SDL_Init(): %s\n", SDL_GetError());
@@ -201,8 +207,7 @@ int main(int argc, char** argv)
   }
 
   // Create GPU Device
-  bool debugMode = false;
-  ctx.gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_DXIL, debugMode, nullptr);
+  ctx.gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_DXIL, ctx.debugMode, nullptr);
   if (ctx.gpu == nullptr)
   {
     fatal("Error: Cannot initialize a supported GPU backend (SPIR-V/MSL/DXIL)\n\nSDL_CreateGPUDevice(): %s\n", SDL_GetError());

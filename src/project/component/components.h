@@ -5,6 +5,7 @@
 #pragma once
 #include <array>
 #include <memory>
+#include <SDL3/SDL_gpu.h>
 
 #include "json.hpp"
 #include "IconsMaterialDesignIcons.h"
@@ -34,6 +35,7 @@ namespace Project::Component
 
   typedef void(*FuncCompDraw)(Object&, Entry &entry);
   typedef void(*FuncCompDraw3D)(Object&, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass);
+  typedef void(*FuncCompCopyPass)(Object&, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass* pass);
   typedef std::shared_ptr<void>(*FuncCompInit)(Object&);
   typedef nlohmann::json(*FuncCompSerial)(const Entry &entry);
   typedef std::shared_ptr<void>(*FuncCompDeserial)(nlohmann::json &doc);
@@ -51,6 +53,7 @@ namespace Project::Component
     FuncCompDraw funcDraw{};
     FuncCompDraw3D funcDraw3D{};
     FuncCompDraw3D funcDrawPost3D{};
+    FuncCompCopyPass funcDrawCopyPass{};
     FuncCompSerial funcSerialize{};
     FuncCompDeserial funcDeserialize{};
     FuncCompBuild funcBuild{};
@@ -64,6 +67,7 @@ namespace Project::Component
       void update(Object& obj, Entry &entry); \
       void draw(Object& obj, Entry &entry); \
       void draw3D(Object&, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass); \
+      void drawCopyPass(Object&, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass* pass); \
       nlohmann::json serialize(const Entry &entry); \
       std::shared_ptr<void> deserialize(nlohmann::json &doc); \
       void build(Object&, Entry &entry, Build::SceneCtx &ctx); \
@@ -214,6 +218,7 @@ namespace Project::Component
       .funcInit = AnimModel::init,
       .funcDraw = AnimModel::draw,
       .funcDraw3D = AnimModel::draw3D,
+      .funcDrawCopyPass = AnimModel::drawCopyPass,
       .funcSerialize = AnimModel::serialize,
       .funcDeserialize = AnimModel::deserialize,
       .funcBuild = AnimModel::build,

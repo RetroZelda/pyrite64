@@ -1,0 +1,193 @@
+{
+  "conf": {
+    "gridSizeX": 16,
+    "gridSizeY": 16,
+    "showGrid": true,
+    "viewportHeight": 240,
+    "viewportWidth": 320
+  },
+  "elements": [
+    {
+      "children": [],
+      "name": "CoinIcon",
+      "props": {
+        "alphaCompare": {
+          "isBound": false,
+          "val": 2
+        },
+        "blendMode": {
+          "isBound": false,
+          "val": 0
+        },
+        "color": {
+          "isBound": false,
+          "val": null
+        },
+        "combiner": {
+          "isBound": false,
+          "val": "RDPQ_COMBINER_TEX"
+        },
+        "sprite": {
+          "isBound": false,
+          "val": 7862731364426322112
+        }
+      },
+      "rotation": {
+        "isBound": false,
+        "val": 0.0
+      },
+      "scaleX": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "scaleY": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "type": 0,
+      "uuid": 1234567890123456001,
+      "visible": true,
+      "x": {
+        "isBound": false,
+        "val": 20.0
+      },
+      "y": {
+        "isBound": false,
+        "val": 208.0
+      }
+    },
+    {
+      "children": [],
+      "name": "HealthBar",
+      "props": {
+        "color": {
+          "isBound": false,
+          "val": [
+            221,
+            85,
+            85,
+            255
+          ]
+        },
+        "height": {
+          "isBound": false,
+          "val": 12.0
+        },
+        "s0": {
+          "isBound": false,
+          "val": null
+        },
+        "sprite": {
+          "isBound": false,
+          "val": 7008574988794858050
+        },
+        "t0": {
+          "isBound": false,
+          "val": null
+        },
+        "width": {
+          "isBound": false,
+          "val": 12.0
+        }
+      },
+      "rotation": {
+        "isBound": false,
+        "val": 0.0
+      },
+      "scaleX": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "scaleY": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "type": 3,
+      "uuid": 1234567890123456002,
+      "visible": true,
+      "x": {
+        "isBound": false,
+        "val": 20.0
+      },
+      "y": {
+        "isBound": false,
+        "val": 20.0
+      }
+    },
+    {
+      "children": [],
+      "name": "Text_new",
+      "props": {
+        "args": {
+          "isBound": false,
+          "val": [
+            "displayCoins"
+          ]
+        },
+        "color": {
+          "isBound": false,
+          "val": [
+            55,
+            36,
+            36,
+            255
+          ]
+        },
+        "font": {
+          "isBound": false,
+          "val": 4
+        },
+        "scale": {
+          "isBound": false,
+          "val": 1.0
+        },
+        "text": {
+          "isBound": false,
+          "val": "%ld"
+        }
+      },
+      "rotation": {
+        "isBound": false,
+        "val": 0.0
+      },
+      "scaleX": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "scaleY": {
+        "isBound": false,
+        "val": 1.0
+      },
+      "type": 1,
+      "uuid": 2331884026990990491,
+      "visible": true,
+      "x": {
+        "isBound": false,
+        "val": 48.0
+      },
+      "y": {
+        "isBound": false,
+        "val": 224.0
+      }
+    }
+  ],
+  "name": "Hud",
+  "uuid": 7653284961083742001,
+  "variables": [
+    {
+      "default": "0",
+      "name": "displayCoins",
+      "type": 1
+    },
+    {
+      "default": "0",
+      "name": "health",
+      "type": 1
+    },
+    {
+      "default": "0",
+      "name": "healthTotal",
+      "type": 1
+    }
+  ]
+}

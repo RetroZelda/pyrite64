@@ -91,8 +91,8 @@ fm_vec3_t center = bcs->center;
 ```
 you would now access either
 ```cpp
-auto rb_comp = obj.getComponent<Comp::RigidBody>();
-auto &rb = rb_comp->rigid_body;
+auto rbComp = obj.getComponent<Comp::RigidBody>();
+auto &rb = rbComp->getBody();
 fm_vec3_t center = rb.worldCenterOfMass();
 ```
 for the compounded center of mass of all the colliders on an object, or
