@@ -25,6 +25,9 @@ namespace
     std::string varDefaultInit(const CanvasVariableDef& v)
     {
         auto& d = v.defaultValue;
+        // StringPtr stores its content without quotes; always wrap them.
+        if (v.type == CanvasVarType::StringPtr)
+            return d.empty() ? "\"\"" : "\"" + d + "\"";
         if (!d.empty()) return d;
         switch (v.type)
         {
@@ -32,9 +35,7 @@ namespace
             case CanvasVarType::Int:       return "0";
             case CanvasVarType::Bool:      return "false";
             case CanvasVarType::ColorRGBA: return "{0xFF, 0xFF, 0xFF, 0xFF}";
-            case CanvasVarType::StringPtr: return "\"\"";
             case CanvasVarType::FontRef:   return "0";
-            // SpriteRef: if defaultValue is a ROM path, generate static AssetRef init
             case CanvasVarType::SpriteRef: return "{}";
             default:                       return "{}";
         }
