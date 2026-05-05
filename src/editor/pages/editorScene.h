@@ -5,6 +5,11 @@
 #pragma once
 #include "parts/assetInspector.h"
 #include "parts/assetsBrowser.h"
+#include "parts/canvasGraph.h"
+#include "parts/canvasObjectInspector.h"
+#include "parts/canvasSettings.h"
+#include "parts/canvasVariables.h"
+#include "parts/canvasViewport.h"
 #include "parts/layerInspector.h"
 #include "parts/logWindow.h"
 #include "parts/memoryDashboard.h"
@@ -25,6 +30,14 @@ namespace Editor
     private:
       Viewport3D viewport3d{};
 
+      // Canvas editor panels (active when a canvas is open)
+      std::shared_ptr<Project::Canvas> openedCanvas{};
+      CanvasViewport      canvasViewport{};
+      CanvasVariables     canvasVariables{};
+      CanvasGraph         canvasGraph{};
+      CanvasSettings      canvasSettings{};
+      CanvasObjectInspector canvasObjectInspector{};
+
       // Editors
       std::vector<std::shared_ptr<NodeEditor>> nodeEditors{};
       std::map<uint64_t, std::shared_ptr<ModelEditor>> modelEditors{};
@@ -39,10 +52,12 @@ namespace Editor
       MemoryDashboard memoryDashboard{};
       SceneGraph sceneGraph{};
 
+      uint64_t pendingRestoreCanvasUUID{0};
       bool dockSpaceInit{false};
-      ImGuiID dockLeftID;
-      ImGuiID dockRightID;
-      ImGuiID dockBottomID;
+      bool canvasJustOpened{false};
+      ImGuiID dockLeftID{};
+      ImGuiID dockRightID{};
+      ImGuiID dockBottomID{};
 
       uint64_t pendingNodeEditorCloseUUID{0};
       bool pendingNodeEditorClosePopup{false};
@@ -52,6 +67,8 @@ namespace Editor
       ~Scene();
 
       void openModelEditor(uint64_t assetUUID);
+      void openCanvas(uint64_t assetUUID);
+      void closeCanvas();
 
       void draw();
       void save();

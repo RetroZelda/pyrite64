@@ -40,6 +40,7 @@ namespace Build
     uint32_t stringOffset{0};
 
     bool needsOpus{false};
+    bool hasCanvases{false};
 
     void addAsset(const Project::AssetManagerEntry &entry);
   };
