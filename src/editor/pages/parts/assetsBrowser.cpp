@@ -5,6 +5,7 @@
 #include "assetsBrowser.h"
 
 #include "imgui.h"
+#include "../../actions.h"
 #include "imgui_internal.h"
 #include "../../imgui/helper.h"
 #include "../../imgui/notification.h"
@@ -16,6 +17,8 @@
 #include <string>
 #include "../../../utils/logger.h"
 #include "../../../utils/proc.h"
+#include "../../../utils/hash.h"
+#include "../../../project/canvas/canvas.h"
 
 using FileType = Project::FileType;
 namespace fs = std::filesystem;
@@ -26,6 +29,7 @@ namespace
   constexpr int TAB_IDX_ASSETS = 1;
   constexpr int TAB_IDX_SCRIPTS = 2;
   constexpr int TAB_IDX_PREFABS = 3;
+  constexpr int TAB_IDX_CANVAS = 4;
 
   struct TabDef
   {
@@ -58,7 +62,7 @@ namespace
 void Editor::AssetsBrowser::draw() {
   auto &scenes = ctx.project->getScenes().getEntries();
 
-  const std::array<TabDef, 4> TABS{
+  const std::array<TabDef, 5> TABS{
     TabDef{
       .name = ICON_MDI_EARTH_BOX "  Scenes",
       .showScenes = true
@@ -75,14 +79,27 @@ void Editor::AssetsBrowser::draw() {
       .name = ICON_MDI_PACKAGE_VARIANT_CLOSED "  Prefabs",
       .fileTypes = {FileType::PREFAB}
     },
+    TabDef{
+      .name = ICON_MDI_LAYERS_OUTLINE "  Canvas",
+      .fileTypes = {FileType::CANVAS}
+    },
   };
 
   ImGui::BeginChild("LEFT", ImVec2(94_px, 0), ImGuiChildFlags_Borders);
-  for (int i=0; i<TABS.size(); ++i) {
+  for (int i=0; i<(int)TABS.size(); ++i) {
     bool isActive = i == activeTab;
-    if (ImGui::Selectable(TABS[i].name, isActive))activeTab = i;
+    if (ImGui::Selectable(TABS[i].name, isActive)) activeTab = i;
   }
   ImGui::EndChild();
+
+  // Detect tab change and dispatch scene/canvas open/close actions
+  if (activeTab != prevActiveTab) {
+    if (prevActiveTab == TAB_IDX_CANVAS)
+      Actions::call(Actions::Type::CLOSE_CANVAS);
+    if (activeTab == TAB_IDX_CANVAS)
+      Actions::call(Actions::Type::OPEN_CANVAS, "auto"); // "auto" = pick first / last
+    prevActiveTab = activeTab;
+  }
 
   float sceneOptionsWidth = 140_px;
 
@@ -424,6 +441,8 @@ void Editor::AssetsBrowser::draw() {
         iconTxt = ICON_MDI_LANGUAGE_CPP;
       } else if (asset.type == FileType::NODE_GRAPH) {
         iconTxt = ICON_MDI_GRAPH_OUTLINE;
+      } else if (asset.type == FileType::CANVAS) {
+        iconTxt = ICON_MDI_LAYERS_OUTLINE;
       }
     }
 
@@ -443,8 +462,10 @@ void Editor::AssetsBrowser::draw() {
       ImGui::makeTabVisible("Asset");
     }
     if (isDblClick) {
-      if (!Utils::Proc::openFile(asset.path))
-      {
+      if (asset.type == FileType::CANVAS) {
+        Editor::Actions::call(Editor::Actions::Type::OPEN_CANVAS,
+                              std::to_string(asset.getUUID()));
+      } else if (!Utils::Proc::openFile(asset.path)) {
         Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File. This may be due to WSL path conversion failure.");
       }
     }
@@ -555,23 +576,56 @@ void Editor::AssetsBrowser::draw() {
     }
   }
 
-  static std::string newScriptDir{};
+  // Canvas flat list (like scenes — no folder browsing)
+  if (activeTab == TAB_IDX_CANVAS)
+  {
+    const auto& canvasEntries = ctx.project->getAssets().getTypeEntries(FileType::CANVAS);
+    for (const auto& entry : canvasEntries)
+    {
+      if (!searchFilter.empty() && !entry.name.contains(searchFilter)) continue;
+      checkLineBreak();
 
-  if (activeTab == TAB_IDX_SCRIPTS || activeTab == TAB_IDX_SCENES)
+      bool isSelected = (entry.canvas && ctx.openedCanvasUUID == entry.getUUID());
+      if (isSelected) {
+        ImGui::PushStyleColor(ImGuiCol_Button, {0.3f, 0.5f, 0.7f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.3f, 0.5f, 0.7f, 0.8f});
+      }
+      ImGui::PushFont(nullptr, 40_px);
+      bool clicked = ImGui::Button((ICON_MDI_LAYERS_OUTLINE + std::string("##") + entry.path).c_str(),
+                                   textBtnSize);
+      ImGui::PopFont();
+      if (isSelected) ImGui::PopStyleColor(2);
+
+      if (clicked && entry.canvas)
+        Actions::call(Actions::Type::OPEN_CANVAS, std::to_string(entry.getUUID()));
+
+      drawLabel(fs::path(entry.name).stem().string(), ImGui::GetItemRectMin());
+
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Canvas: %s", entry.name.c_str());
+    }
+  }
+
+  static std::string newScriptDir{};
+  static std::string newCanvasName{};
+
+  if (activeTab == TAB_IDX_SCRIPTS || activeTab == TAB_IDX_SCENES || activeTab == TAB_IDX_CANVAS)
   {
     checkLineBreak();
-    // set textsize to larger
 
     ImGui::PushFont(nullptr, 32_px);
-    if (ImGui::Button(
-      (activeTab == TAB_IDX_SCRIPTS) ? ICON_MDI_FILE_DOCUMENT_PLUS_OUTLINE : ICON_MDI_EARTH_BOX_PLUS,
-      textBtnSize
-    )) {
+    const char* btnIcon = ICON_MDI_EARTH_BOX_PLUS;
+    if (activeTab == TAB_IDX_SCRIPTS) btnIcon = ICON_MDI_FILE_DOCUMENT_PLUS_OUTLINE;
+    if (activeTab == TAB_IDX_CANVAS)  btnIcon = ICON_MDI_LAYERS_PLUS;
+    if (ImGui::Button(btnIcon, textBtnSize)) {
       if(activeTab == TAB_IDX_SCRIPTS) {
         newScriptDir = dirState;
         scriptName = "New_Script";
         scriptType = 0;
         ImGui::OpenPopup("NewScript");
+      } else if (activeTab == TAB_IDX_CANVAS) {
+        newCanvasName = "NewCanvas";
+        ImGui::OpenPopup("NewCanvas");
       } else {
         ctx.project->getScenes().add();
       }
@@ -588,8 +642,47 @@ void Editor::AssetsBrowser::draw() {
   {
     ImGui::SetTooltip("Create new Scene");
   }
+  if (activeTab == TAB_IDX_CANVAS && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+  {
+    ImGui::SetTooltip("Create new Canvas");
+  }
 
   ImGui::Dummy({0, 10_px});
+
+  ImGui::SetNextWindowSize(ImVec2(250_px, 0));
+  if (ImGui::BeginPopup("NewCanvas"))
+  {
+    ImTable::start("CANVAS");
+    ImTable::add("Name");
+    ImGui::InputText("##CanvasName", &newCanvasName);
+    ImTable::end();
+
+    ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 112_px);
+    if (ImGui::Button("Create"))
+    {
+      // Canvas files always go in assets/ui/ by default
+      auto assetsPath = fs::path{ctx.project->getPath()} / "assets" / "ui";
+      fs::create_directories(assetsPath);
+      auto canvasPath = assetsPath / (newCanvasName + ".canvas");
+
+      if (!fs::exists(canvasPath))
+      {
+        Project::Canvas c;
+        c.name = newCanvasName;
+        c.uuid = Utils::Hash::randomU64();
+        c.save(canvasPath.string());
+        ctx.project->getAssets().reload();
+        ImGui::CloseCurrentPopup();
+      }
+      else
+      {
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "A canvas with that name already exists.");
+      }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
 
   ImGui::SetNextWindowSize(ImVec2(250_px, 0));
   if(ImGui::BeginPopup("NewScript"))

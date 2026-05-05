@@ -9,6 +9,7 @@
 #include "imgui_internal.h"
 #include "../actions.h"
 #include "../undoRedo.h"
+#include "../canvasHistory.h"
 #include "../../context.h"
 
 #define IMVIEWGUIZMO_IMPLEMENTATION 1
@@ -42,6 +43,30 @@ Editor::Scene::Scene()
     }
     return false;
   });
+
+  Editor::Actions::registerAction(Editor::Actions::Type::OPEN_CANVAS, [this](const std::string& asset)
+  {
+    if(!ctx.project)return false;
+    if (asset == "auto") {
+      // Re-open last canvas, or fall back to first available
+      if (ctx.openedCanvasUUID != 0) {
+        openCanvas(ctx.openedCanvasUUID);
+      } else {
+        const auto& canvases = ctx.project->getAssets().getTypeEntries(Project::FileType::CANVAS);
+        if (!canvases.empty()) openCanvas(canvases.front().getUUID());
+      }
+      return true;
+    }
+    openCanvas(std::stoull(asset));
+    return true;
+  });
+
+  Editor::Actions::registerAction(Editor::Actions::Type::CLOSE_CANVAS, [this](const std::string&)
+  {
+    closeCanvas();
+    return true;
+  });
+
   needsSanityCheck = true;
 
   try
@@ -50,6 +75,13 @@ Editor::Scene::Scene()
     if(json.contains("winModels")) {
       for(const auto& assetUUID : json["winModels"]) {
         openModelEditor(assetUUID.get<uint64_t>());
+      }
+    }
+    if(json.contains("openedCanvasUUID")) {
+      uint64_t uuid = json["openedCanvasUUID"].get<uint64_t>();
+      if(uuid != 0) {
+        pendingRestoreCanvasUUID = uuid;
+        assetsBrowser.forceTab(AssetsBrowser::TAB_CANVAS);
       }
     }
   } catch(const std::exception& e) {}
@@ -62,10 +94,33 @@ Editor::Scene::~Scene()
   for(const auto& [assetUUID, _] : modelEditors) {
     conf["winModels"].push_back(assetUUID);
   }
+  conf["openedCanvasUUID"] = openedCanvas ? ctx.openedCanvasUUID : 0ULL;
 
   Utils::FS::saveTextFile(Utils::Proc::getAppDataPath() / "editorScene.json", conf.dump(2));
 
   Editor::Actions::registerAction(Editor::Actions::Type::OPEN_NODE_GRAPH, nullptr);
+  Editor::Actions::registerAction(Editor::Actions::Type::OPEN_CANVAS, nullptr);
+  Editor::Actions::registerAction(Editor::Actions::Type::CLOSE_CANVAS, nullptr);
+}
+
+void Editor::Scene::openCanvas(uint64_t assetUUID)
+{
+  auto* entry = ctx.project->getAssets().getEntryByUUID(assetUUID);
+  if (!entry || !entry->canvas) return;
+  if (openedCanvas) openedCanvas->save();
+  openedCanvas = entry->canvas;
+  ctx.openedCanvasUUID = assetUUID;
+  CanvasHistory::clear();
+  canvasJustOpened = true;
+}
+
+void Editor::Scene::closeCanvas()
+{
+  if (openedCanvas) {
+    openedCanvas->save();
+    openedCanvas = nullptr;
+  }
+  // Keep ctx.openedCanvasUUID so "auto" can re-open it later
 }
 
 void Editor::Scene::openModelEditor(uint64_t assetUUID)
@@ -80,6 +135,11 @@ void Editor::Scene::openModelEditor(uint64_t assetUUID)
 
 void Editor::Scene::draw()
 {
+  if(pendingRestoreCanvasUUID && ctx.project) {
+    openCanvas(pendingRestoreCanvasUUID);
+    pendingRestoreCanvasUUID = 0;
+  }
+
   float HEIGHT_TOP_BAR = 28_px;
   float HEIGHT_STATUS_BAR = 24_px;
 
@@ -126,13 +186,13 @@ void Editor::Scene::draw()
 
     // Center
     ImGui::DockBuilderDockWindow("3D-Viewport", dockSpaceID);
-    // ImGui::DockBuilderDockWindow("Node-Editor", dockSpaceID);
+    ImGui::DockBuilderDockWindow("Canvas",      dockSpaceID);
 
     // Left
-    //ImGui::DockBuilderDockWindow("Project", dockLeftID);
-    ImGui::DockBuilderDockWindow("Scene", dockLeftID);
-    ImGui::DockBuilderDockWindow("Graph", dockLeftID);
-    ImGui::DockBuilderDockWindow("Layers", dockLeftID);
+    ImGui::DockBuilderDockWindow("Scene",     dockLeftID);
+    ImGui::DockBuilderDockWindow("Graph",     dockLeftID);
+    ImGui::DockBuilderDockWindow("Layers",    dockLeftID);
+    ImGui::DockBuilderDockWindow("Variables", dockLeftID);
 
     // Right
     ImGui::DockBuilderDockWindow("Asset", dockRightID);
@@ -147,10 +207,21 @@ void Editor::Scene::draw()
     ImGui::DockBuilderFinish(dockSpaceID);
   }
 
+  CanvasHistory::begin(openedCanvas.get());
+
+  const ImGuiCond dockCond = canvasJustOpened ? ImGuiCond_Always : ImGuiCond_Appearing;
+
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
-  ImGui::Begin("3D-Viewport");
-    viewport3d.draw();
-  ImGui::End();
+  if (openedCanvas) {
+    ImGui::SetNextWindowDockID(dockSpaceID, dockCond);
+    ImGui::Begin("Canvas");
+      canvasViewport.draw(*openedCanvas);
+    ImGui::End();
+  } else {
+    ImGui::Begin("3D-Viewport");
+      viewport3d.draw();
+    ImGui::End();
+  }
   ImGui::PopStyleVar(1);
 
   std::vector<uint32_t> delIndices{};
@@ -217,9 +288,11 @@ void Editor::Scene::draw()
   }
   for(auto &uuid : delUUIDs)modelEditors.erase(uuid);
 
-  ImGui::Begin("Object");
-    objectInspector.draw();
-  ImGui::End();
+  if (!openedCanvas) {
+    ImGui::Begin("Object");
+      objectInspector.draw();
+    ImGui::End();
+  }
 
   ImGui::Begin("Asset");
     assetInspector.draw();
@@ -231,8 +304,41 @@ void Editor::Scene::draw()
     assetsBrowser.draw();
   ImGui::End();
 
-  if (ctx.project->getScenes().getLoadedScene()) {
+  if (openedCanvas)
+  {
+    // Canvas editor mode: swap Scene/Layers/Graph panels
+    ImGui::Begin("Scene");
+      canvasSettings.draw(*openedCanvas);
+      ImGui::Separator();
+      if (ImGui::Button("Close Canvas")) {
+        closeCanvas();
+        assetsBrowser.setActiveTab(AssetsBrowser::TAB_ASSETS); // leave prevActiveTab=4 so detection fires
+      }
+    ImGui::End();
 
+    ImGui::SetNextWindowDockID(dockLeftID, dockCond);
+    ImGui::Begin("Variables");
+      canvasVariables.draw(*openedCanvas);
+    ImGui::End();
+
+    ImGui::Begin("Graph");
+      canvasGraph.draw(*openedCanvas);
+    ImGui::End();
+
+    canvasJustOpened = false;
+
+    // Bidirectional selection sync: viewport click wins this frame, otherwise graph drives viewport
+    if (canvasViewport.consumeSelectionChange())
+      canvasGraph.setSelectedUUID(canvasViewport.getSelected());
+    else
+      canvasViewport.setSelected(canvasGraph.getSelectedUUID());
+
+    ImGui::Begin("Object");
+      canvasObjectInspector.draw(*openedCanvas, canvasGraph.getSelected(*openedCanvas));
+    ImGui::End();
+  }
+  else if (ctx.project->getScenes().getLoadedScene())
+  {
     ImGui::Begin("Graph");
       sceneGraph.draw();
     ImGui::End();
@@ -323,22 +429,30 @@ void Editor::Scene::draw()
       // Edit Menu with undo/redo functionality including description
       if(ImGui::BeginMenu("Edit"))
       {
-        auto& history = UndoRedo::getHistory();
-
         std::string undoText = ICON_MDI_UNDO " Undo";
-        if (history.canUndo()) {
-          undoText += " (" + history.getUndoDescription() + ")";
-        }
-        if(ImGui::MenuItem(undoText.c_str(), "Ctrl+Z", false, history.canUndo())) {
-          history.undo();
+        std::string redoText = ICON_MDI_REDO " Redo";
+        bool canUndo, canRedo;
+
+        if (openedCanvas) {
+          canUndo = CanvasHistory::canUndo();
+          canRedo = CanvasHistory::canRedo();
+          if (canUndo) undoText += " (" + CanvasHistory::getUndoDescription() + ")";
+          if (canRedo) redoText += " (" + CanvasHistory::getRedoDescription() + ")";
+        } else {
+          auto& history = UndoRedo::getHistory();
+          canUndo = history.canUndo();
+          canRedo = history.canRedo();
+          if (canUndo) undoText += " (" + history.getUndoDescription() + ")";
+          if (canRedo) redoText += " (" + history.getRedoDescription() + ")";
         }
 
-        std::string redoText = ICON_MDI_REDO " Redo";
-        if (history.canRedo()) {
-          redoText += " (" + history.getRedoDescription() + ")";
+        if(ImGui::MenuItem(undoText.c_str(), "Ctrl+Z", false, canUndo)) {
+          if (openedCanvas) CanvasHistory::undo();
+          else UndoRedo::getHistory().undo();
         }
-        if(ImGui::MenuItem(redoText.c_str(), "Ctrl+Y", false, history.canRedo())) {
-          history.redo();
+        if(ImGui::MenuItem(redoText.c_str(), "Ctrl+Y", false, canRedo)) {
+          if (openedCanvas) CanvasHistory::redo();
+          else UndoRedo::getHistory().redo();
         }
 
         if(ImGui::MenuItem(ICON_MDI_COG " Preferences", "Ctrl+."))preferencesOpen = true;
@@ -406,13 +520,23 @@ void Editor::Scene::draw()
   ImGui::PushFont(ImGui::Theme::getFontMono(), 16_px);
   ImVec4 perfColor{1.0f,1.0f,1.0f,0.4f};
   if (io.Framerate < 45) perfColor = {1.0f, 0.5f, 0.5f, 1.0f};
-  ImGui::TextColored(perfColor, "%d FPS | History: %d/%d %s | CPU: %.2fms",
-    (int)roundf(io.Framerate),
-    UndoRedo::getHistory().getUndoCount(),
-    UndoRedo::getHistory().getRedoCount(),
-    Utils::byteSize(UndoRedo::getHistory().getMemoryUsage()).c_str(),
-    fpsRingBuffer.average()
-  );
+  if (openedCanvas) {
+    ImGui::TextColored(perfColor, "%d FPS | Canvas: %d/%d %s | CPU: %.2fms",
+      (int)roundf(io.Framerate),
+      CanvasHistory::getUndoCount(),
+      CanvasHistory::getRedoCount(),
+      Utils::byteSize(CanvasHistory::getMemoryUsage()).c_str(),
+      fpsRingBuffer.average()
+    );
+  } else {
+    ImGui::TextColored(perfColor, "%d FPS | History: %d/%d %s | CPU: %.2fms",
+      (int)roundf(io.Framerate),
+      UndoRedo::getHistory().getUndoCount(),
+      UndoRedo::getHistory().getRedoCount(),
+      Utils::byteSize(UndoRedo::getHistory().getMemoryUsage()).c_str(),
+      fpsRingBuffer.average()
+    );
+  }
 
   ImGui::SameLine();
   auto posX = io.DisplaySize.x - 12_px;
@@ -463,12 +587,20 @@ void Editor::Scene::draw()
     
     // Undo: Ctrl+Z
     if (isCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
-      UndoRedo::getHistory().undo();
+      if (openedCanvas) CanvasHistory::undo();
+      else UndoRedo::getHistory().undo();
     }
-    
+
     // Redo: Ctrl+Y
     if (isCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) {
-      UndoRedo::getHistory().redo();
+      if (openedCanvas) CanvasHistory::redo();
+      else UndoRedo::getHistory().redo();
+    }
+
+    // Save: Ctrl+S
+    if (isCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
+      ctx.project->save();
+      save();
     }
 
     // Align focused object to the editor camera: Ctrl+Shift+F
@@ -505,10 +637,13 @@ void Editor::Scene::draw()
     }
     needsSanityCheck = false;
   }
+
+  CanvasHistory::end();
 }
 
 void Editor::Scene::save()
 {
+  if (openedCanvas) openedCanvas->save();
   for(auto &nodeEditor : nodeEditors) {
     nodeEditor->save();
   }

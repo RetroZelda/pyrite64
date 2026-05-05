@@ -4,6 +4,8 @@
 
 #include "script/globalScript.h"
 
+__EXTRA_DECL__
+
 namespace P64::GlobalScript
 {
   __CODE_DECL__
