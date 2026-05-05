@@ -119,6 +119,12 @@ namespace P64::Coll {
     /// Call destroyData() to free them.
     static MeshCollider *createFromRawData(void *rawData, Object *obj);
 
+    /// Create a MeshCollider from manually defined geometry, binding to the given Object's transform.
+    /// Coordinates must use internal physics scale (i.e. 1 unit = 1 meter).
+    /// Ownership of the given arrays (vertices, triangleIndices) is transferred to the returned MeshCollider
+    /// object; call destroyData() to free them.
+    static MeshCollider* create(fm_vec3_t* vertices, uint16_t vertexCount, MeshTriangleIndices* triangleIndices, uint16_t triangleCount, Object *obj);
+
     static inline fm_vec3_t triangleNormalFromVertices(const fm_vec3_t &v0, const fm_vec3_t &v1, const fm_vec3_t &v2)
     {
       const fm_vec3_t edge0 = v1 - v0;
@@ -135,6 +141,7 @@ namespace P64::Coll {
     friend class CollisionScene;
 
     AABBTree aabbTree_{};
+    static void buildAabbTree(MeshCollider* collider);
     fm_vec3_t *vertices_{nullptr};
     MeshTriangleIndices *triangles_{nullptr};
     fm_vec3_t *normals_{nullptr};
