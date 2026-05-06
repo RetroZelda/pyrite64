@@ -4,7 +4,7 @@
 */
 #pragma once
 #include <string>
-
+#include <cstdint> // HACK: autobuild on github was breaking in ImNodeFlow with a missing uint32_t so this should hopefully fix that
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcomment"
 #include "ImNodeFlow.h"
