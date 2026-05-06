@@ -27,11 +27,17 @@ namespace Editor
 
         void drawGrid(ImDrawList* dl, ImVec2 origin, const Project::CanvasConf& conf);
         void drawElement(ImDrawList* dl, ImVec2 origin,
-                         const Project::CanvasElement& e, bool parentVisible);
+                         const Project::CanvasElement& e, bool parentVisible,
+                         const Project::CanvasConf& conf);
         void handleInput(ImVec2 origin, Project::Canvas& canvas);
 
         Project::CanvasElement* findElement(std::vector<Project::CanvasElement>& elems,
                                              uint64_t uuid);
+
+        // Returns canvas-space (w, h) for a Text element, fitting the 8px preview text.
+        // If tp_width/tp_height are explicitly set those take priority.
+        // Minimum 8x8 canvas pixels.
+        ImVec2 calcTextElementBounds(const Project::CanvasElement& e) const;
 
     public:
         void draw(Project::Canvas& canvas);

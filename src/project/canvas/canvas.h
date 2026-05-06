@@ -34,12 +34,21 @@ namespace Project
         static CanvasVariableDef deserialize(const nlohmann::json& j);
     };
 
-    // A property on a canvas element — either a literal value or a binding to a variable
+    // A property on a canvas element — either a literal value or a binding to a variable.
+    // For bool props, isBound may represent a direct variable or a comparison operation.
     struct PropValue
     {
         bool isBound{false};
-        std::string boundVar;   // variable name when isBound
+        std::string boundVar;   // variable name when isBound && !isOp
+
         nlohmann::json value{}; // literal value when !isBound
+
+        // Comparison operation (bool props only; isBound && isOp)
+        bool isOp{false};
+        std::string opLhs;       // left-hand variable name
+        std::string opOp;        // ">", "<", ">=", "<=", "==", "!="
+        bool opRhsIsVar{false};  // true = opRhs is a variable name; false = literal
+        std::string opRhs;       // right-hand variable name or literal string
 
         std::string serialize() const;
         static PropValue deserialize(const nlohmann::json& j);
@@ -63,11 +72,9 @@ namespace Project
         // Transform (all bindable)
         PropValue x{};
         PropValue y{};
-        PropValue scaleX{};
-        PropValue scaleY{};
         PropValue rotation{};
 
-        bool visible{true};
+        PropValue visible;  // bool; bindable to a bool variable
 
         // Type-specific properties (keyed by property name)
         std::unordered_map<std::string, PropValue> props;

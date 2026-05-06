@@ -55,8 +55,15 @@ namespace
     std::string propExpr(const PropValue& p, const std::string& literalFallback,
                          const std::string& dataRef = "data.", bool ident = false)
     {
-        if (p.isBound && !p.boundVar.empty())
-            return dataRef + p.boundVar;
+        if (p.isBound) {
+            if (p.isOp && !p.opLhs.empty() && !p.opOp.empty()) {
+                std::string lhs = dataRef + p.opLhs;
+                std::string rhs = p.opRhsIsVar ? (dataRef + p.opRhs) : p.opRhs;
+                return "(" + lhs + " " + p.opOp + " " + rhs + ")";
+            }
+            if (!p.boundVar.empty())
+                return dataRef + p.boundVar;
+        }
 
         if (p.value.is_number_float())
             return floatLit(p.value.get<float>());
@@ -117,11 +124,11 @@ namespace
     }
 
     std::string getProp(const CanvasElement& e, const std::string& key,
-                        const std::string& fallback = "")
+                        const std::string& fallback = "", bool ident = false)
     {
         auto it = e.props.find(key);
         if (it == e.props.end()) return fallback;
-        return propExpr(it->second, fallback);
+        return propExpr(it->second, fallback, "data.", ident);
     }
 
     std::string getPropFloat(const CanvasElement& e, const std::string& key,
@@ -200,9 +207,9 @@ namespace
     {
         auto x       = posIntExpr(e.x, 0);
         auto y       = posIntExpr(e.y, 0);
-        auto scaleX  = getPropFloat(e, "scaleX",  1.0f);
-        auto scaleY  = getPropFloat(e, "scaleY",  1.0f);
-        auto blend   = getProp(e, "blendMode",  "0");
+        auto scaleX  = getPropFloat(e, "blit_scale_x", 1.0f);
+        auto scaleY  = getPropFloat(e, "blit_scale_y", 1.0f);
+        auto blend   = getProp(e, "blendMode",  "0", /*ident=*/true);
         auto alpha   = getPropInt(e,  "alphaCompare", 0);
         auto sprite  = spriteExpr(e, "sprite");
 
@@ -228,18 +235,62 @@ namespace
         out += "        rdpq_mode_end();\n";
         if (hasColor && !color.empty())
             out += "        rdpq_set_prim_color(" + color + ");\n";
-        out += "        rdpq_blitparms_t __p_" + std::to_string(e.uuid & 0xFFFF) + "{};\n";
-        out += "        __p_" + std::to_string(e.uuid & 0xFFFF) + ".scale_x = " + scaleX + ";\n";
-        out += "        __p_" + std::to_string(e.uuid & 0xFFFF) + ".scale_y = " + scaleY + ";\n";
-        out += "        rdpq_sprite_blit(" + sprite + ", " + x + ", " + y + ", "
-             + "&__p_" + std::to_string(e.uuid & 0xFFFF) + ");\n";
+        auto id = std::to_string(e.uuid & 0xFFFF);
+        auto p  = "__p_" + id;
+        out += "        rdpq_blitparms_t " + p + "{};\n";
+
+        // Transform-derived fields
+        out += "        " + p + ".scale_x = " + scaleX + ";\n";
+        out += "        " + p + ".scale_y = " + scaleY + ";\n";
+        if (e.rotation.isBound ||
+            (e.rotation.value.is_number() && e.rotation.value.get<float>() != 0.0f))
+            out += "        " + p + ".theta = " + propFloat(e.rotation, 0.0f) + ";\n";
+
+        // Blit-specific fields — only emit when non-default or bound
+        auto emitBlitInt = [&](const char* prop, const char* field, int def) {
+            auto it = e.props.find(prop);
+            if (it == e.props.end()) return;
+            const auto& pv = it->second;
+            if (!pv.isBound && pv.value.is_number() && (int)pv.value.get<float>() == def) return;
+            if (!pv.isBound && !pv.value.is_number()) return;
+            out += "        " + p + "." + field + " = " + posIntExpr(pv, def) + ";\n";
+        };
+        auto emitBlitBool = [&](const char* prop, const char* field) {
+            auto it = e.props.find(prop);
+            if (it == e.props.end()) return;
+            const auto& pv = it->second;
+            if (!pv.isBound && pv.value.is_boolean() && !pv.value.get<bool>()) return;
+            if (!pv.isBound && !pv.value.is_boolean()) return;
+            out += "        " + p + "." + field + " = " + propExpr(pv, "false") + ";\n";
+        };
+
+        emitBlitInt("blit_tile",   "tile",        0);
+        emitBlitInt("blit_s0",     "s0",          0);
+        emitBlitInt("blit_t0",     "t0",          0);
+        emitBlitInt("blit_w",      "width",       0);
+        emitBlitInt("blit_h",      "height",      0);
+        emitBlitBool("blit_flip_x", "flip_x");
+        emitBlitBool("blit_flip_y", "flip_y");
+        emitBlitInt("blit_cx",     "cx",          0);
+        emitBlitInt("blit_cy",     "cy",          0);
+        emitBlitBool("blit_allow_xform", "allow_xform");
+        emitBlitBool("blit_filtering",   "filtering");
+
+        out += "        rdpq_sprite_blit(" + sprite + ", " + x + ", " + y + ", &" + p + ");\n";
         out += "    }\n";
     }
 
     void generateTextCode(std::string& out, const CanvasElement& e)
     {
         auto x     = posIntExpr(e.x, 0);
-        auto y     = posIntExpr(e.y, 0);
+        auto yRaw  = posIntExpr(e.y, 0);
+        // rdpq_text uses y as the baseline (bottom of letter bodies), so offset
+        // by the paragraph height so text fills the box from the top down.
+        auto tpHIt = e.props.find("tp_height");
+        int  tpH   = (tpHIt != e.props.end() && !tpHIt->second.isBound &&
+                    tpHIt->second.value.is_number())
+                    ? tpHIt->second.value.get<int>() : 0;
+        auto y     = tpH > 0 ? ("(" + yRaw + " + " + std::to_string(tpH) + ")") : yRaw + " + 8";
         auto scale = getPropFloat(e, "scale", 1.0f);
         auto style = getPropInt(e, "style", 0);
         bool hasColor = e.props.count("color");
@@ -273,14 +324,71 @@ namespace
         auto fontIdExpr = getPropInt(e, "font", 0);
 
         auto id = std::to_string(e.uuid & 0xFFFF);
+        std::string tp = "__tp_" + id;
+
+        // Collect non-default textparms fields
+        std::string tpFields;
+        auto emitTpInt = [&](const char* field, const char* prop) {
+            auto it = e.props.find(prop);
+            if (it == e.props.end()) return;
+            const auto& p = it->second;
+            if (p.isBound && !p.boundVar.empty()) {
+                tpFields += "        " + tp + "." + field + " = (int16_t)data." + p.boundVar + ";\n";
+            } else {
+                int v = p.value.is_number() ? p.value.get<int>() : 0;
+                if (v != 0) tpFields += "        " + tp + "." + field + " = " + std::to_string(v) + ";\n";
+            }
+        };
+        auto emitTpEnum = [&](const char* field, const char* prop,
+                               std::initializer_list<const char*> names) {
+            auto it = e.props.find(prop);
+            if (it == e.props.end()) return;
+            const auto& p = it->second;
+            if (p.isBound && !p.boundVar.empty()) {
+                tpFields += "        " + tp + "." + field + " = (decltype(" + tp + "." + field + "))data." + p.boundVar + ";\n";
+                return;
+            }
+            int v = p.value.is_number() ? p.value.get<int>() : 0;
+            if (v == 0) return;
+            int n = (int)names.size();
+            if (v >= 0 && v < n) tpFields += "        " + tp + "." + field + " = " + *(names.begin() + v) + ";\n";
+        };
+        auto emitTpBool = [&](const char* field, const char* prop) {
+            auto it = e.props.find(prop);
+            if (it == e.props.end()) return;
+            const auto& p = it->second;
+            if (p.isBound && !p.boundVar.empty()) {
+                tpFields += "        " + tp + "." + field + " = (bool)data." + p.boundVar + ";\n";
+                return;
+            }
+            bool v = p.value.is_boolean() && p.value.get<bool>();
+            if (v) tpFields += "        " + tp + "." + field + " = true;\n";
+        };
+
+        emitTpInt("style_id",     "style");
+        emitTpInt("width",        "tp_width");
+        emitTpInt("height",       "tp_height");
+        emitTpEnum("align",       "tp_align",  {"ALIGN_LEFT", "ALIGN_CENTER", "ALIGN_RIGHT"});
+        emitTpEnum("valign",      "tp_valign", {"VALIGN_TOP", "VALIGN_CENTER", "VALIGN_BOTTOM"});
+        emitTpInt("indent",       "tp_indent");
+        emitTpInt("max_chars",    "tp_max_chars");
+        emitTpInt("char_spacing", "tp_char_spacing");
+        emitTpInt("line_spacing", "tp_line_spacing");
+        emitTpEnum("wrap",        "tp_wrap",   {"WRAP_NONE", "WRAP_ELLIPSES", "WRAP_CHAR", "WRAP_WORD"});
+        emitTpBool("disable_aa_fix",   "tp_disable_aa_fix");
+        emitTpBool("preserve_overlap", "tp_preserve_overlap");
+
         out += "    // " + e.name + " [Text]\n";
         out += "    {\n";
         if (hasColor && !color.empty())
             out += "        rdpq_set_prim_color(" + color + ");\n";
-        out += "        rdpq_textparms_t __tp_" + id + "{};\n";
-        out += "        __tp_" + id + ".style_id = " + style + ";\n";
-        out += "        rdpq_text_printf(&__tp_" + id
-             + ", " + fontIdExpr + ", " + x + ", " + y + ", " + textExpr;
+        if (tpFields.empty()) {
+            out += "        rdpq_text_printf(NULL, " + fontIdExpr + ", " + x + ", " + y + ", " + textExpr;
+        } else {
+            out += "        rdpq_textparms_t " + tp + "{};\n";
+            out += tpFields;
+            out += "        rdpq_text_printf(&" + tp + ", " + fontIdExpr + ", " + x + ", " + y + ", " + textExpr;
+        }
         for (const auto& arg : argExprs)
             out += ", " + arg;
         out += ");\n";
@@ -333,7 +441,15 @@ namespace
 
     void generateElementCode(std::string& out, const CanvasElement& e)
     {
-        if (!e.visible) return;
+        // Literal false: skip entirely
+        if (!e.visible.isBound) {
+            bool vis = e.visible.value.is_boolean() ? e.visible.value.get<bool>() : true;
+            if (!vis) return;
+        }
+
+        bool hasVisGuard = e.visible.isBound;
+        if (hasVisGuard)
+            out += "    if " + propExpr(e.visible, "true") + " {\n";
 
         switch (e.type)
         {
@@ -345,6 +461,9 @@ namespace
 
         for (const auto& child : e.children)
             generateElementCode(out, child);
+
+        if (hasVisGuard)
+            out += "    }\n";
     }
 
     // =====================================================================
@@ -400,16 +519,33 @@ namespace
         }
         src += "}\n\n";
 
-        // Emit X-macro
         src += "namespace P64::UI\n{\n";
         src += "    using namespace Types;\n\n";
-        src += "    #define UI_SCENE_TYPES \\\n";
-        for (const auto* c : canvases)
-            src += "        X(" + c->name + ", " + c->name + "Data) \\\n";
-        src += "\n}\n\n";
 
-        // Include base infrastructure
-        src += "#include \"ui/UISceneTypes_base.h\"\n";
+        // UISceneType enum
+        src += "    enum class UISceneType : uint8_t\n    {\n";
+        for (const auto* c : canvases)
+            src += "        " + c->name + ",\n";
+        src += "        Count\n    };\n\n";
+
+        // UISceneTraits primary template + specializations
+        src += "    template<UISceneType Scene> struct UISceneTraits;\n\n";
+        for (const auto* c : canvases)
+        {
+            src += "    template<> ";
+            src += "    struct UISceneTraits<UISceneType::" + c->name + "> ";
+            src += "    { using DataType = " + c->name + "Data; };\n";
+        }
+        src += "\n";
+
+        // GetSceneName
+        src += "    constexpr const char* GetSceneName(UISceneType scene)\n    {\n";
+        src += "        switch(scene)\n        {\n";
+        for (const auto* c : canvases)
+            src += "            case UISceneType::" + c->name + ": return \"" + c->name + "\";\n";
+        src += "            default: return \"Unknown\";\n        }\n    }\n";
+
+        src += "}\n";
 
         Utils::FS::saveTextFile(outPath, src);
     }

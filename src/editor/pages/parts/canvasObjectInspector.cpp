@@ -72,19 +72,172 @@ namespace
         return 0;
     }
 
+    // Small (?) marker with a tooltip — call after any prop draw
+    void helpMarker(const char* desc)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+            ImGui::SetTooltip("%s", desc);
+    }
+
     // Draw binding badge + unbind button when prop is bound
     bool drawBindBadge(Project::PropValue& p)
     {
         if (!p.isBound) return false;
-        ImGui::TextColored({0.4f, 0.8f, 1.0f, 1.0f}, "[%s]", p.boundVar.c_str());
+        if (p.isOp) {
+            ImGui::TextColored({0.4f, 0.8f, 1.0f, 1.0f}, "[%s %s %s]",
+                p.opLhs.c_str(), p.opOp.c_str(), p.opRhs.c_str());
+        } else {
+            ImGui::TextColored({0.4f, 0.8f, 1.0f, 1.0f}, "[%s]", p.boundVar.c_str());
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("X##ubnd")) {
-            p.isBound = false;
+            p.isBound  = false;
             p.boundVar = {};
-            p.value = 0;
-            Editor::CanvasHistory::markChanged("Unbind variable");
+            p.isOp     = false;
+            p.opLhs = p.opOp = p.opRhs = {};
+            p.value    = 0;
+            Editor::CanvasHistory::markChanged("Unbind");
         }
         return true;
+    }
+
+    // Type-aware literal widget for comparison RHS
+    void drawRhsLiteral(Project::CanvasVarType lhsType, std::string& val)
+    {
+        ImGui::SetNextItemWidth(90.0f);
+        switch (lhsType) {
+            case Project::CanvasVarType::Float: {
+                float f = 0.0f;
+                try { f = std::stof(val); } catch (...) {}
+                if (ImGui::DragFloat("##rhslit", &f, 0.1f)) {
+                    char buf[32]; snprintf(buf, sizeof(buf), "%g", f);
+                    val = buf;
+                }
+            } break;
+            case Project::CanvasVarType::Int: {
+                int i = 0;
+                try { i = std::stoi(val); } catch (...) {}
+                if (ImGui::DragInt("##rhslit", &i)) val = std::to_string(i);
+            } break;
+            case Project::CanvasVarType::Bool: {
+                bool b = (val == "true");
+                if (ImGui::Checkbox("##rhslit", &b)) val = b ? "true" : "false";
+            } break;
+            default:
+                ImGui::InputText("##rhslit", &val);
+                break;
+        }
+    }
+
+    // Bool-specific bind popup: supports variable reference OR comparison operation
+    void drawBoolBindButton(Project::PropValue& p,
+                            const std::vector<Project::CanvasVariableDef>& vars)
+    {
+        static constexpr const char* OPS[] = {">", "<", ">=", "<=", "==", "!="};
+        static int         s_mode{0};
+        static std::string s_opLhs;
+        static int         s_opOpIdx{4}; // default "=="
+        static bool        s_opRhsIsVar{false};
+        static std::string s_opRhsVar;
+        static std::string s_opRhsLit;
+
+        bool open = ImGui::SmallButton("Bind");
+        if (open) {
+            s_mode = 0;
+            s_opLhs.clear(); s_opOpIdx = 4;
+            s_opRhsIsVar = false; s_opRhsVar.clear(); s_opRhsLit.clear();
+            ImGui::OpenPopup("##boolbind");
+        }
+
+        if (ImGui::BeginPopup("##boolbind")) {
+            // Mode tabs
+            if (ImGui::RadioButton("Variable",  &s_mode, 0)) {}
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Operation", &s_mode, 1)) {}
+            ImGui::Separator();
+
+            if (s_mode == 0) {
+                // Direct bool variable
+                bool any = false;
+                for (const auto& v : vars) {
+                    if (v.type != Project::CanvasVarType::Bool) continue;
+                    any = true;
+                    if (ImGui::MenuItem(v.name.c_str())) {
+                        p.isBound  = true;
+                        p.isOp     = false;
+                        p.boundVar = v.name;
+                        Editor::CanvasHistory::markChanged("Bind variable");
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+                if (!any) ImGui::TextDisabled("(no bool variables)");
+            } else {
+                // Comparison operation builder
+                // LHS variable (any type)
+                const char* lhsPrev = s_opLhs.empty() ? "(LHS)" : s_opLhs.c_str();
+                ImGui::SetNextItemWidth(110.0f);
+                if (ImGui::BeginCombo("##oplhs", lhsPrev)) {
+                    for (const auto& v : vars) {
+                        bool sel = (v.name == s_opLhs);
+                        if (ImGui::Selectable(v.name.c_str(), sel)) s_opLhs = v.name;
+                        if (sel) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::SameLine();
+                // Operator
+                ImGui::SetNextItemWidth(48.0f);
+                ImGui::Combo("##opop", &s_opOpIdx, OPS, 6);
+                ImGui::SameLine();
+                // RHS — variable or literal, with a small [V/L] toggle
+                if (s_opRhsIsVar) {
+                    // Find LHS type to filter matching variables
+                    Project::CanvasVarType lhsType = Project::CanvasVarType::Float;
+                    for (const auto& v : vars) if (v.name == s_opLhs) { lhsType = v.type; break; }
+
+                    const char* rhsPrev = s_opRhsVar.empty() ? "(RHS)" : s_opRhsVar.c_str();
+                    ImGui::SetNextItemWidth(100.0f);
+                    if (ImGui::BeginCombo("##oprhs", rhsPrev)) {
+                        for (const auto& v : vars) {
+                            if (v.type != lhsType || v.name == s_opLhs) continue;
+                            bool sel = (v.name == s_opRhsVar);
+                            if (ImGui::Selectable(v.name.c_str(), sel)) s_opRhsVar = v.name;
+                            if (sel) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                } else {
+                    Project::CanvasVarType lhsType = Project::CanvasVarType::Float;
+                    for (const auto& v : vars) if (v.name == s_opLhs) { lhsType = v.type; break; }
+                    drawRhsLiteral(lhsType, s_opRhsLit);
+                }
+                ImGui::SameLine();
+                // Toggle RHS between variable and literal
+                if (ImGui::SmallButton(s_opRhsIsVar ? "[V]" : "[L]")) {
+                    s_opRhsIsVar = !s_opRhsIsVar;
+                    s_opRhsVar.clear(); s_opRhsLit.clear();
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle RHS: Variable / Literal");
+
+                // Apply
+                bool valid = !s_opLhs.empty() && (s_opRhsIsVar ? !s_opRhsVar.empty() : !s_opRhsLit.empty());
+                if (!valid) ImGui::BeginDisabled();
+                if (ImGui::Button("Apply", {-1, 0})) {
+                    p.isBound     = true;
+                    p.isOp        = true;
+                    p.opLhs       = s_opLhs;
+                    p.opOp        = OPS[s_opOpIdx];
+                    p.opRhsIsVar  = s_opRhsIsVar;
+                    p.opRhs       = s_opRhsIsVar ? s_opRhsVar : s_opRhsLit;
+                    Editor::CanvasHistory::markChanged("Bind operation");
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!valid) ImGui::EndDisabled();
+            }
+            ImGui::EndPopup();
+        }
     }
 
     // Draw bind button + popup
@@ -118,6 +271,26 @@ namespace
     // ----------------------------------------------------------------
     // Per-type prop drawing
     // ----------------------------------------------------------------
+
+    // Full bool prop row: label | checkbox (or bind badge) | Bind button.
+    // PushID(label) ensures each instance gets a unique popup ID.
+    void drawBoolProp(const char* label, Project::PropValue& p,
+                      const std::vector<Project::CanvasVariableDef>& vars,
+                      bool defaultVal = false)
+    {
+        ImGui::PushID(label);
+        rowLabel(label);
+        if (!drawBindBadge(p)) {
+            bool val = p.value.is_boolean() ? p.value.get<bool>() : defaultVal;
+            if (ImGui::Checkbox("##v", &val)) {
+                p.value = val;
+                Editor::CanvasHistory::markChanged(std::string("Edit ") + label);
+            }
+            ImGui::SameLine();
+            drawBoolBindButton(p, vars);
+        }
+        ImGui::PopID();
+    }
 
     void drawFloatProp(const char* label, Project::PropValue& p,
                        const std::vector<Project::CanvasVariableDef>& vars)
@@ -167,6 +340,35 @@ namespace
             if (ImGui::DragInt("##v", &val)) {
                 p.value = val;
                 Editor::CanvasHistory::markChanged(std::string("Edit ") + label);
+            }
+            ImGui::SameLine();
+            drawBindButton(p, vars);
+        }
+        ImGui::PopID();
+    }
+
+    void drawEnumProp(const char* label, Project::PropValue& p,
+                      const std::vector<Project::CanvasVariableDef>& vars,
+                      std::initializer_list<const char*> names)
+    {
+        ImGui::PushID(label);
+        rowLabel(label);
+        if (!drawBindBadge(p)) {
+            int val = p.value.is_number() ? p.value.get<int>() : 0;
+            int n = (int)names.size();
+            val = (val < 0 || val >= n) ? 0 : val;
+            const char* cur = *(names.begin() + val);
+            ImGui::SetNextItemWidth(-80.0f);
+            if (ImGui::BeginCombo("##v", cur)) {
+                int i = 0;
+                for (const char* name : names) {
+                    if (ImGui::Selectable(name, val == i)) {
+                        p.value = i;
+                        Editor::CanvasHistory::markChanged(std::string("Edit ") + label);
+                    }
+                    ++i;
+                }
+                ImGui::EndCombo();
             }
             ImGui::SameLine();
             drawBindButton(p, vars);
@@ -393,16 +595,13 @@ void Editor::CanvasObjectInspector::drawElementProps(
     ImGui::Text("Type: %s", TYPE_NAMES_ELEM[static_cast<int>(e.type)]);
     if (ImGui::InputText("Name", &e.name))
         Editor::CanvasHistory::markChanged("Rename element");
-    if (ImGui::Checkbox("Visible", &e.visible))
-        Editor::CanvasHistory::markChanged("Toggle visibility");
+    drawBoolProp("Visible", e.visible, vars, /*defaultVal=*/true);
     ImGui::Separator();
 
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
     {
         drawPosProp  ("X",        e.x,        vars);
         drawPosProp  ("Y",        e.y,        vars);
-        drawFloatProp("Scale X",  e.scaleX,   vars);
-        drawFloatProp("Scale Y",  e.scaleY,   vars);
         drawFloatProp("Rotation", e.rotation, vars);
     }
 
@@ -416,6 +615,35 @@ void Editor::CanvasObjectInspector::drawElementProps(
                 drawBlendModeProp("Blend",     e.props["blendMode"],    vars);
                 drawIntProp      ("Alpha Cmp", e.props["alphaCompare"], vars);
                 drawCombinerProp ("Combiner",  e.props["combiner"],     vars);
+                if (ImGui::CollapsingHeader("Blit"))
+                {
+                    drawFloatProp("Scale X", e.props["blit_scale_x"], vars);
+                    helpMarker("Horizontal scale (0 = no scaling = 1.0). Negative = flip.");
+                    drawFloatProp("Scale Y", e.props["blit_scale_y"], vars);
+                    helpMarker("Vertical scale (0 = no scaling = 1.0). Negative = flip.");
+                    drawIntProp("Tile",    e.props["blit_tile"], vars);
+                    helpMarker("Base tile descriptor (default: TILE_0 = 0)");
+                    drawIntProp("S0",      e.props["blit_s0"],   vars);
+                    helpMarker("Source sub-rect top-left X coordinate");
+                    drawIntProp("T0",      e.props["blit_t0"],   vars);
+                    helpMarker("Source sub-rect top-left Y coordinate");
+                    drawIntProp("Width",   e.props["blit_w"],    vars);
+                    helpMarker("Source sub-rect width (0 = full surface width)");
+                    drawIntProp("Height",  e.props["blit_h"],    vars);
+                    helpMarker("Source sub-rect height (0 = full surface height)");
+                    drawBoolProp("Flip X", e.props["blit_flip_x"], vars);
+                    helpMarker("Flip horizontally before all other transformations");
+                    drawBoolProp("Flip Y", e.props["blit_flip_y"], vars);
+                    helpMarker("Flip vertically before all other transformations");
+                    drawIntProp("CX",      e.props["blit_cx"],   vars);
+                    helpMarker("Transformation hotspot X, relative to (S0, T0)");
+                    drawIntProp("CY",      e.props["blit_cy"],   vars);
+                    helpMarker("Transformation hotspot Y, relative to (S0, T0)");
+                    drawBoolProp("Allow XForm", e.props["blit_allow_xform"], vars);
+                    helpMarker("If true, blit is affected by transforms from rdpq_xform");
+                    drawBoolProp("Filtering", e.props["blit_filtering"], vars);
+                    helpMarker("Enable texture filtering (activates anti-artifact workaround when splitting textures)");
+                }
                 break;
 
             case Project::CanvasElementType::Text:
@@ -424,6 +652,32 @@ void Editor::CanvasObjectInspector::drawElementProps(
                 drawFontProp  ("Font",  e.props["font"],  vars);
                 drawFloatProp ("Scale", e.props["scale"], vars);
                 drawColorProp ("Color", e.props["color"], vars);
+                if (ImGui::CollapsingHeader("Text Params")) {
+                    drawIntProp ("Style ID",     e.props["style"],          vars);
+                    helpMarker("Initial style ID for the text");
+                    drawIntProp ("Width",        e.props["tp_width"],        vars);
+                    helpMarker("Max paragraph width in pixels (0 = unbounded)");
+                    drawIntProp ("Height",       e.props["tp_height"],       vars);
+                    helpMarker("Max paragraph height in pixels (0 = unbounded)");
+                    drawEnumProp("Align",        e.props["tp_align"],        vars, {"Left", "Center", "Right"});
+                    helpMarker("Horizontal text alignment");
+                    drawEnumProp("VAlign",       e.props["tp_valign"],       vars, {"Top", "Center", "Bottom"});
+                    helpMarker("Vertical text alignment");
+                    drawIntProp ("Indent",       e.props["tp_indent"],       vars);
+                    helpMarker("First-line indentation in pixels (left alignment only)");
+                    drawIntProp ("Max Chars",    e.props["tp_max_chars"],    vars);
+                    helpMarker("Max characters to print (0 = all), useful for typewriter effect");
+                    drawIntProp ("Char Spacing", e.props["tp_char_spacing"], vars);
+                    helpMarker("Extra spacing between characters in pixels");
+                    drawIntProp ("Line Spacing", e.props["tp_line_spacing"], vars);
+                    helpMarker("Extra spacing between lines in pixels");
+                    drawEnumProp("Wrap",         e.props["tp_wrap"],         vars, {"None", "Ellipses", "Char", "Word"});
+                    helpMarker("Line wrap mode");
+                    drawBoolProp("Disable AA Fix",    e.props["tp_disable_aa_fix"],    vars, false);
+                    helpMarker("Skip anti-aliasing fix for speedup (when AA is disabled in display_init)");
+                    drawBoolProp("Preserve Overlap",  e.props["tp_preserve_overlap"],  vars, false);
+                    helpMarker("Preserve overlapping glyphs (forces LTR rendering, impacts performance)");
+                }
                 break;
 
             case Project::CanvasElementType::ColorRect:

@@ -5,6 +5,7 @@
 #include "canvasViewport.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "../../../context.h"
 #include <algorithm>
 #include <cmath>
 
@@ -68,27 +69,64 @@ void Editor::CanvasViewport::drawGrid(ImDrawList* dl, ImVec2 origin,
 }
 
 void Editor::CanvasViewport::drawElement(ImDrawList* dl, ImVec2 origin,
-                                          const Project::CanvasElement& e, bool parentVisible)
+                                          const Project::CanvasElement& e, bool parentVisible,
+                                          const Project::CanvasConf& conf)
 {
-    if (!e.visible || !parentVisible) return;
+    bool visLit = e.visible.isBound || (e.visible.value.is_boolean() ? e.visible.value.get<bool>() : true);
+    if (!visLit || !parentVisible) return;
 
     float ex = propLitFloat(e.x, 0.f);
     float ey = propLitFloat(e.y, 0.f);
-    float scx = propLitFloat(e.scaleX, 1.f);
-    float scy = propLitFloat(e.scaleY, 1.f);
 
-    float w = 32.f * scx;
-    float h = 32.f * scy;
+    float w = (float)conf.gridSizeX;
+    float h = (float)conf.gridSizeY;
 
-    if (e.type == Project::CanvasElementType::Text)
-    { w = 64.f * scx; h = 16.f * scy; }
-    else if (e.type == Project::CanvasElementType::ColorRect ||
-             e.type == Project::CanvasElementType::TextureRect)
+    switch (e.type)
     {
-        auto wi = e.props.find("width");
-        auto hi = e.props.find("height");
-        if (wi != e.props.end()) w = propLitFloat(wi->second, 32.f) * scx;
-        if (hi != e.props.end()) h = propLitFloat(hi->second, 32.f) * scy;
+        case Project::CanvasElementType::Sprite:
+        {
+            auto spit = e.props.find("sprite");
+            if (spit != e.props.end() && !spit->second.isBound &&
+                spit->second.value.is_number_integer())
+            {
+                uint64_t sprUUID = spit->second.value.get<uint64_t>();
+                if (sprUUID && ctx.project)
+                {
+                    auto* entry = ctx.project->getAssets().getEntryByUUID(sprUUID);
+                    if (entry && entry->texture)
+                    {
+                        w = (float)entry->texture->getWidth();
+                        h = (float)entry->texture->getHeight();
+                    }
+                }
+            }
+            {
+                auto sxi = e.props.find("blit_scale_x");
+                auto syi = e.props.find("blit_scale_y");
+                float scx = (sxi != e.props.end()) ? propLitFloat(sxi->second, 0.f) : 0.f;
+                float scy = (syi != e.props.end()) ? propLitFloat(syi->second, 0.f) : 0.f;
+                if (scx != 0.f) w *= scx;
+                if (scy != 0.f) h *= scy;
+            }
+            break;
+        }
+        case Project::CanvasElementType::Text:
+        {
+            auto bounds = calcTextElementBounds(e);
+            w = bounds.x;
+            h = bounds.y;
+            break;
+        }
+        case Project::CanvasElementType::ColorRect:
+        case Project::CanvasElementType::TextureRect:
+        {
+            auto wi = e.props.find("width");
+            auto hi = e.props.find("height");
+            if (wi != e.props.end()) w = propLitFloat(wi->second, w);
+            if (hi != e.props.end()) h = propLitFloat(hi->second, h);
+            break;
+        }
+        default: break;
     }
 
     auto tl = canvasToScreen({ex, ey}, origin);
@@ -103,18 +141,42 @@ void Editor::CanvasViewport::drawElement(ImDrawList* dl, ImVec2 origin,
 
     if (e.type == Project::CanvasElementType::Text)
     {
-        auto txtIt = e.props.find("text");
         const char* preview = "[text]";
+        auto txtIt = e.props.find("text");
         if (txtIt != e.props.end() && !txtIt->second.isBound &&
             txtIt->second.value.is_string())
-        {
             preview = txtIt->second.value.get_ref<const std::string&>().c_str();
-        }
-        dl->AddText(tl, IM_COL32(220, 220, 220, 255), preview);
+        // Fixed 8px screen-space text so it doesn't scale with zoom
+        float fontSize = 8.0f * zoom;
+        dl->AddText(ImGui::GetFont(), fontSize, tl, IM_COL32(220, 220, 220, 255), preview);
     }
 
     for (const auto& child : e.children)
-        drawElement(dl, origin, child, true);
+        drawElement(dl, origin, child, true, conf);
+}
+
+ImVec2 Editor::CanvasViewport::calcTextElementBounds(const Project::CanvasElement& e) const
+{
+    auto twi = e.props.find("tp_width");
+    auto thi = e.props.find("tp_height");
+    float setW = (twi != e.props.end()) ? propLitFloat(twi->second, 0.f) : 0.f;
+    float setH = (thi != e.props.end()) ? propLitFloat(thi->second, 0.f) : 0.f;
+    if (setW > 0.f && setH > 0.f)
+        return {setW, setH};
+
+    const char* preview = "[text]";
+    auto txtIt = e.props.find("text");
+    if (txtIt != e.props.end() && !txtIt->second.isBound &&
+        txtIt->second.value.is_string())
+        preview = txtIt->second.value.get_ref<const std::string&>().c_str();
+
+    // Measure at 8px — at zoom=1 screen pixels == canvas pixels, so this gives
+    // a stable canvas-space size that scales with the canvas like other elements.
+    constexpr float FONT_PX = 8.0f;
+    auto tsz = ImGui::GetFont()->CalcTextSizeA(FONT_PX, FLT_MAX, 0.0f, preview);
+    float w = setW > 0.f ? setW : std::max(8.f, tsz.x);
+    float h = setH > 0.f ? setH : std::max(8.f, FONT_PX);
+    return {w, h};
 }
 
 Project::CanvasElement* Editor::CanvasViewport::findElement(
@@ -166,14 +228,46 @@ void Editor::CanvasViewport::handleInput(ImVec2 origin, Project::Canvas& canvas)
         {
             float ex = propLitFloat(e.x, 0.f);
             float ey = propLitFloat(e.y, 0.f);
-            float scx = propLitFloat(e.scaleX, 1.f);
-            float scy = propLitFloat(e.scaleY, 1.f);
-            float w = 32.f * scx, h = 32.f * scy;
+            float w = (float)canvas.conf.gridSizeX;
+            float h = (float)canvas.conf.gridSizeY;
 
-            auto wi = e.props.find("width");
-            auto hi = e.props.find("height");
-            if (wi != e.props.end()) w = propLitFloat(wi->second, 32.f) * scx;
-            if (hi != e.props.end()) h = propLitFloat(hi->second, 32.f) * scy;
+            if (e.type == Project::CanvasElementType::Sprite)
+            {
+                auto spit = e.props.find("sprite");
+                if (spit != e.props.end() && !spit->second.isBound &&
+                    spit->second.value.is_number_integer())
+                {
+                    uint64_t sprUUID = spit->second.value.get<uint64_t>();
+                    if (sprUUID && ctx.project)
+                    {
+                        auto* entry = ctx.project->getAssets().getEntryByUUID(sprUUID);
+                        if (entry && entry->texture)
+                        {
+                            w = (float)entry->texture->getWidth();
+                            h = (float)entry->texture->getHeight();
+                        }
+                    }
+                }
+                auto sxi = e.props.find("blit_scale_x");
+                auto syi = e.props.find("blit_scale_y");
+                float scx = (sxi != e.props.end()) ? propLitFloat(sxi->second, 0.f) : 0.f;
+                float scy = (syi != e.props.end()) ? propLitFloat(syi->second, 0.f) : 0.f;
+                if (scx != 0.f) w *= scx;
+                if (scy != 0.f) h *= scy;
+            }
+            else if (e.type == Project::CanvasElementType::Text)
+            {
+                auto bounds = calcTextElementBounds(e);
+                w = bounds.x;
+                h = bounds.y;
+            }
+            else
+            {
+                auto wi = e.props.find("width");
+                auto hi = e.props.find("height");
+                if (wi != e.props.end()) w = propLitFloat(wi->second, w);
+                if (hi != e.props.end()) h = propLitFloat(hi->second, h);
+            }
 
             if (cp.x >= ex && cp.x <= ex + w && cp.y >= ey && cp.y <= ey + h)
             {
@@ -249,7 +343,7 @@ void Editor::CanvasViewport::draw(Project::Canvas& canvas)
     drawGrid(dl, origin, canvas.conf);
 
     for (const auto& e : canvas.elements)
-        drawElement(dl, origin, e, true);
+        drawElement(dl, origin, e, true, canvas.conf);
 
     // InvisibleButton covers the full content area for input capture.
     // SetCursorScreenPos back to origin so it starts at the content top-left.

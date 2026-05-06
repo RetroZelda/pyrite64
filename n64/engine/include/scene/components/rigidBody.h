@@ -35,5 +35,6 @@ namespace P64::Comp
     static void update(Object& obj, RigidBody* data, float deltaTime);
 
     Coll::RigidBody& getBody() { return rigidBody; }
+    const Coll::RigidBody& getBody() const { return rigidBody; }
   };
 }

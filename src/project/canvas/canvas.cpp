@@ -38,10 +38,19 @@ namespace Project
     {
         nlohmann::json j;
         j["isBound"] = isBound;
-        if (isBound)
-            j["var"] = boundVar;
-        else
+        if (isBound) {
+            if (isOp) {
+                j["isOp"]       = true;
+                j["opLhs"]      = opLhs;
+                j["opOp"]       = opOp;
+                j["opRhsIsVar"] = opRhsIsVar;
+                j["opRhs"]      = opRhs;
+            } else {
+                j["var"] = boundVar;
+            }
+        } else {
             j["val"] = value;
+        }
         return j.dump();
     }
 
@@ -49,10 +58,19 @@ namespace Project
     {
         PropValue p;
         p.isBound = j.value("isBound", false);
-        if (p.isBound)
-            p.boundVar = j.value("var", "");
-        else
+        if (p.isBound) {
+            if (j.value("isOp", false)) {
+                p.isOp       = true;
+                p.opLhs      = j.value("opLhs", "");
+                p.opOp       = j.value("opOp", ">");
+                p.opRhsIsVar = j.value("opRhsIsVar", false);
+                p.opRhs      = j.value("opRhs", "");
+            } else {
+                p.boundVar = j.value("var", "");
+            }
+        } else {
             p.value = j.contains("val") ? j["val"] : nlohmann::json{};
+        }
         return p;
     }
 
@@ -78,10 +96,8 @@ namespace Project
         j["uuid"] = uuid;
         j["x"] = nlohmann::json::parse(x.serialize());
         j["y"] = nlohmann::json::parse(y.serialize());
-        j["scaleX"] = nlohmann::json::parse(scaleX.serialize());
-        j["scaleY"] = nlohmann::json::parse(scaleY.serialize());
         j["rotation"] = nlohmann::json::parse(rotation.serialize());
-        j["visible"] = visible;
+        j["visible"] = nlohmann::json::parse(visible.serialize());
 
         nlohmann::json propsJson = nlohmann::json::object();
         for (const auto& [k, v] : props)
@@ -102,19 +118,17 @@ namespace Project
         e.name = j.value("name", "");
         e.type = static_cast<CanvasElementType>(j.value("type", 0));
         e.uuid = j.value("uuid", uint64_t{0});
-        e.visible = j.value("visible", true);
+        if (j.contains("visible")) {
+            auto& jv = j["visible"];
+            if (jv.is_boolean()) e.visible.value = jv.get<bool>(); // backward compat
+            else e.visible = PropValue::deserialize(jv);
+        } else { e.visible.value = true; }
 
         if (j.contains("x")) e.x = PropValue::deserialize(j["x"]);
         else e.x = litFloat(0.f);
 
         if (j.contains("y")) e.y = PropValue::deserialize(j["y"]);
         else e.y = litFloat(0.f);
-
-        if (j.contains("scaleX")) e.scaleX = PropValue::deserialize(j["scaleX"]);
-        else e.scaleX = litFloat(1.f);
-
-        if (j.contains("scaleY")) e.scaleY = PropValue::deserialize(j["scaleY"]);
-        else e.scaleY = litFloat(1.f);
 
         if (j.contains("rotation")) e.rotation = PropValue::deserialize(j["rotation"]);
         else e.rotation = litFloat(0.f);

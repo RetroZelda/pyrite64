@@ -9,6 +9,13 @@
 #include "../../../utils/hash.h"
 #include <algorithm>
 
+void Editor::CanvasGraph::regenUUIDs(Project::CanvasElement& e)
+{
+    e.uuid = Utils::Hash::randomU64();
+    for (auto& child : e.children)
+        regenUUIDs(child);
+}
+
 static constexpr const char* ELEMENT_TYPE_NAMES[] = {
     "Sprite", "Text", "ColorRect", "TextureRect"
 };
@@ -22,9 +29,8 @@ void Editor::CanvasGraph::addDefaultProps(Project::CanvasElement& e)
     };
     e.x = lit(0.f);
     e.y = lit(0.f);
-    e.scaleX = lit(1.f);
-    e.scaleY = lit(1.f);
     e.rotation = lit(0.f);
+    e.visible.value = true;
 
     switch (e.type)
     {
@@ -93,6 +99,9 @@ void Editor::CanvasGraph::drawElement(Project::Canvas& canvas,
 
     if (ImGui::BeginPopupContextItem())
     {
+        if (ImGui::MenuItem("Copy")) {
+            clipboard_ = e;
+        }
         if (ImGui::MenuItem("Delete"))
         {
             e.uuid = 0; // sentinel for deletion (pruned after traversal)
@@ -131,6 +140,21 @@ void Editor::CanvasGraph::draw(Project::Canvas& canvas)
         for (auto& e : canvas.elements)
             drawElement(canvas, e, 0);
         pruneDeleted(canvas.elements);
+
+        // Ctrl+C / Ctrl+V when the tree is focused
+        if (!ImGui::GetIO().WantTextInput) {
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && selectedUUID != 0) {
+                auto* sel = getSelected(canvas);
+                if (sel) clipboard_ = *sel;
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && clipboard_.has_value()) {
+                auto newElem = *clipboard_;
+                regenUUIDs(newElem);
+                newElem.name += "_copy";
+                canvas.elements.push_back(std::move(newElem));
+                Editor::CanvasHistory::markChanged("Paste element");
+            }
+        }
     }
     ImGui::EndChild();
 
@@ -154,5 +178,16 @@ void Editor::CanvasGraph::draw(Project::Canvas& canvas)
             }
         }
         ImGui::EndPopup();
+    }
+
+    if (clipboard_.has_value()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Paste")) {
+            auto newElem = *clipboard_;
+            regenUUIDs(newElem);
+            newElem.name += "_copy";
+            canvas.elements.push_back(std::move(newElem));
+            Editor::CanvasHistory::markChanged("Paste element");
+        }
     }
 }

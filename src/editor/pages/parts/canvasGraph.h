@@ -4,6 +4,7 @@
 */
 #pragma once
 #include "../../../project/canvas/canvas.h"
+#include <optional>
 
 namespace Editor
 {
@@ -11,9 +12,11 @@ namespace Editor
     {
     private:
         uint64_t selectedUUID{0};
+        std::optional<Project::CanvasElement> clipboard_;
 
         void drawElement(Project::Canvas& canvas, Project::CanvasElement& e, int depth);
         void addDefaultProps(Project::CanvasElement& e);
+        static void regenUUIDs(Project::CanvasElement& e);
 
     public:
         uint64_t getSelectedUUID() const { return selectedUUID; }
