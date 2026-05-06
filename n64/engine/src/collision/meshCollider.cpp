@@ -326,14 +326,21 @@ namespace P64::Coll {
     }
 
     // Bind to owner object
-  collider->owner_ = obj;
+    collider->owner_ = obj;
 
-    // Build AABB tree from triangle bounding boxes
-    // Need 2*N-1 internal nodes for N leaves, plus some margin
-    int treeCapacity = static_cast<int>(header->triCount) * 2 + 1;
+    buildAabbTree(collider);
+    collider->syncOwnerTransform();
+
+    return collider;
+  }
+
+  // Build AABB tree from triangle bounding boxes
+  // Need 2*N-1 internal nodes for N leaves, plus some margin
+  void MeshCollider::buildAabbTree(MeshCollider* collider) {
+    int treeCapacity = static_cast<int>(collider->triangleCount_) * 2 + 1;
     collider->aabbTree_.init(treeCapacity);
 
-    for(uint32_t t = 0; t < header->triCount; ++t) {
+    for(uint32_t t = 0; t < collider->triangleCount_; ++t) {
       const fm_vec3_t &v0 = collider->vertices_[collider->triangles_[t].indices[0]];
       const fm_vec3_t &v1 = collider->vertices_[collider->triangles_[t].indices[1]];
       const fm_vec3_t &v2 = collider->vertices_[collider->triangles_[t].indices[2]];
@@ -348,6 +355,28 @@ namespace P64::Coll {
 
     collider->computeLocalRootAabb();
     collider->recalculateWorldAabb();
+  }
+
+  MeshCollider* MeshCollider::create(fm_vec3_t* vertices, uint16_t vertexCount, MeshTriangleIndices* triangleIndices, uint16_t triangleCount, Object *obj) {
+    if (!vertices || vertexCount == 0 || !triangleIndices || triangleCount == 0 || !obj) return nullptr;
+
+    auto *collider = new MeshCollider();
+    collider->vertices_ = vertices;
+    collider->vertexCount_ = vertexCount;
+    collider->triangles_ = triangleIndices;
+    collider->triangleCount_ = triangleCount;
+    collider->owner_ = obj;
+
+    collider->normals_ = new fm_vec3_t[triangleCount];
+    for (uint16_t t = 0; t < triangleCount; ++t) {
+      const auto& indices = triangleIndices[t].indices;
+      fm_vec3_t v0 = vertices[indices[0]];
+      fm_vec3_t v1 = vertices[indices[1]];
+      fm_vec3_t v2 = vertices[indices[2]];
+      collider->normals_[t] = triangleNormalFromVertices(v0, v1, v2);
+    }
+
+    buildAabbTree(collider);
     collider->syncOwnerTransform();
 
     return collider;
