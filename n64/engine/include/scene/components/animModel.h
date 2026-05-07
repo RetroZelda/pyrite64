@@ -25,6 +25,9 @@ namespace P64::Comp
       T3DSkeleton skelMain{};
       T3DSkeleton *skelAnim{};
       T3DAnim *anims{};
+      
+      float mainAnimDuration  = 0.0f;
+      float blendAnimDuration = 0.0f;
 
       int16_t animIdxMain{-1};
       int16_t animIdxBlend{-1};

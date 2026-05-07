@@ -30,13 +30,27 @@ namespace P64::Comp
 {
   void AnimModel::setMainAnim(int16_t idx) {
     animIdxMain = idx;
+    mainAnimDuration = animIdxMain >= 0 ? anims[animIdxMain].animRef->duration : 0.0f;
   }
 
   void AnimModel::setBlendAnim(int16_t idx) {
+    if (idx < 0) {
+      animIdxBlend = -1;
+      blendAnimDuration = 0.0f;
+      return;
+    }
     if (animIdxBlend != idx) {
       t3d_anim_attach(&anims[idx], &skelAnim[idx]);
+
+      // Snap blend anim to the same normalized phase as main so they start in sync
+      if (animIdxMain >= 0 && mainAnimDuration > 0.0f) {
+        float normPhase = anims[animIdxMain].time / mainAnimDuration;
+        float blendDur = anims[idx].animRef->duration;
+        t3d_anim_set_time(&anims[idx], normPhase * blendDur);
+      }
     }
     animIdxBlend = idx;
+    blendAnimDuration = anims[idx].animRef->duration;
   }
 
 
@@ -132,28 +146,49 @@ namespace P64::Comp
     data->model->userBlock = rspq_block_end();
   }
 
-  void AnimModel::update(Object&obj, AnimModel* data, float deltaTime) {
+  void AnimModel::update(Object& obj, AnimModel* data, float deltaTime)
+  {
     uint8_t framesSinceUpdate;
-    if(!AnimController::canAnimUpdate(*data, framesSinceUpdate)) {
-        data->flags |= 1; // mark as not updated, can be used by other systems to skip processing
-        return; // not updating
+    if (!AnimController::canAnimUpdate(*data, framesSinceUpdate)) {
+        data->flags |= 1;
+        return;
     }
-    data->flags &= ~(1); // mark as updated
-    //if(framesSinceUpdate == 0) return;
+    data->flags &= ~1;
 
-    const float deltaTimeAdjusted = deltaTime * static_cast<float>(framesSinceUpdate);
-    if (data->animIdxMain >= 0) {
-      t3d_anim_update(&data->anims[data->animIdxMain], deltaTimeAdjusted);
+    const float dt = deltaTime * static_cast<float>(framesSinceUpdate);
+
+    if (data->animIdxMain < 0) return;
+
+    const float alpha = data->blendFactor;
+
+    if (data->animIdxBlend >= 0)
+    {
+      float durMain  = data->mainAnimDuration  > 0.0f ? data->mainAnimDuration  : 1.0f;
+      float durBlend = data->blendAnimDuration > 0.0f ? data->blendAnimDuration : 1.0f;
+
+      // Both animations advance at the same normalized phase rate so their cycles stay locked.
+      // Phase rate (cycles/sec) = (1-alpha)/durMain + alpha/durBlend
+      // dt_main  = phase_rate * durMain  * dt = ((1-alpha) + alpha*(durMain/durBlend)) * dt
+      // dt_blend = phase_rate * durBlend * dt = ((1-alpha)*(durBlend/durMain) + alpha) * dt
+      float dtMain  = ((1.0f - alpha) + alpha * (durMain  / durBlend)) * dt;
+      float dtBlend = ((1.0f - alpha) * (durBlend / durMain) + alpha)  * dt;
+
+      // Always update both so their phases never drift apart, even when alpha is 0 or 1
+      t3d_anim_update(&data->anims[data->animIdxMain],  dtMain);
+      t3d_anim_update(&data->anims[data->animIdxBlend], dtBlend);
+
+      if (alpha > 0.001f) {
+        t3d_skeleton_blend(
+          &data->skelMain,
+          &data->skelMain,
+          &data->skelAnim[data->animIdxBlend],
+          alpha
+        );
+      }
     }
-    if (data->animIdxBlend >= 0) {
-      t3d_anim_update(&data->anims[data->animIdxBlend], deltaTimeAdjusted);
-
-      t3d_skeleton_blend(
-        &data->skelMain,
-        &data->skelMain,
-        &data->skelAnim[data->animIdxBlend],
-        data->blendFactor
-      );
+    else
+    {
+      t3d_anim_update(&data->anims[data->animIdxMain], dt);
     }
 
     t3d_skeleton_update(&data->skelMain);
