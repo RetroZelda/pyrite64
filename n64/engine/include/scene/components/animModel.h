@@ -42,6 +42,7 @@ namespace P64::Comp
 
       void setMainAnim(int16_t idx);
       void setBlendAnim(int16_t idx);
+      void swapModel(uint16_t assetIdx);
 
       Renderer::MaterialInstance& getMatInstance() {
         return material;

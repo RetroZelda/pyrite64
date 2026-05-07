@@ -54,6 +54,62 @@ namespace P64::Comp
   }
 
 
+  void AnimModel::swapModel(uint16_t assetIdx) {
+    if (anims) {
+      auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
+      uint32_t i = 0;
+      while(t3d_model_iter_next(&it)) {
+        t3d_anim_destroy(&anims[i]);
+        t3d_skeleton_destroy(&skelAnim[i]);
+        ++i;
+      }
+      t3d_skeleton_destroy(&skelMain);
+      free(skelAnim);
+      free(anims);
+      skelAnim = nullptr;
+      anims    = nullptr;
+    }
+
+    model = (T3DModel*)AssetManager::getByIndex(assetIdx);
+    assert(model != nullptr);
+
+    animIdxMain       = -1;
+    animIdxBlend      = -1;
+    mainAnimDuration  = 0.0f;
+    blendAnimDuration = 0.0f;
+    blendFactor       = 0.0f;
+
+    auto animCount = t3d_model_get_animation_count(model);
+    skelMain = t3d_skeleton_create_buffered(model, 3);
+    skelAnim = static_cast<T3DSkeleton*>(malloc(sizeof(T3DSkeleton) * animCount));
+    anims    = static_cast<T3DAnim*>(malloc(sizeof(T3DAnim) * animCount));
+    t3d_skeleton_update(&skelMain);
+
+    auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
+    uint32_t i = 0;
+    while(t3d_model_iter_next(&it)) {
+      skelAnim[i] = t3d_skeleton_clone(&skelMain, false);
+      anims[i]    = t3d_anim_create(model, it.anim->name);
+      t3d_anim_attach(&anims[i], &skelMain);
+      ++i;
+    }
+
+    if (!model->userBlock) {
+      Renderer::MaterialState state{};
+      rspq_block_begin();
+      auto boneSeg = (const T3DMat4FP*)t3d_segment_placeholder(T3D_SEGMENT_SKELETON);
+      it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_OBJECT);
+      while(t3d_model_iter_next(&it)) {
+        auto *mat = (P64::Renderer::Material*)it.object->material;
+        assert(mat);
+        mat->begin(state);
+        t3d_model_draw_object(it.object, boneSeg);
+        mat->end(state);
+      }
+      model->userBlock = rspq_block_end();
+    }
+  }
+
   uint32_t AnimModel::getAllocSize(uint16_t* initData)
   {
     return sizeof(AnimModel) - sizeof(Renderer::MaterialInstance) + ((InitData*)initData)->material.getSize();
