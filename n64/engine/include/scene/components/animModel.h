@@ -60,6 +60,9 @@ namespace P64::Comp
       T3DAnim* getAnim(int16_t idx) const {
         return anims ? &anims[idx] : nullptr;
       }
+      
+      float getMainAnimDuration()  const { return mainAnimDuration;  }
+      float getBlendAnimDuration() const { return blendAnimDuration; }
 
       const T3DModel* getModel() const {
         return model;
