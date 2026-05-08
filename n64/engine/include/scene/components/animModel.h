@@ -37,12 +37,30 @@ namespace P64::Comp
       uint8_t flags{0};
 
     public:
+      // Stagger fields written by AnimController::setAnimStagger
+      uint8_t staggerRate{1};   // 0=disabled, 1=every frame, N=every N frames
+      uint8_t staggerOffset{0};
+      uint8_t staggerLast{0};   // low 8 bits of globalFrameCounter at last update
+
       float blendFactor{0.5f};
       Renderer::MaterialInstance material{};
 
       void setMainAnim(int16_t idx);
       void setBlendAnim(int16_t idx);
       void swapModel(uint16_t assetIdx);
+
+      bool shouldUpdate(uint64_t globalFrame, uint8_t &framesSince) {
+        if (staggerRate == 0) { framesSince = 0; return false; }
+        if (staggerRate == 1) { framesSince = 1; return true; }
+        uint8_t elapsed = (uint8_t)(globalFrame - staggerLast);
+        if (elapsed >= staggerRate) {
+          framesSince = elapsed;
+          staggerLast = (uint8_t)globalFrame;
+          return true;
+        }
+        framesSince = 0;
+        return true;
+      }
 
       Renderer::MaterialInstance& getMatInstance() {
         return material;

@@ -14,31 +14,20 @@ namespace P64 {
     void update([[maybe_unused]] float deltaTime);
     void draw_registered();
 
-    /**
-        * The animation will be updated in a staggered manner, meaning that not all animations will be updated every frame. 
-        * This can be used to improve performance when there are many animations in the scene that do not need to be updated every frame. 
-        * The exact staggering pattern is determined by the implementation and may change over time.
-        * @param anim The animation to add to the staggered update list. Must not be null.
-        * @param staggerRate The rate at which the animation should be updated. A value of 1 means the animation will be updated every frame, 
-    *            2 means every other frame, and so on. Set to 0 to disable animation.
-    */
-    void setAnimStagger(const P64::Comp::AnimModel &anim, uint8_t staggerRate = 1);
+    uint64_t getFrameCount();
 
     /**
-     * Removes the specified animation from the staggered update list, allowing it to be updated every frame.
-     * @param anim The animation to remove from the staggered update list.
+     * Updates the animation at a staggered rate. Animations with the same rate
+     * are assigned different phase offsets so their updates spread evenly across
+     * frames rather than all firing at once.
+     * @param staggerRate  1 = every frame (default), N = every N frames, 0 = disabled (no draw).
      */
-    void clearAnimStagger(const P64::Comp::AnimModel &anim);
+    void setAnimStagger(P64::Comp::AnimModel &anim, uint8_t staggerRate = 1);
 
     /**
-     * Determines if the specified animation can be updated based on the current staggering pattern. 
-     * This function should be called each frame for each animation to check if it should be updated.
-     * @param anim The animation to check. Must not be null.
-     * @param framesSinceUpdate The number of frames since the last update for this animation.
-     *         If the returned value is greater than or equal to the stagger rate set for this animation, it can be updated this frame.
-     *         If the returned value is 0, it means the animation is not due for an update this frame.
-     * @return true if the animation can be updated this frame, false otherwise.
+     * Resets stagger for this animation back to every-frame updates.
      */
-    bool canAnimUpdate(const P64::Comp::AnimModel &anim, uint8_t &framesSinceUpdate);
-  }
-}
+    void clearAnimStagger(P64::Comp::AnimModel &anim);
+
+  } // AnimController
+} // P64

@@ -205,15 +205,16 @@ namespace P64::Comp
   void AnimModel::update(Object& obj, AnimModel* data, float deltaTime)
   {
     uint8_t framesSinceUpdate;
-    if (!AnimController::canAnimUpdate(*data, framesSinceUpdate)) {
-        data->flags |= 1;
-        return;
+    if (!data->shouldUpdate(AnimController::getFrameCount(), framesSinceUpdate)) {
+      data->flags |= 1;
+      return;
     }
     data->flags &= ~1;
 
-    const float dt = deltaTime * static_cast<float>(framesSinceUpdate);
-
+    if (framesSinceUpdate == 0) return;
     if (data->animIdxMain < 0) return;
+
+    const float dt = deltaTime * static_cast<float>(framesSinceUpdate);
 
     const float alpha = data->blendFactor;
 
