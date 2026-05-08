@@ -98,16 +98,36 @@ namespace Utils
     return std::string{buf};
   }
 
-  inline int compareSemVer(const std::string &versionA, const std::string &versionB)
-  {
-    auto splitA = splitString(versionA.starts_with('v') ? versionA.substr(1) : versionA, '.');
-    auto splitB = splitString(versionB.starts_with('v') ? versionB.substr(1) : versionB, '.');
+inline int compareSemVer(const std::string &versionA, const std::string &versionB)
+{
+    // Remove leading 'v' (if present) - keeps compatibility with GitHub tags etc.
+    std::string cleanA = versionA.starts_with('v') ? versionA.substr(1) : versionA;
+    std::string cleanB = versionB.starts_with('v') ? versionB.substr(1) : versionB;
+
+    size_t sepA = cleanA.find('-');
+    size_t sepB = cleanB.find('-');
+    std::string baseA = (sepA != std::string::npos) ? cleanA.substr(0, sepA) : cleanA;
+    std::string baseB = (sepB != std::string::npos) ? cleanB.substr(0, sepB) : cleanB;
+
+    auto splitA = splitString(baseA, '.');
+    auto splitB = splitString(baseB, '.');
     for (size_t i = 0; i < 3; ++i) {
-      int partA = i < splitA.size() ? std::stoi(splitA[i]) : 0;
-      int partB = i < splitB.size() ? std::stoi(splitB[i]) : 0;
-      if (partA > partB) return 1;
-      if (partA < partB) return -1;
+        int partA = i < splitA.size() ? std::stoi(splitA[i]) : 0;
+        int partB = i < splitB.size() ? std::stoi(splitB[i]) : 0;
+
+        if (partA > partB) return 1;
+        if (partA < partB) return -1;
     }
+
+    if (sepA == std::string::npos && sepB == std::string::npos) return 0;  // both old-style, equal
+    if (sepA == std::string::npos) return -1;  // A has no timestamp → older
+    if (sepB == std::string::npos) return  1;  // B has no timestamp → newer
+
+    std::string timestampA = cleanA.substr(sepA + 1);
+    std::string timestampB = cleanB.substr(sepB + 1);
+
+    if (timestampA > timestampB) return 1;
+    if (timestampA < timestampB) return -1;
+
     return 0;
-  }
 }
