@@ -100,8 +100,8 @@ namespace Utils
     return std::string{buf};
   }
 
-inline int compareSemVer(const std::string &versionA, const std::string &versionB)
-{
+  inline int compareSemVer(const std::string &versionA, const std::string &versionB)
+  {
     // Remove leading 'v' (if present) - keeps compatibility with GitHub tags etc.
     std::string cleanA = versionA.starts_with('v') ? versionA.substr(1) : versionA;
     std::string cleanB = versionB.starts_with('v') ? versionB.substr(1) : versionB;
@@ -114,11 +114,11 @@ inline int compareSemVer(const std::string &versionA, const std::string &version
     auto splitA = splitString(baseA, '.');
     auto splitB = splitString(baseB, '.');
     for (size_t i = 0; i < 3; ++i) {
-        int partA = i < splitA.size() ? std::stoi(splitA[i]) : 0;
-        int partB = i < splitB.size() ? std::stoi(splitB[i]) : 0;
-
-        if (partA > partB) return 1;
-        if (partA < partB) return -1;
+      int partA = i < splitA.size() ? std::stoi(splitA[i]) : 0;
+      int partB = i < splitB.size() ? std::stoi(splitB[i]) : 0;
+  
+      if (partA > partB) return 1;
+      if (partA < partB) return -1;
     }
 
     if (sepA == std::string::npos && sepB == std::string::npos) return 0;  // both old-style, equal
@@ -132,4 +132,5 @@ inline int compareSemVer(const std::string &versionA, const std::string &version
     if (timestampA < timestampB) return -1;
 
     return 0;
+  }
 }
