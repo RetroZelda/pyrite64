@@ -135,11 +135,41 @@ namespace
     }
   }
 
+  // Recursively populate relPosMap with every descendant's world position expressed
+  // in the local space of their immediate parent (not the root selected object).
+  void buildRelPosMap(
+    Project::Object &obj,
+    const glm::mat4 &objMat,
+    std::unordered_map<uint64_t, glm::vec3> &relPosMap
+  ) {
+    glm::vec3 skew{0.f};
+    glm::vec4 persp{0.f, 0.f, 0.f, 1.f};
+    for (auto& child : obj.children)
+    {
+      if (ctx.isObjectSelected(child->uuid)) continue;
+      relPosMap[child->uuid] = glm::vec3(glm::inverse(objMat) * glm::vec4(
+        child->pos.resolve(child->propOverrides), 1.0f
+      ));
+      if (!child->children.empty())
+      {
+        auto childMat = glm::recompose(
+          child->scale.resolve(child->propOverrides),
+          child->rot.resolve(child->propOverrides),
+          child->pos.resolve(child->propOverrides),
+          skew, persp
+        );
+        buildRelPosMap(*child, childMat, relPosMap);
+      }
+    }
+  }
+
   void applyDeltaToChildren(
     Project::Object &obj,
     const std::unordered_map<uint64_t, glm::vec3> &relPosMap,
     const glm::mat4 &mat
   ) {
+    glm::vec3 skew{0.f};
+    glm::vec4 persp{0.f, 0.f, 0.f, 1.f};
     for(auto& child : obj.children)
     {
       // if child itself is selected, skip (already transformed with it)
@@ -148,6 +178,17 @@ namespace
       auto it = relPosMap.find(child->uuid);
       if(it == relPosMap.end())continue;
       child->pos.resolve(child->propOverrides) = mat * glm::vec4(it->second, 1.0f);
+
+      if (!child->children.empty())
+      {
+        auto newChildMat = glm::recompose(
+          child->scale.resolve(child->propOverrides),
+          child->rot.resolve(child->propOverrides),
+          child->pos.resolve(child->propOverrides),
+          skew, persp
+        );
+        applyDeltaToChildren(*child, relPosMap, newChildMat);
+      }
     }
   }
 
@@ -235,14 +276,9 @@ bool Editor::Viewport3D::alignFocusedObjectToCamera()
   // Rebuild current object matrix so child transforms can be converted into the old local space
   auto oldObjMatrix = glm::recompose(objScale, objRot, objPos, skew, persp);
 
-  // Cache each child in the local space of the old transform so they can be rebuilt relative to the new one
+  // Cache all descendants in the local space of their immediate parent
   std::unordered_map<uint64_t, glm::vec3> relPosMap{};
-  for (auto& child : obj->children)
-  {
-    relPosMap[child->uuid] = glm::inverse(oldObjMatrix) * glm::vec4(
-      child->pos.resolve(child->propOverrides), 1.0f
-    );
-  }
+  buildRelPosMap(*obj, oldObjMatrix, relPosMap);
 
   // Copy editor camera transform to focused object
   obj->pos.resolve(obj->propOverrides) = camera.pos;
@@ -852,12 +888,7 @@ void Editor::Viewport3D::draw()
                 obj->pos.resolve(obj->propOverrides),
                 skew, persp);
 
-              for(auto& child : obj->children)
-              {
-                relPosMap[child->uuid] = glm::inverse(oldObjMat) * glm::vec4(
-                  child->pos.resolve(child->propOverrides), 1.0f
-                );
-              }
+              buildRelPosMap(*obj, oldObjMat, relPosMap);
             }
 
             glm::decompose(
@@ -917,13 +948,7 @@ void Editor::Viewport3D::draw()
               if(!isOnlySelf)
               {
                 auto oldObjMat = glm::recompose(oldScale, oldRot, oldPos, skew, persp);
-
-                for(auto& child : selObj->children)
-                {
-                  relPosMap[child->uuid] = glm::inverse(oldObjMat) * glm::vec4(
-                    child->pos.resolve(child->propOverrides), 1.0f
-                  );
-                }
+                buildRelPosMap(*selObj, oldObjMat, relPosMap);
               }
 
               objPos = center + ((oldPos - center) * scaleDelta);
@@ -951,13 +976,7 @@ void Editor::Viewport3D::draw()
                   selObj->rot.resolve(selObj->propOverrides),
                   selObj->pos.resolve(selObj->propOverrides),
                   skew, persp);
-
-                for(auto& child : selObj->children)
-                {
-                  relPosMap[child->uuid] = glm::inverse(oldObjMat) * glm::vec4(
-                    child->pos.resolve(child->propOverrides), 1.0f
-                  );
-                }
+                buildRelPosMap(*selObj, oldObjMat, relPosMap);
               }
 
               auto oldObjMat = glm::recompose(

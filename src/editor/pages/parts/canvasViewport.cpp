@@ -37,6 +37,18 @@ namespace
             return p.value.get<float>();
         return def;
     }
+
+    void shiftDescendants(std::vector<Project::CanvasElement>& children, float dx, float dy)
+    {
+        for (auto& child : children)
+        {
+            if (!child.x.isBound && child.x.value.is_number())
+                child.x.value = std::round(child.x.value.get<float>() + dx);
+            if (!child.y.isBound && child.y.value.is_number())
+                child.y.value = std::round(child.y.value.get<float>() + dy);
+            shiftDescendants(child.children, dx, dy);
+        }
+    }
 }
 
 ImVec2 Editor::CanvasViewport::canvasToScreen(ImVec2 cp, ImVec2 origin) const
@@ -306,10 +318,19 @@ void Editor::CanvasViewport::handleInput(ImVec2 origin, Project::Canvas& canvas)
                 // Always snap to whole-pixel positions
                 newX = std::round(newX);
                 newY = std::round(newY);
+
+                float curX = propLitFloat(elem->x, 0.f);
+                float curY = propLitFloat(elem->y, 0.f);
+
                 elem->x.isBound = false;
                 elem->x.value = newX;
                 elem->y.isBound = false;
                 elem->y.value = newY;
+
+                float dx = newX - curX;
+                float dy = newY - curY;
+                if (dx != 0.f || dy != 0.f)
+                    shiftDescendants(elem->children, dx, dy);
             }
         }
     }
