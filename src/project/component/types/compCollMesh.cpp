@@ -123,34 +123,67 @@ namespace Project::Component::CollMesh
 
     if (ImTable::start("Comp", &obj)) {
       ImTable::add("Name", entry.name);
-      ImTable::addMultiSelectMask8("Reacts to", data.maskRead.resolve(obj), ctx.project->conf.collLayerNames, "<Nothing>");
-      ImTable::addMultiSelectMask8("Is Affecting", data.maskWrite.resolve(obj), ctx.project->conf.collLayerNames, "<Nothing>");
-      ImTable::add("Model");
-      //ImGui::InputScalar("##UUID", ImGuiDataType_U64, &data.scriptUUID);
 
-      int idx = modelList.size();
-      for (int i=0; i<modelList.size(); ++i) {
-        if (modelList[i].getUUID() == data.modelUUID.resolve(obj.propOverrides)) {
-          idx = i;
-          break;
-        }
-      }
-
-      auto getter = [](void*, int idx) -> const char*
-      {
-        auto &scriptList = ctx.project->getAssets().getTypeEntries(FileType::MODEL_3D);
-        if (idx < 0 || idx >= scriptList.size())return "<Select Model>";
-        return scriptList[idx].name.c_str();
+      const auto& layerNames = ctx.project->conf.collLayerNames;
+      auto maskLambda = [&layerNames](const char* id) {
+        return [&layerNames, id](uint32_t *val) -> bool {
+          std::string preview;
+          for (int i = 0; i < 8; ++i) {
+            if (*val & (1u << i)) {
+              if (!preview.empty()) preview += "  |  ";
+              preview += layerNames[i].empty() ? "??" : layerNames[i];
+            }
+          }
+          bool isEmpty = preview.empty();
+          if (isEmpty) {
+            preview = "<Nothing>";
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+          }
+          bool changed = false;
+          bool open = ImGui::BeginCombo(id, preview.c_str());
+          if (isEmpty) ImGui::PopStyleColor();
+          if (open) {
+            for (int i = 0; i < 8; ++i) {
+              if (layerNames[i].empty()) continue;
+              bool selected = (*val & (1u << i)) != 0;
+              auto label = std::string{selected ? ICON_MDI_CHECKBOX_MARKED " " : ICON_MDI_CHECKBOX_BLANK_OUTLINE " "}
+                         + layerNames[i] + "##" + std::to_string(i);
+              if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_DontClosePopups)) {
+                if (!selected) *val |= (1u << i); else *val &= ~(1u << i);
+                changed = true;
+              }
+            }
+            ImGui::EndCombo();
+          }
+          return changed;
+        };
       };
+      ImTable::addObjProp<uint32_t>("Reacts to",   data.maskRead,  maskLambda("##mr"), nullptr);
+      ImTable::addObjProp<uint32_t>("Is Affecting", data.maskWrite, maskLambda("##mw"), nullptr);
 
-      if (ImGui::Combo("##UUID", &idx, getter, nullptr, modelList.size()+1)) {
-        data.obj3D.removeMesh();
-      }
+      ImTable::addObjProp<uint64_t>("Model", data.modelUUID, [&](uint64_t *val) -> bool {
+        int idx = (int)modelList.size();
+        for (int i = 0; i < (int)modelList.size(); ++i) {
+          if (modelList[i].getUUID() == *val) { idx = i; break; }
+        }
+        auto getter = [](void*, int i) -> const char* {
+          auto &list = ctx.project->getAssets().getTypeEntries(FileType::MODEL_3D);
+          if (i < 0 || i >= (int)list.size()) return "<Select Model>";
+          return list[i].name.c_str();
+        };
+        bool changed = ImGui::Combo("##UUID", &idx, getter, nullptr, (int)modelList.size() + 1);
+        if (changed) {
+          data.obj3D.removeMesh();
+          if (idx < (int)modelList.size())
+            *val = modelList[idx].getUUID();
+        }
+        return changed;
+      }, nullptr);
 
+      uint64_t effectiveModelUUID = data.modelUUID.resolve(obj.propOverrides);
       const AssetManagerEntry* selModel = nullptr;
-      if (idx < (int)modelList.size()) {
-        selModel = &modelList[idx];
-        data.modelUUID.value = selModel->getUUID();
+      for (int i = 0; i < (int)modelList.size(); ++i) {
+        if (modelList[i].getUUID() == effectiveModelUUID) { selModel = &modelList[i]; break; }
       }
 
       ImTable::end();

@@ -100,11 +100,11 @@ namespace Project::Component::RigidBody
 
     if (ImTable::start("Comp", &obj)) {
       ImTable::add("Name", entry.name);
-      auto &mass = data.mass.resolve(obj.propOverrides);
-      if (ImTable::add("Mass", mass))
-      {
-        mass = std::clamp(mass, 0.01f, std::numeric_limits<float>::max());
-      }
+      ImTable::addObjProp<float>("Mass", data.mass, [](float *val) -> bool {
+        bool changed = ImGui::InputFloat("##mass", val);
+        if (changed) *val = std::clamp(*val, 0.01f, std::numeric_limits<float>::max());
+        return changed;
+      }, nullptr);
       ImTable::addObjProp("Is Kinematic", data.isKinematic);
       ImTable::addObjProp("Constrain Pos X", data.constrainPosX);
       ImTable::addObjProp("Constrain Pos Y", data.constrainPosY);

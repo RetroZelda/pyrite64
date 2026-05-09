@@ -67,11 +67,16 @@ namespace Project::Component::Culling
 
       auto &ext = data.halfExtend.resolve(obj.propOverrides);
 
-      ImTable::addComboBox("Type", data.type.value, {"Box", "Sphere"});
+      ImTable::addObjProp<int32_t>("Type", data.type, [](int32_t *val) -> bool {
+        const char* types[] = {"Box", "Sphere"};
+        return ImGui::Combo("##type", val, types, 2);
+      }, nullptr);
       if(data.type.resolve(obj.propOverrides) == TYPE_SPHERE) {
-        ImTable::add("Size", ext.y);
-        ext.x = ext.y;
-        ext.z = ext.y;
+        ImTable::addObjProp<glm::vec3>("Size", data.halfExtend, [](glm::vec3 *val) -> bool {
+          bool changed = ImGui::InputFloat("##size", &val->y);
+          if (changed) { val->x = val->y; val->z = val->y; }
+          return changed;
+        }, nullptr);
       } else {
         ImTable::addObjProp("Size", data.halfExtend);
       }

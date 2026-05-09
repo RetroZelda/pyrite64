@@ -1784,18 +1784,21 @@ namespace P64::Coll {
             col = color_t{0x80, 0x80, 0x80, 0xFF};
           }
 
+          color_t customCol = collider->debugColor_;
+          bool hasCustomColor = !isSleepingBody && customCol.a != 0;
+
           switch (collider->type_)
           {
           case ShapeType::Sphere:
-            if (!isSleepingBody) col = color_t{0xFF, 0x00, 0x00, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x00, 0x00, 0xFF};
             Debug::drawSphere(collider->worldCenter_ * getGfxScale(), collider->sphere_.radius * getGfxScale(), col);
             break;
           case ShapeType::Box:
-            if (!isSleepingBody) col = color_t{0x00, 0xFF, 0xFF, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0x00, 0xFF, 0xFF, 0xFF};
             Debug::drawOBB(collider->worldCenter_ * getGfxScale(), collider->box_.halfSize * getGfxScale(), collider->owner_->rot, col);
             break;
           case ShapeType::Capsule:
-            if (!isSleepingBody) col = color_t{0x00, 0x80, 0xFF, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0x00, 0x80, 0xFF, 0xFF};
             Debug::drawCapsule(
                 collider->worldCenter_ * getGfxScale(),
                 collider->capsule_.radius * getGfxScale(),
@@ -1804,7 +1807,7 @@ namespace P64::Coll {
                 col);
             break;
           case ShapeType::Cylinder:
-            if (!isSleepingBody) col = color_t{0xFF, 0x80, 0x00, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x80, 0x00, 0xFF};
             Debug::drawCylinder(
                 collider->worldCenter_ * getGfxScale(),
                 collider->cylinder_.radius * getGfxScale(),
@@ -1813,7 +1816,7 @@ namespace P64::Coll {
                 col);
             break;
           case ShapeType::Cone:
-            if (!isSleepingBody) col = color_t{0xFF, 0x40, 0xA0, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x40, 0xA0, 0xFF};
             Debug::drawCone(
                 collider->worldCenter_ * getGfxScale(),
                 collider->cone_.radius * getGfxScale(),
@@ -1822,7 +1825,7 @@ namespace P64::Coll {
                 col);
             break;
           case ShapeType::Pyramid:
-            if (!isSleepingBody) col = color_t{0xB0, 0xFF, 0x40, 0xFF};
+            if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xB0, 0xFF, 0x40, 0xFF};
             Debug::drawPyramid(
                 collider->worldCenter_ * getGfxScale(),
                 collider->pyramid_.baseHalfWidthX * getGfxScale(),

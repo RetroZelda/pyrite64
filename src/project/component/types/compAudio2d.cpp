@@ -86,7 +86,28 @@ namespace Project::Component::Audio2D
       auto &listXM = ctx.project->getAssets().getTypeEntries(FileType::MUSIC_XM);
       audioList.insert(audioList.end(), listXM.begin(), listXM.end());
 
-      ImTable::addAssetVecComboBox("Audio", audioList, data.audioUUID.resolve(obj), [](auto){});
+      if (!ImTable::isPrefabLocked()) {
+        ImTable::addAssetVecComboBox("Audio", audioList, data.audioUUID.resolve(obj), [](auto){});
+      } else {
+        ImTable::addObjProp<uint64_t>("Audio", data.audioUUID, [&](uint64_t *val) -> bool {
+          int idx = -1;
+          for (int i = 0; i < (int)audioList.size(); ++i) {
+            if (audioList[i].getId() == *val) { idx = i; break; }
+          }
+          const char* preview = (idx >= 0) ? audioList[idx].getName().c_str() : "<None>";
+          bool changed = false;
+          if (ImGui::BeginCombo("##audio", preview)) {
+            for (int i = 0; i < (int)audioList.size(); ++i) {
+              if (ImGui::Selectable(audioList[i].getName().c_str(), i == idx)) {
+                *val = audioList[i].getId();
+                changed = true;
+              }
+            }
+            ImGui::EndCombo();
+          }
+          return changed;
+        }, nullptr);
+      }
       ImTable::addObjProp("Volume", data.volume);
       ImTable::addObjProp("Loop", data.loop);
       ImTable::addObjProp("Auto-Play", data.autoPlay);

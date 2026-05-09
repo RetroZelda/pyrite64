@@ -99,9 +99,10 @@ namespace Project::Component::Camera
 
       ImTable::add("Name", entry.name);
 
-      ImTable::addComboBox("Controlled", data.mode.resolve(obj), {
-        "Manually", "By Object"
-      });
+      ImTable::addObjProp<int32_t>("Controlled", data.mode, [](int32_t *val) -> bool {
+        const char* modes[] = {"Manually", "By Object"};
+        return ImGui::Combo("##mode", val, modes, 2);
+      }, nullptr);
 
       ImTable::addObjProp("Offset", data.vpOffset);
       ImTable::addObjProp("Size", data.vpSize);

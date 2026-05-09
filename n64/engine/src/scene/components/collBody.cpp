@@ -22,6 +22,7 @@ namespace
     uint8_t maskWrite{};
     float friction{};
     float bounce{};
+    color_t debugColor{};
   };
 }
 
@@ -56,6 +57,7 @@ namespace P64::Comp
 
     data->collider.setTrigger(initData->isTrigger);
     data->collider.setCollisionMask(initData->maskRead, initData->maskWrite);
+    data->collider.setDebugColor(initData->debugColor);
     switch(data->collider.shapeType())
     {
       case P64::Coll::ShapeType::Sphere:

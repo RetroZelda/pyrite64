@@ -66,6 +66,9 @@ namespace P64::Coll {
     void setTrigger(bool newIsTrigger) { isTrigger_ = newIsTrigger; }
     bool isTrigger() const { return isTrigger_; }
 
+    void setDebugColor(color_t col) { debugColor_ = col; }
+    color_t debugColor() const { return debugColor_; }
+
     void setCollisionMask(uint8_t newReadMask, uint8_t newWriteMask) {
       readMask_ = newReadMask;
       writeMask_ = newWriteMask;
@@ -118,6 +121,7 @@ namespace P64::Coll {
     float friction_{0.8f};
     uint32_t worldStateVersion_{0};
     NodeProxy aabbTreeNodeId_{NULL_NODE};
+    color_t debugColor_{0, 0, 0, 0};
     ShapeType type_{ShapeType::Sphere};
     uint8_t readMask_{0x00};
     uint8_t writeMask_{0x00};

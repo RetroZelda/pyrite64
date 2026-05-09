@@ -120,13 +120,37 @@ namespace Project::Component::Model
 
     if (ImTable::start("Comp", &obj)) {
       ImTable::add("Name", entry.name);
-      ImTable::addAssetVecComboBox("Model", modelList, data.model.value, [&data](auto) {
-        data.obj3D.removeMesh();
-      });
+      if (!ImTable::isPrefabLocked()) {
+        ImTable::addAssetVecComboBox("Model", modelList, data.model.value, [&data](auto) {
+          data.obj3D.removeMesh();
+        });
+      } else {
+        ImTable::addObjProp<uint64_t>("Model", data.model, [&](uint64_t *val) -> bool {
+          int idx = -1;
+          for (int i = 0; i < (int)modelList.size(); ++i) {
+            if (modelList[i].getId() == *val) { idx = i; break; }
+          }
+          const char* preview = (idx >= 0) ? modelList[idx].getName().c_str() : "<None>";
+          bool changed = false;
+          if (ImGui::BeginCombo("##model", preview)) {
+            for (int i = 0; i < (int)modelList.size(); ++i) {
+              if (ImGui::Selectable(modelList[i].getName().c_str(), i == idx)) {
+                *val = modelList[i].getId();
+                data.obj3D.removeMesh();
+                changed = true;
+              }
+            }
+            ImGui::EndCombo();
+          }
+          return changed;
+        }, nullptr);
+      }
+
+      auto effectiveModelUUID = data.model.resolve(obj.propOverrides);
 
       ImTable::add("");
       if(ImGui::Button(ICON_MDI_PENCIL " Open Model Editor")) {
-        ctx.editorScene->openModelEditor(data.model.value);
+        ctx.editorScene->openModelEditor(effectiveModelUUID);
       }
 
       std::vector<const char*> layerNames{};
@@ -142,7 +166,7 @@ namespace Project::Component::Model
       ImTable::addObjProp("Culling", data.culling);
 
       if(data.culling.resolve(obj.propOverrides)) {
-        auto modelAsset = ctx.project->getAssets().getEntryByUUID(data.model.value);
+        auto modelAsset = ctx.project->getAssets().getEntryByUUID(effectiveModelUUID);
         if(modelAsset && !modelAsset->conf.gltfBVH) {
           ImGui::SameLine();
           ImGui::TextColored({1.0f, 0.5f, 0.5f, 1.0f}, "Warning: BVH not enabled!");
@@ -151,7 +175,7 @@ namespace Project::Component::Model
 
       ImTable::end();
 
-      auto t3dm = ctx.project->getAssets().getEntryByUUID(data.model.value);
+      auto t3dm = ctx.project->getAssets().getEntryByUUID(effectiveModelUUID);
       if(ImGui::CollapsingSubHeader("Mesh Filter", ImGuiTreeNodeFlags_DefaultOpen) && ImTable::start("Filter", &obj))
       {
         bool changed = ImTable::addObjProp("Filter", data.filter.meshFilter);

@@ -103,12 +103,14 @@ namespace Project::Component::Light
     if (ImTable::start("Comp", &obj))
     {
       ImTable::add("Name", entry.name);
-      ImTable::addComboBox("Type", data.type.value, LIGHT_TYPES, LIGHT_TYPE_COUNT);
-      ImTable::addProp("Index", data.index);
-      ImTable::addProp("Color", data.color);
+      ImTable::addObjProp<int32_t>("Type", data.type, [](int32_t *val) -> bool {
+        return ImGui::Combo("##type", val, LIGHT_TYPES, LIGHT_TYPE_COUNT);
+      }, nullptr);
+      ImTable::addObjProp("Index", data.index);
+      ImTable::addObjProp("Color", data.color);
 
-      if(data.type.value == LIGHT_TYPE_POINT) {
-        ImTable::addProp("Size", data.size);
+      if(data.type.resolve(obj.propOverrides) == LIGHT_TYPE_POINT) {
+        ImTable::addObjProp("Size", data.size);
       }
 
       ImTable::end();
