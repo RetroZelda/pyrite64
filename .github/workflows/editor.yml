@@ -1,4 +1,4 @@
-name: Windows (MSYS2 UCRT64)
+name: Build & Release
 
 on:
   workflow_dispatch:
@@ -7,13 +7,29 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
-  pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version_tag: ${{ steps.version.outputs.version_tag }}
+      build_timestamp: ${{ steps.version.outputs.build_timestamp }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Generate version
+        id: version
+        run: |
+          PROJECT_VERSION=$(grep -m1 'project(pyrite64 VERSION' CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+          BUILD_TIMESTAMP=$(TZ=America/New_York date +%Y%m%d-%H%M%S)
+          VERSION_TAG="v${PROJECT_VERSION}-Full-Frontal-${BUILD_TIMESTAMP}"
+          echo "version_tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "build_timestamp=${BUILD_TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION_TAG}"
+
   build-windows:
+    needs: setup
     runs-on: windows-latest
 
     defaults:
@@ -37,27 +53,25 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
+            zip
 
       - name: Configure CMake
-        run: |
-          cmake --preset windows-gcc-release
+        run: cmake --preset windows-gcc-release -DBUILD_TIMESTAMP_OVERRIDE=${{ needs.setup.outputs.build_timestamp }}
 
       - name: Build
-        run: |
-          cmake --build --preset windows-gcc-release
+        run: cmake --build --preset windows-gcc-release
 
-      - name: Upload build artifact
+      - name: Package
+        run: zip -r pyrite64-windows.zip pyrite64.exe data/ n64/ LICENSE
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: pyrite64-windows
-          include-hidden-files: true
-          path: |
-            pyrite64.exe
-            data
-            n64
-            LICENSE
+          name: pyrite64-windows-zip
+          path: pyrite64-windows.zip
 
   build-linux:
+    needs: setup
     runs-on: ubuntu-latest
 
     steps:
@@ -75,20 +89,42 @@ jobs:
 #            libwayland-dev libwayland-client-dev libwayland-cursor-dev libwayland-egl-dev
 
       - name: Configure CMake
-        run: |
-          cmake --preset linux-release
+        run: cmake --preset linux-release -DBUILD_TIMESTAMP_OVERRIDE=${{ needs.setup.outputs.build_timestamp }}
 
       - name: Build
-        run: |
-          cmake --build --preset linux-release
+        run: cmake --build --preset linux-release
 
-      - name: Upload build artifact
+      - name: Package
+        run: tar czf pyrite64-linux.tar.gz pyrite64 data/ n64/ LICENSE
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: pyrite64-linux
-          include-hidden-files: true
-          path: |
-            pyrite64
-            data
-            n64
-            LICENSE
+          name: pyrite64-linux-tarball
+          path: pyrite64-linux.tar.gz
+
+  release:
+    needs: [setup, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pyrite64-windows-zip
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pyrite64-linux-tarball
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.setup.outputs.version_tag }}
+          name: Pyrite64 ${{ needs.setup.outputs.version_tag }}
+          files: |
+            pyrite64-windows.zip
+            pyrite64-linux.tar.gz

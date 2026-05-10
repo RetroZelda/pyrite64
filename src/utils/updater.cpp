@@ -2,6 +2,7 @@
 * @copyright 2026 - Max Bebök
 * @license MIT
 */
+#include "pyrite64_version.h"
 #include "updater.h"
 
 #include "network.h"

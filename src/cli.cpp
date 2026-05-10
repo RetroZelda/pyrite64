@@ -2,6 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include "pyrite64_version.h"
 #include "cli.h"
 #include "argparse/argparse.hpp"
 #include "build/projectBuilder.h"

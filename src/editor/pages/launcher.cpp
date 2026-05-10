@@ -2,6 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include "pyrite64_version.h"
 #include "launcher.h"
 
 #include <atomic>

@@ -317,36 +317,6 @@ target_include_directories(pyrite64 PRIVATE
     n64
 )
 
-# =============================================================================
-# Build timestamp in USA East Coast / Eastern Time (America/New_York)
-# Uses 24-hour format YYYYMMDD-HHMMSS and automatically handles DST
-# =============================================================================
-if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-    # Native Windows (MSVC or MinGW) - uses PowerShell timezone conversion
-    execute_process(
-        COMMAND powershell -NoProfile -Command 
-            "[TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), 'Eastern Standard Time').ToString('yyyyMMdd-HHmmss')"
-        OUTPUT_VARIABLE BUILD_TIMESTAMP
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-else()
-    # Linux / macOS / MinGW with Unix tools
-    execute_process(
-        COMMAND env TZ=America/New_York date +%Y%m%d-%H%M%S
-        OUTPUT_VARIABLE BUILD_TIMESTAMP
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-endif()
-
-# Fallback to local time if the platform-specific command failed
-if(NOT BUILD_TIMESTAMP)
-    string(TIMESTAMP BUILD_TIMESTAMP "%Y%m%d-%H%M%S")
-    message(WARNING "Could not determine Eastern Time timestamp - falling back to local time")
-endif()
-
-message(STATUS "Pyrite build timestamp (ET): ${BUILD_TIMESTAMP}")
 
 # target_link_libraries(pyrite64 PRIVATE SDL3::SDL3)
 
@@ -359,7 +329,17 @@ target_compile_definitions(pyrite64 PRIVATE "PYRITE_ORG_NAME=\"${PYRITE_ORG_NAME
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_APP_NAME=\"${PYRITE_APP_NAME}\"")
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_GH_USER=\"${PYRITE_GH_USER}\"")
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_GH_REPO=\"${PYRITE_GH_REPO}\"")
-target_compile_definitions(pyrite64 PRIVATE "PYRITE_VERSION=\"${PROJECT_VERSION}-Full-Frontal-${BUILD_TIMESTAMP}\"")
+add_custom_target(generate_version ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/pyrite64_version.h
+        -DPROJECT_VERSION=${PROJECT_VERSION}
+        "-DBUILD_TIMESTAMP=${BUILD_TIMESTAMP_OVERRIDE}"
+        -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersionHeader.cmake
+    COMMENT "Generating version header"
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/pyrite64_version.h
+)
+add_dependencies(pyrite64 generate_version)
+target_include_directories(pyrite64 PRIVATE ${CMAKE_BINARY_DIR})
 
 target_compile_definitions(pyrite64 PRIVATE IMGUI_DEFINE_MATH_OPERATORS GLM_FORCE_QUAT_DATA_XYZW)
 
