@@ -41,11 +41,6 @@
 #include "editor/undoRedo.h"
 #include "editor/actions.h"
 
-// HACK: Windows for whatever fucking reason doesnt have this and the auto build keeps failing
-#if defined(__GNUC__) && !defined(_Countof)
-#define _Countof(x) (sizeof(x) / sizeof((x)[0]))
-#endif
-
 Context ctx{};
 constinit SDL_GPUSampler *texSamplerRepeat{nullptr};
 
@@ -87,7 +82,7 @@ bool confirmCloseWithUnsavedChanges()
   messageboxdata.window = ctx.window;
   messageboxdata.title = "Unsaved Changes";
   messageboxdata.message = "Your Project has unsaved changes, do you want to save them before closing?";
-  messageboxdata.numbuttons = SDL_arraysize(buttons);
+  messageboxdata.numbuttons = static_cast<int>(std::size(buttons));
   messageboxdata.buttons = buttons;
   messageboxdata.colorScheme = nullptr;
 
