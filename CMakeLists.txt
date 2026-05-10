@@ -106,7 +106,7 @@ add_executable(pyrite64 src/main.cpp
         vendored/imgui/misc/cpp/imgui_stdlib.h
 
         # ImGuizmo
-        vendored/ImGuizmo/ImGuizmo.cpp
+        vendored/ImGuizmo/src/ImGuizmo.cpp
 
         # Imgui node editor
         vendored/ImNodeFlow/src/ImNodeFlow.cpp
@@ -309,7 +309,7 @@ target_include_directories(pyrite64 PRIVATE
     vendored/ImViewGuizmo
     vendored/ImNodeFlow/include
     vendored/glm
-    vendored/ImGuizmo
+    vendored/ImGuizmo/src
     vendored/tiny3d/tools/gltf_importer/src/lib
     vendored/libdragon
     vendored/SDL_shadercross/include
