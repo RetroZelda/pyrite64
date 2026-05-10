@@ -8,7 +8,6 @@
 #include "backends/imgui_impl_sdlgpu3.h"
 #include <stdio.h>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_arraysize.h>
 #include <future>
 
 #include <argparse/argparse.hpp>
@@ -41,6 +40,11 @@
 
 #include "editor/undoRedo.h"
 #include "editor/actions.h"
+
+// HACK: Windows for whatever fucking reason doesnt have this and the auto build keeps failing
+#if defined(__GNUC__) && !defined(_Countof)
+#define _Countof(x) (sizeof(x) / sizeof((x)[0]))
+#endif
 
 Context ctx{};
 constinit SDL_GPUSampler *texSamplerRepeat{nullptr};
