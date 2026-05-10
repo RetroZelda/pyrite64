@@ -8,6 +8,7 @@
 #include "backends/imgui_impl_sdlgpu3.h"
 #include <stdio.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_arraysize.h>
 #include <future>
 
 #include <argparse/argparse.hpp>
