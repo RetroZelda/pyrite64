@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace Utils::Logger
 {
@@ -22,4 +23,8 @@ namespace Utils::Logger
 
   std::string getLog();
   const std::string& getLogStripped();
+
+  void clearBuild();
+  void appendBuild(const std::string &msg);
+  const std::vector<std::string>& getBuildLines();
 }

@@ -100,6 +100,7 @@ bool Utils::Proc::runSyncLogged(const std::string&cmd) {
   {
     if(fgets(buffer, BUFF_SIZE, pipe) != nullptr) {
       Logger::logRaw(buffer);
+      Logger::appendBuild(buffer);
     }
   }
   return pclose(pipe) == 0;

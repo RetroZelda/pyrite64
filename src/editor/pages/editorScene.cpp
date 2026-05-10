@@ -203,6 +203,7 @@ void Editor::Scene::draw()
     // Bottom
     ImGui::DockBuilderDockWindow("Files", dockBottomID);
     ImGui::DockBuilderDockWindow("Log", dockBottomID);
+    ImGui::DockBuilderDockWindow("Build", dockBottomID);
     ImGui::DockBuilderDockWindow("ROM", dockBottomID);
 
     ImGui::DockBuilderFinish(dockSpaceID);
@@ -355,8 +356,14 @@ void Editor::Scene::draw()
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
   ImGui::Begin("Log");
-  ImGui::PopStyleVar();;
+  ImGui::PopStyleVar();
     logWindow.draw();
+  ImGui::End();
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
+  ImGui::Begin("Build");
+  ImGui::PopStyleVar();
+    logWindow.drawBuild();
   ImGui::End();
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4_px, 4_px));

@@ -16,6 +16,10 @@ namespace
 
   constinit Utils::Logger::LogOutputFunc outputFunc = nullptr;
   constinit std::string logStripped{};
+
+  std::string buildBuff{};
+  std::atomic_bool buildLogChanged{false};
+  std::vector<std::string> buildLines{};
 }
 
 void Utils::Logger::setOutput(LogOutputFunc outFunc) {
@@ -70,6 +74,55 @@ std::string Utils::Logger::getLog() {
     logChanged = true;
   }
   return buff;
+}
+
+void Utils::Logger::clearBuild() {
+  std::lock_guard lock{mtx};
+  buildBuff = "";
+  buildLines.clear();
+  buildLogChanged = true;
+}
+
+void Utils::Logger::appendBuild(const std::string &msg) {
+  std::lock_guard lock{mtx};
+  buildBuff += msg;
+  buildLogChanged = true;
+}
+
+const std::vector<std::string>& Utils::Logger::getBuildLines()
+{
+  if (!buildLogChanged) return buildLines;
+
+  std::string stripped;
+  {
+    std::lock_guard lock{mtx};
+    bool inAnsi = false;
+    for (char c : buildBuff) {
+      if (c == '\x1b') {
+        inAnsi = true;
+      } else if (inAnsi && (c == 'm' || c == 'K')) {
+        inAnsi = false;
+      } else if (!inAnsi) {
+        if (c < 32 && c != '\n' && c != '\t') c = '?';
+        stripped += c;
+      }
+    }
+  }
+
+  buildLines.clear();
+  std::string line;
+  for (char c : stripped) {
+    if (c == '\n') {
+      buildLines.push_back(std::move(line));
+      line.clear();
+    } else {
+      line += c;
+    }
+  }
+  if (!line.empty()) buildLines.push_back(std::move(line));
+
+  buildLogChanged = false;
+  return buildLines;
 }
 
 const std::string& Utils::Logger::getLogStripped()

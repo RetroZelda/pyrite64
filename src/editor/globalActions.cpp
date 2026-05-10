@@ -104,7 +104,8 @@ namespace Editor::Actions
       if (ctx.isBuildOrRunning())return false;
       if (!ctx.project)return false;
 
-      ImGui::SetWindowFocus("Log");
+      ImGui::SetWindowFocus("Build");
+      Utils::Logger::clearBuild();
 
       ctx.project->save();
       ctx.editorScene->save();
