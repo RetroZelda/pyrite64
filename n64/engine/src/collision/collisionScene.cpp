@@ -1268,8 +1268,10 @@ namespace P64::Coll {
           float newAccumV = cp.accumulatedTangentImpulseV + lambdaV;
 
           float maxFriction = cc.combinedFriction * cp.accumulatedNormalImpulse;
-          float tangentMagnitude = sqrtf(newAccumU * newAccumU + newAccumV * newAccumV);
-          if(tangentMagnitude > maxFriction && tangentMagnitude > FM_EPSILON) {
+          float accumSq = newAccumU * newAccumU + newAccumV * newAccumV;
+          float maxFrictionSq = maxFriction * maxFriction;
+          if(accumSq > maxFrictionSq && accumSq > FM_EPSILON * FM_EPSILON) {
+            float tangentMagnitude = sqrtf(accumSq);
             float scale = maxFriction / tangentMagnitude;
             newAccumU *= scale;
             newAccumV *= scale;

@@ -712,13 +712,15 @@ namespace P64::Coll {
     // Conservative early-out
     fm_vec3_t closest = closestPointOnTriangle(center, v0, v1, v2);
     fm_vec3_t diff = center - closest;
-    float dist = fm_vec3_len(&diff);
+    float distSq = fm_vec3_len2(&diff);
 
-    //conservative early-out if closest point is outside the sphere radius
-    //scaled by the maximum inverse meshscale component
-    if(dist >= proxy.effectiveRadius) {
+    // Early-out using squared distance — avoids sqrt on the common miss path
+    float effRadSq = proxy.effectiveRadius * proxy.effectiveRadius;
+    if(distSq >= effRadSq) {
       return false;
     }
+
+    float dist = sqrtf(distSq);
     fm_vec3_t normal = triNormal;
     if(dist > FM_EPSILON) {
       normal = diff * (1.0f / dist);
@@ -1319,6 +1321,7 @@ namespace P64::Coll {
       colliderInMeshSpace.normalToSpace = matrix3Transpose(colliderInMeshSpace.spaceToShape);
     } else {
       colliderInMeshSpace.worldCenter = collider->worldCenter();
+      colliderInMeshSpace.effectiveRadius = collider->sphereShape().radius;
       colliderInMeshSpace.shapeToSpace = collider->rotationMatrix();
       colliderInMeshSpace.shapeToSpaceTranspose = matrix3Transpose(colliderInMeshSpace.shapeToSpace);
       colliderInMeshSpace.spaceToShape = collider->inverseRotationMatrix();

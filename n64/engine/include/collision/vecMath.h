@@ -113,10 +113,12 @@ namespace P64::Coll {
   /// @param tangentV The second tangent vector (output).
   inline void vec3CalculateTangents(const fm_vec3_t &normal, fm_vec3_t &tangentU, fm_vec3_t &tangentV) {
     if(fabsf(normal.x) > fabsf(normal.z)) {
-      float invLen = 1.0f / sqrtf(normal.x * normal.x + normal.y * normal.y);
+      // normal is unit length → x²+y²+z²=1 → x²+y² = 1−z²
+      float invLen = 1.0f / sqrtf(1.0f - normal.z * normal.z);
       tangentU = fm_vec3_t{{-normal.y * invLen, normal.x * invLen, 0.0f}};
     } else {
-      float invLen = 1.0f / sqrtf(normal.y * normal.y + normal.z * normal.z);
+      // y²+z² = 1−x²
+      float invLen = 1.0f / sqrtf(1.0f - normal.x * normal.x);
       tangentU = fm_vec3_t{{0.0f, -normal.z * invLen, normal.y * invLen}};
     }
     fm_vec3_cross(&tangentV, &normal, &tangentU);

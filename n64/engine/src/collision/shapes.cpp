@@ -186,8 +186,8 @@ fm_vec3_t ConeShape::support(const fm_vec3_t &dir) const {
   float dy = dir.y;
   float dz = dir.z;
 
-  float sinAlpha = radius / sqrtf(radius * radius + 4.0f * halfHeight * halfHeight);
-  float sin2 = sinAlpha * sinAlpha;
+  float rSq = radius * radius;
+  float sin2 = rSq / (rSq + 4.0f * halfHeight * halfHeight);
   float sigma2 = dx * dx + dz * dz;
   float dy2 = dy * dy;
   float d2 = dy2 + sigma2;
