@@ -773,11 +773,72 @@ void Editor::Viewport3D::draw()
         UndoRedo::getHistory().markChanged("Add Prefab");
         auto newObj = scene->addPrefabInstance(prefabUUID);
         if (newObj) {
-          // place in front of camera view
-          glm::vec3 camForward = camera.rot * glm::vec3{0,0,-1};
-          glm::vec3 camPos = camera.pos;
-          newObj->pos.resolve(newObj->propOverrides) = camPos + camForward * 150.0f;
+          // Build a world-space ray through the mouse position
+          glm::vec4 vp{0.0f, 0.0f, currSize.x, currSize.y};
+          glm::vec3 screenNear{mousePos.x, currSize.y - mousePos.y, 0.0f};
+          glm::vec3 screenFar {mousePos.x, currSize.y - mousePos.y, 1.0f};
+          glm::vec3 rayNear = glm::unProject(screenNear, uniGlobal.cameraMat, uniGlobal.projMat, vp);
+          glm::vec3 rayDir  = glm::normalize(
+            glm::unProject(screenFar, uniGlobal.cameraMat, uniGlobal.projMat, vp) - rayNear);
 
+          // Raycast against every static-mesh triangle in the scene
+          float closestT = 1e20f;
+          bool hitMesh = false;
+          glm::vec3 spawnPos{};
+
+          iterateObjects(scene->getRootObject(), [&](Project::Object &obj, Project::Component::Entry *comp) {
+            if (!comp || comp->id != 1) return; // 1 = Model (Static)
+
+            auto json = Project::Component::TABLE[1].funcSerialize(*comp);
+            uint64_t modelUUID = json.value("model", uint64_t{0});
+            if (!modelUUID) return;
+
+            auto *asset = ctx.project->getAssets().getEntryByUUID(modelUUID);
+            if (!asset || asset->type != Project::FileType::MODEL_3D) return;
+
+            glm::vec3 skew{};
+            glm::vec4 persp{0, 0, 0, 1};
+            glm::mat4 modelMat = glm::recompose(
+              obj.scale.resolve(obj.propOverrides),
+              obj.rot.resolve(obj.propOverrides),
+              obj.pos.resolve(obj.propOverrides),
+              skew, persp);
+
+            for (auto &model : asset->model.t3dm.models) {
+              for (auto &tri : model.triangles) {
+                glm::vec3 v0(modelMat * glm::vec4(tri.vert[0].pos[0], tri.vert[0].pos[1], tri.vert[0].pos[2], 1.0f));
+                glm::vec3 v1(modelMat * glm::vec4(tri.vert[1].pos[0], tri.vert[1].pos[1], tri.vert[1].pos[2], 1.0f));
+                glm::vec3 v2(modelMat * glm::vec4(tri.vert[2].pos[0], tri.vert[2].pos[1], tri.vert[2].pos[2], 1.0f));
+
+                // Möller-Trumbore ray-triangle intersection
+                constexpr float EPS = 1e-5f;
+                glm::vec3 e1 = v1 - v0, e2 = v2 - v0;
+                glm::vec3 h = glm::cross(rayDir, e2);
+                float a = glm::dot(e1, h);
+                if (std::abs(a) < EPS) continue;
+                float f = 1.0f / a;
+                glm::vec3 s = rayNear - v0;
+                float u = f * glm::dot(s, h);
+                if (u < 0.0f || u > 1.0f) continue;
+                glm::vec3 q = glm::cross(s, e1);
+                float v = f * glm::dot(rayDir, q);
+                if (v < 0.0f || u + v > 1.0f) continue;
+                float t = f * glm::dot(e2, q);
+                if (t > EPS && t < closestT) {
+                  closestT = t;
+                  spawnPos = rayNear + rayDir * t;
+                  hitMesh = true;
+                }
+              }
+            }
+          });
+
+          if (!hitMesh) {
+            glm::vec3 camForward = camera.rot * glm::vec3{0, 0, -1};
+            spawnPos = camera.pos + camForward * 150.0f;
+          }
+
+          newObj->pos.resolve(newObj->propOverrides) = spawnPos;
           ctx.setObjectSelection(newObj->uuid);
         }
       }

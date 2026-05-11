@@ -144,7 +144,7 @@ std::shared_ptr<Project::Object> Project::Scene::addPrefabInstance(uint64_t pref
 
   auto obj = std::make_shared<Object>(root);
   obj->id = getFreeObjectId();
-  obj->name += prefab->obj.name + " ("+std::to_string(obj->id)+")";
+  obj->name = prefab->obj.name;
   obj->uuid = Utils::Hash::randomU32();
   obj->pos = prefab->obj.pos;
   obj->rot = prefab->obj.rot;
@@ -156,6 +156,27 @@ std::shared_ptr<Project::Object> Project::Scene::addPrefabInstance(uint64_t pref
   obj->addPropOverride(obj->scale);
 
   return addObject(root, obj);
+}
+
+std::shared_ptr<Project::Object> Project::Scene::addPrefabInstance(uint64_t prefabUUID, Object& parent)
+{
+  auto prefab = ctx.project->getAssets().getPrefabByUUID(prefabUUID);
+  if (!prefab) return nullptr;
+
+  auto obj = std::make_shared<Object>(parent);
+  obj->id = getFreeObjectId();
+  obj->name = prefab->obj.name;
+  obj->uuid = Utils::Hash::randomU32();
+  obj->pos.value = parent.pos.resolve(parent.propOverrides);
+  obj->rot = prefab->obj.rot;
+  obj->scale = prefab->obj.scale;
+
+  obj->uuidPrefab.value = prefab->uuid.value;
+  obj->addPropOverride(obj->pos);
+  obj->addPropOverride(obj->rot);
+  obj->addPropOverride(obj->scale);
+
+  return addObject(parent, obj);
 }
 
 void Project::Scene::removeObject(Object &obj) {
@@ -374,18 +395,17 @@ void Project::Scene::deserialize(const std::string &data)
 
 uint16_t Project::Scene::getFreeObjectId()
 {
-  uint16_t objId = 1;
+  // Walk the tree (not objectsMap) so that objects temporarily absent from
+  // objectsMap during paste — because their entries were overwritten by the
+  // copies' stale old UUIDs — are still counted as having their IDs in use.
+  std::unordered_set<uint16_t> used;
+  std::function<void(const Object&)> collect = [&](const Object &obj) {
+    used.insert(obj.id);
+    for (const auto &child : obj.children) collect(*child);
+  };
+  collect(root);
 
-  for(int i=0; i<0xFFFF; ++i) {
-    bool found = false;
-    for (auto &[uuid, obj] : objectsMap) {
-      if (obj->id == objId) {
-        found = true;
-        break;
-      }
-    }
-    if (!found)break;
-    ++objId;
-  }
+  uint16_t objId = 1;
+  while (used.count(objId)) ++objId;
   return objId;
 }

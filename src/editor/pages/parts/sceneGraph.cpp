@@ -31,6 +31,13 @@ namespace
 
   DragDropTask dragDropTask{};
 
+  struct PrefabDropTask {
+    uint64_t prefabUUID{0};
+    uint32_t targetNodeUUID{0};
+  };
+
+  PrefabDropTask prefabDropTask{};
+
   /**
    * Computes the horizontal area reserved for the controls at the right side of a row.
    *
@@ -239,7 +246,9 @@ namespace
         ? ICON_MDI_MOVIE_OPEN_OUTLINE " "
         : ICON_MDI_CUBE_OUTLINE " ";
     }
-    nameID += obj.name + "##" + std::to_string(obj.uuid);
+    nameID += obj.name;
+    if (obj.parent) nameID += " (" + std::to_string(obj.id) + ")";
+    nameID += "##" + std::to_string(obj.uuid);
 
     bool isOpen = ImGui::TreeNodeEx(nameID.c_str(), flag);
     ImGui::PopStyleVar(2);
@@ -273,6 +282,18 @@ namespace
         dragDropTask.sourceUUID = *((uint32_t*)payload->Data);
         dragDropTask.targetUUID = obj.uuid;
         dragDropTask.isInsert = true;
+      }
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
+        prefabDropTask.prefabUUID = *((uint64_t*)payload->Data);
+        prefabDropTask.targetNodeUUID = obj.uuid;
+      }
+      ImGui::EndDragDropTarget();
+    }
+
+    if (!obj.parent && ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
+        prefabDropTask.prefabUUID = *((uint64_t*)payload->Data);
+        prefabDropTask.targetNodeUUID = obj.uuid;
       }
       ImGui::EndDragDropTarget();
     }
@@ -365,6 +386,7 @@ void Editor::SceneGraph::draw()
   if (!scene)return;
 
   dragDropTask = {};
+  prefabDropTask = {};
   deleteObj = nullptr;
   deleteSelection = false;
   bool isFocus = ImGui::IsWindowFocused();
@@ -409,6 +431,14 @@ void Editor::SceneGraph::draw()
     // Could move --> Add to history
     if (moved)
       UndoRedo::getHistory().markChanged("Move Object");
+  }
+
+  if (prefabDropTask.prefabUUID && prefabDropTask.targetNodeUUID) {
+    auto targetObj = scene->getObjectByUUID(prefabDropTask.targetNodeUUID);
+    Project::Object* parent = targetObj ? targetObj.get() : &scene->getRootObject();
+    UndoRedo::getHistory().markChanged("Add Prefab");
+    auto newObj = scene->addPrefabInstance(prefabDropTask.prefabUUID, *parent);
+    if (newObj) ctx.setObjectSelection(newObj->uuid);
   }
 
   if (deleteSelection || deleteObj) {

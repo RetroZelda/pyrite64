@@ -78,6 +78,7 @@ namespace Project
       std::shared_ptr<Object> addObject(Object &parent, std::shared_ptr<Object> obj, bool generateIDs = false);
 
       std::shared_ptr<Object> addPrefabInstance(uint64_t prefabUUID);
+      std::shared_ptr<Object> addPrefabInstance(uint64_t prefabUUID, Object& parent);
 
       void removeObject(Object &obj);
       void removeAllObjects();
