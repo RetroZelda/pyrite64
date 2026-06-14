@@ -19,7 +19,7 @@ echo "Watching for changes..."
 make html
 
 while true; do
-    inotifywait -r -e modify,create,delete,move docs/ index.rst ../n64/engine/include/
+    inotifywait -r -e modify,create,delete,move docs/ _static/ index.rst conf.py Doxyfile ../n64/engine/include/
     echo "Change detected, rebuild..."
     rm -rf _build/html/*
     make html

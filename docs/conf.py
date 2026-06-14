@@ -42,6 +42,11 @@ breathe_projects = {"pyrite64": _doxygen_xml}
 breathe_default_project = "pyrite64"
 breathe_default_members = ("members",)
 
+# Wrap long C++ signatures onto multiple lines (one parameter per line) instead
+# of one cramped horizontal line. Pairs with the API card styling in custom.css.
+cpp_maximum_signature_line_length = 90
+maximum_signature_line_length = 90
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -56,11 +61,25 @@ html_css_files = [
 ]
 
 html_theme_options = {
-  "sidebar_hide_name": True,    
+  "sidebar_hide_name": True,
   "light_logo": 'logo.png',
   "dark_logo": 'logo.png',
-  
+
   "light_css_variables": {
     "font-stack": "Noto, Arial, sans-serif",
+    # C++ API token colors (light mode)
+    "color-api-name": "#F5A937",       # symbol name (e.g. addObject)
+    "color-api-pre-name": "#5a6b7b",   # namespace / class qualifier
+    "color-api-keyword": "#a626a4",    # const, class, inline, template...
+    "color-api-paren": "#5a6b7b",      # parentheses
+    "color-api-background": "#f0f2f4", # signature header background
   },
-} 
+  "dark_css_variables": {
+
+    "color-api-name": "#F5A937",
+    "color-api-pre-name": "#9aa7b4",
+    "color-api-keyword": "#d6a0ff",
+    "color-api-paren": "#9aa7b4",
+    "color-api-background": "#222225",
+  },
+}
