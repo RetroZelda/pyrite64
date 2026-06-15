@@ -1,5 +1,9 @@
 # Node Graph
 
+```{image} /_static/img/ui_comp_node_graph.png
+:align: center
+```
+
 Attaches a visual node-graph script to the object, an alternative to a
 {doc}`Code <code>` component for behavior authored as a graph instead of C++.
 

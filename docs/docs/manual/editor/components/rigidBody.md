@@ -1,5 +1,9 @@
 # Rigid-Body
 
+```{image} /_static/img/ui_comp_rigid_body.png
+:align: center
+```
+
 Gives the object a full rigid-body physics simulation:\
 it is moved by forces, gravity and collisions.\
 A {doc}`Collider <collBody>` must be attached to define the body's shape.

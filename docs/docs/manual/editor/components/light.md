@@ -1,5 +1,9 @@
 # Light
 
+```{image} /_static/img/ui_comp_light.png
+:align: center
+```
+
 Adds a light to the scene. 
 A directional light's direction is taken from the object's rotation,\
 and a point light's position from the object's position.\

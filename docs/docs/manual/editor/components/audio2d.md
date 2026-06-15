@@ -1,5 +1,9 @@
 # Audio (2D)
 
+```{image} /_static/img/ui_comp_audio_2d.png
+:align: center
+```
+
 Plays a non-positional (2D) sound or music track tied to the object.\
 "2D" means the playback is not spatialized: it does not change with the object's position relative
 to the listener.

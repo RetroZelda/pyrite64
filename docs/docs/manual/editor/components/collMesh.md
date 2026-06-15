@@ -1,8 +1,12 @@
 # Collision-Mesh
 
+```{image} /_static/img/ui_comp_coll_mesh.png
+:align: center
+```
+
 A static triangle-mesh collider built from a 3D model.\
 This is typically used for level geometry that other objects collide against.\
-It can either be something static (e.g. map mesh), or transforming objects like moving platforms.\
+It can either be something static (e.g. map mesh), or transforming objects like moving platforms.
 
 Note that collision between collision-meshes is not handled due to the cost and complexity.
 

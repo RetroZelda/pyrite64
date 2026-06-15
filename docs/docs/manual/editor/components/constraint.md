@@ -1,5 +1,9 @@
 # Constraint
 
+```{image} /_static/img/ui_comp_constraint.png
+:align: center
+```
+
 Relates the object's transform to another object or the camera,\
 instead of (or in addition to) its own.\
 Useful for attaching, following, or billboarding objects.

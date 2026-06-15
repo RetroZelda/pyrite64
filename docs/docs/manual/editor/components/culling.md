@@ -1,5 +1,9 @@
 # Culling
 
+```{image} /_static/img/ui_comp_culling.png
+:align: center
+```
+
 Defines a bounding volume used to cull the object:\
 when the volume is outside the camera view, the object's per-camera draw work is skipped.\
 Use it to avoid drawing objects that can't be seen.

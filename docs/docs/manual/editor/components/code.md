@@ -1,5 +1,9 @@
 # Code
 
+```{image} /_static/img/ui_comp_code.png
+:align: center
+```
+
 Attaches a C++ script to the object, giving it custom behavior.\
 An object can have several Code components to compose behavior from multiple small scripts.\
 For how scripts are written, see the {doc}`Object-Scripts <../../script>` guide.

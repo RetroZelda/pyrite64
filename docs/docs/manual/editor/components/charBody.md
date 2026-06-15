@@ -1,5 +1,9 @@
 # Character-Body
 
+```{image} /_static/img/ui_comp_char_body.png
+:align: center
+```
+
 A kinematic capsule controller for objects that need non-physical movement with
 manual control over collision response, typically the player or certain enemies.\
 It handles gravity, capsule sweeps, sliding along walls, stair stepping and floor

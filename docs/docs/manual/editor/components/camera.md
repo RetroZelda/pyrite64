@@ -1,5 +1,9 @@
 # Camera
 
+```{image} /_static/img/ui_comp_camera.png
+:align: center
+```
+
 Turns the object into a camera that renders the scene to a viewport.\
 Multiple cameras can be active at once (e.g. for split-screen).
 

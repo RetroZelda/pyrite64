@@ -1,5 +1,9 @@
 # Model (Static)
 
+```{image} /_static/img/ui_comp_model_static.png
+:align: center
+```
+
 Renders a static (non-animated) 3D model attached to the object. \
 This is the most common way to give an object a visible mesh.
 

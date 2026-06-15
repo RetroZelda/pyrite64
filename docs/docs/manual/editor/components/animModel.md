@@ -1,5 +1,9 @@
 # Model (Animated)
 
+```{image} /_static/img/ui_comp_model_anim.png
+:align: center
+```
+
 Renders an animated (skeletal) 3D model. Works like the {doc}`static model <model>`
 component, but the model can play skinned animations at runtime.
 

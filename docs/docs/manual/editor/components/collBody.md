@@ -1,5 +1,9 @@
 # Collider
 
+```{image} /_static/img/ui_comp_coll_body.png
+:align: center
+```
+
 A primitive-shape collider attached to the object.\
 Unlike a {doc}`Collision-Mesh <collMesh>` this uses a simple analytic shape,\
 which is cheap and suitable for moving/dynamic objects.\
