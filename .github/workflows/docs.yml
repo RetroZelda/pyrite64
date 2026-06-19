@@ -6,10 +6,12 @@ on:
     branches: [ stream/full-frontal ]
     paths:
       - 'docs/**'
+      - 'n64/engine/include/**'
       - '.github/workflows/docs.yml'
   pull_request:
     paths:
       - 'docs/**'
+      - 'n64/engine/include/**'
 
 jobs:
   build-docs:
@@ -24,6 +26,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Install Doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen
 
       - name: Install dependencies
         run: |

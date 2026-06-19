@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(pyrite64 VERSION 0.7.0)
+project(pyrite64 VERSION 0.8.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -136,6 +136,8 @@ add_executable(pyrite64 src/main.cpp
         src/editor/canvasHistory.cpp
         src/editor/selectionUtils.h
         src/editor/selectionUtils.cpp
+        src/editor/thumbnailCache.h
+        src/editor/thumbnailCache.cpp
         src/editor/window.h
         src/editor/window.cpp
         src/editor/keymap.h
@@ -231,6 +233,7 @@ add_executable(pyrite64 src/main.cpp
         src/build/collisionBuilder.cpp
         src/project/component/types/compCollBody.cpp
         src/project/component/types/compRigidBody.cpp
+        src/project/component/types/compCharBody.cpp
         src/build/fontBuilder.cpp
         src/utils/prop.h
         src/project/scene/prefab.h
@@ -300,6 +303,13 @@ add_executable(pyrite64 src/main.cpp
         src/renderer/animation.cpp
 )
 
+# libdragon's C headers (e.g. surface_make in surface.h) use narrowing
+# conversions in braced initializers. GCC only warns, but Clang/AppleClang
+# treat this as a hard error, so relax it there to keep the macOS build working.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(pyrite64 PRIVATE -Wno-narrowing)
+endif()
+
 target_include_directories(pyrite64 PRIVATE
     vendored
     vendored/imgui
@@ -325,6 +335,10 @@ set(PYRITE_APP_NAME "pyrite64")
 set(PYRITE_GH_USER "RetroZelda")
 set(PYRITE_GH_REPO "pyrite64")
 
+# Base URL of the published docs (GitHub Pages host is the lowercased user name).
+string(TOLOWER "${PYRITE_GH_USER}" PYRITE_GH_USER_LC)
+set(PYRITE_DOCS_URL "https://${PYRITE_GH_USER_LC}.github.io/${PYRITE_GH_REPO}/docs")
+
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_ORG_NAME=\"${PYRITE_ORG_NAME}\"")
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_APP_NAME=\"${PYRITE_APP_NAME}\"")
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_GH_USER=\"${PYRITE_GH_USER}\"")
@@ -340,6 +354,7 @@ add_custom_target(generate_version ALL
 )
 add_dependencies(pyrite64 generate_version)
 target_include_directories(pyrite64 PRIVATE ${CMAKE_BINARY_DIR})
+target_compile_definitions(pyrite64 PRIVATE "PYRITE_DOCS_URL=\"${PYRITE_DOCS_URL}\"")
 
 target_compile_definitions(pyrite64 PRIVATE IMGUI_DEFINE_MATH_OPERATORS GLM_FORCE_QUAT_DATA_XYZW)
 

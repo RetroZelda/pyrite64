@@ -97,13 +97,14 @@ namespace Project::Component::Culling
 
     glm::vec4 aabbCol{1.0f, 0.0f, 0.0f, 1.0f};
 
+    auto rot = obj.rot.resolve(obj.propOverrides);
     if(type == TYPE_BOX)
     {
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, rot, ctx.prefs.culledLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, ctx.prefs.culledLineColor, rot, ctx.prefs.culledLineThickness);
     } else if(type == TYPE_SPHERE)
     {
-      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, {1, 0, 0, 0}, ctx.prefs.culledLineThickness);
+      Utils::Mesh::addLineSphere(*vp.getLines(), center, halfExt, ctx.prefs.culledLineColor, rot, ctx.prefs.culledLineThickness);
     }
   }
 }

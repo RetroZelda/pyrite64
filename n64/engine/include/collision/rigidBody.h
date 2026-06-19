@@ -102,6 +102,7 @@ namespace P64::Coll {
     bool hasLinearConstraints() const { return hasLinearConstraints_; }
     bool hasAngularConstraints() const { return hasAngularConstraints_; }
     bool canApplyAngularResponse() const { return !isKinematic_ && !hasFlag(constraints_, Constraint::FreezeRotAll); }
+    bool isEnabled() const { return isEnabled_; }
     bool isKinematic() const { return isKinematic_; }
     bool isSleeping() const { return isSleeping_; }
 
@@ -190,6 +191,7 @@ namespace P64::Coll {
     NodeProxy aabbTreeNodeId_{NULL_NODE};
     uint16_t sleepCounter_{0};
     bool hasGravity_{true};
+    bool isEnabled_{true};
     bool isKinematic_{false};
     bool isSleeping_{false};
 
@@ -218,6 +220,9 @@ namespace P64::Coll {
     void refreshConstraintCaches();
     void refreshAngularConstraintProjection();
     void refreshConstrainedInertiaTensor();
+
+    void enable();
+    void disable();
 
   };
 

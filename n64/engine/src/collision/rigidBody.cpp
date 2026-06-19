@@ -216,7 +216,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::applyConstrainedImpulseAtContact(const fm_vec3_t &impulse, const fm_vec3_t &toContact) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
 
     applyConstrainedLinearVelocityDelta(impulse * inverseMass_);
     if(!canApplyAngularResponse()) return;
@@ -227,7 +227,7 @@ namespace P64::Coll {
   }
 
   float RigidBody::constrainedLinearInvMassAlong(const fm_vec3_t &direction) const {
-    if(isKinematic_) return 0.0f;
+    if(!isEnabled_ || isKinematic_) return 0.0f;
     if(inverseMass_ <= FM_EPSILON) return 0.0f;
     if(!hasLinearConstraints_) return inverseMass_;
 
@@ -265,7 +265,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::integrateVelocity(float fixedDt, const fm_vec3_t &gravity) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
 
     // Sleeping bodies must have their velocities explicitly zeroed each frame.
     // Although sleep() zeros them once, the warm start and velocity solver apply
@@ -310,7 +310,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::integrateAngularVelocity(float fixedDt) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
 
     // See integrateVelocity for rationale — sleeping bodies must start each step
     // with zero angular velocity so the solver treats them as effectively static.
@@ -359,7 +359,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::integratePosition(float fixedDt) {
-    if(isKinematic_ || isSleeping_) return;
+    if(!isEnabled_ || isKinematic_ || isSleeping_) return;
 
     float dt = fixedDt * timeScale_;
     previousStepPosition_ = position_;
@@ -367,7 +367,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::integrateRotation(float fixedDt) {
-    if(isKinematic_ || isSleeping_) return;
+    if(!isEnabled_ || isKinematic_ || isSleeping_) return;
     if(vec3IsZero(angularVelocity_)) return;
 
     float dt = fixedDt * timeScale_;
@@ -388,6 +388,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::accelerate(const fm_vec3_t &accel) {
+    if(!isEnabled_ || isKinematic_) return;
     acceleration_ = acceleration_ + accel;
     if(isSleeping_) wake();
   }
@@ -398,25 +399,25 @@ namespace P64::Coll {
   }
 
   void RigidBody::applyLinearForce(const fm_vec3_t &force) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
     accelerate(force * inverseMass_);
   }
 
   void RigidBody::applyLinearImpulse(const fm_vec3_t &impulse) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
     fm_vec3_t deltaV = constrainLinearWorld(impulse * inverseMass_);
     linearVelocity_ = linearVelocity_ + deltaV;
     if(isSleeping_) wake();
   }
 
   void RigidBody::applyTorque(const fm_vec3_t &torque) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
     torqueAccumulator_ = torqueAccumulator_ + torque;
     if(isSleeping_) wake();
   }
 
   void RigidBody::applyAngularImpulse(const fm_vec3_t &angImpulse) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
     angularVelocity_ = angularVelocity_ + applyConstrainedWorldInertia(angImpulse);
     if(isSleeping_) wake();
   }
@@ -440,7 +441,7 @@ namespace P64::Coll {
   }
 
   void RigidBody::applyForceAtPoint(const fm_vec3_t &force, const fm_vec3_t &worldPoint) {
-    if(isKinematic_) return;
+    if(!isEnabled_ || isKinematic_) return;
     accelerate(force * inverseMass_);
     fm_vec3_t r = worldPoint - worldCenterOfMass_;
     fm_vec3_t torque;
@@ -494,6 +495,19 @@ namespace P64::Coll {
     if(hasFlag(constraints_, Constraint::FreezePosX)) position_.x = previousStepPosition_.x;
     if(hasFlag(constraints_, Constraint::FreezePosY)) position_.y = previousStepPosition_.y;
     if(hasFlag(constraints_, Constraint::FreezePosZ)) position_.z = previousStepPosition_.z;
+  }
+
+  void RigidBody::enable() {
+    isEnabled_ = true;
+    wake();
+  }
+
+  void RigidBody::disable() {
+    isEnabled_ = false;
+    linearVelocity_ = VEC3_ZERO;
+    angularVelocity_ = VEC3_ZERO;
+    acceleration_ = VEC3_ZERO;
+    torqueAccumulator_ = VEC3_ZERO;
   }
 
 } // namespace P64::Coll

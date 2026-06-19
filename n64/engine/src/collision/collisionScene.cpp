@@ -54,6 +54,9 @@ namespace P64::Coll {
   }
 
   static bool collisionEventMasksOverlap(const CollEvent &event) {
+    if (event.selfRigidBody && !event.selfRigidBody->isEnabled()) return false;
+    if (event.hitRigidBody && !event.hitRigidBody->isEnabled()) return false;
+
     if(event.selfCollider) {
       if(event.hitCollider) return event.selfCollider->readsCollider(event.hitCollider);
       if(event.hitMeshCollider) return event.selfCollider->readsMeshCollider(event.hitMeshCollider);
@@ -96,7 +99,7 @@ namespace P64::Coll {
   }
 
   bool CollisionScene::shouldTrackSleepState(const RigidBody *rigidBody) {
-    return rigidBody && !rigidBody->isKinematic_;
+    return rigidBody && rigidBody->isEnabled_ && !rigidBody->isKinematic_;
   }
 
   bool CollisionScene::rigidBodyVelocitiesExceededSleepThreshold(const RigidBody *rigidBody) {
@@ -148,6 +151,7 @@ namespace P64::Coll {
 
   void CollisionScene::reset() {
     colliderAABBTree.destroy();
+    meshColliderAABBTree.destroy();
 
     rigidBodies_.clear();
     ownerRigidBodies_.clear();
@@ -174,6 +178,7 @@ namespace P64::Coll {
     ticksTotal = 0;
 
     colliderAABBTree.init(32); // Initial capacity (will grow as needed)
+    meshColliderAABBTree.init(32);
   }
 
   RigidBody *CollisionScene::findRigidBodyByOwner(const Object *owner) const {
@@ -272,7 +277,7 @@ namespace P64::Coll {
   void CollisionScene::removeRigidBody(RigidBody *rigidBody) {
     if(!rigidBody) return;
 
-    std::vector<RigidBody *> wakeCandidates;
+    disableRigidBody(rigidBody);
 
     if(rigidBody->owner_) {
       auto ownerIt = ownerRigidBodies_.find(rigidBody->owner_);
@@ -281,13 +286,26 @@ namespace P64::Coll {
       }
     }
 
+    rigidBodies_.erase(std::remove(rigidBodies_.begin(), rigidBodies_.end(), rigidBody), rigidBodies_.end());
+  }
+
+  void CollisionScene::enableRigidBody(RigidBody *rigidBody) {
+    if(!rigidBody || rigidBody->isEnabled_) return;
+    rigidBody->enable();
+  }
+
+  void CollisionScene::disableRigidBody(RigidBody* rigidBody) {
+    if(!rigidBody || !rigidBody->isEnabled_) return;
+
+    std::vector<RigidBody *> wakeCandidates;
+
     removeCachedConstraints([rigidBody](const ContactConstraint &cc) {
       return cc.rigidBodyA == rigidBody || cc.rigidBodyB == rigidBody;
     }, wakeCandidates, rigidBody);
 
-    // Sleeping rigidBodies overlapping the removed body are likely support-dependent and should re-evaluate.
+    // Sleeping rigidBodies overlapping the disabled body are likely support-dependent and should re-evaluate.
     const AABB removedBounds = rigidBody->worldAabb_;
-    
+
     for(RigidBody *body : rigidBodies_) {
       if(!body || body == rigidBody) continue;
       if(aabbOverlap(body->worldAabb_, removedBounds)) {
@@ -296,8 +314,7 @@ namespace P64::Coll {
     }
 
     wakeCandidateIslands(wakeCandidates);
-
-    rigidBodies_.erase(std::remove(rigidBodies_.begin(), rigidBodies_.end(), rigidBody), rigidBodies_.end());
+    rigidBody->disable();
   }
 
   RigidBody *CollisionScene::findRigidBodyByObjectId(uint16_t id) const
@@ -373,6 +390,8 @@ namespace P64::Coll {
     mesh->syncOwnerTransform();
 
     meshColliders_.push_back(mesh);
+
+    mesh->aabbTreeNodeId_ = meshColliderAABBTree.createNode(mesh->worldAabb_, mesh);
   }
 
   void CollisionScene::removeMeshCollider(MeshCollider *mesh) {
@@ -391,6 +410,11 @@ namespace P64::Coll {
         meshColliders_.pop_back();
         break;
       }
+    }
+
+    if (mesh->aabbTreeNodeId_ != NULL_NODE) {
+      meshColliderAABBTree.removeLeaf(mesh->aabbTreeNodeId_, true);
+      mesh->aabbTreeNodeId_ = NULL_NODE;
     }
   }
 
@@ -658,7 +682,7 @@ namespace P64::Coll {
     std::vector<RigidBody *> wakeCandidates;
 
     for(RigidBody *body : rigidBodies_) {
-      if(!body || !body->isSleeping_) continue;
+      if(!body || !body->isEnabled_ || !body->isSleeping_) continue;
       if(!rigidBodyTransformExceededSleepThreshold(body)) continue;
       wakeCandidates.push_back(body);
     }
@@ -818,8 +842,11 @@ namespace P64::Coll {
     std::vector<NodeProxy> candidates;
     candidates.resize(colliders_.size());
 
+    std::vector<NodeProxy> meshCandidates;
+    meshCandidates.resize(meshColliders_.size());
+
     for(RigidBody *body : rigidBodies_) {
-      if(!body || body->isSleeping_ || body->isKinematic_) continue;
+      if(!body || !body->isEnabled_ || body->isSleeping_ || body->isKinematic_) continue;
 
       const float dt = fixedDt_ * body->timeScale_;
       if(dt <= 0.0f) continue;
@@ -900,12 +927,18 @@ namespace P64::Coll {
         if (hit) break;
 
         // Broadphase + narrowphase against mesh colliders
-        for(MeshCollider *mesh : meshColliders_) {
-          if(!mesh || mesh->triangleCount_ <= 0) continue;
-          for(Collider *collider : *ownerColliders) {
-            if(!collider || !collider->owner_) continue;
+        for(Collider *collider : *ownerColliders) {
+          if(!collider || !collider->owner_) continue;
+          const int meshCandidateCount = meshColliderAABBTree.queryBounds(
+             collider->worldAabb_,
+             meshCandidates.data(),
+             static_cast<int>(meshCandidates.size()));
+          for(int m = 0; m < meshCandidateCount; ++m) {
+            void *data = meshColliderAABBTree.getNodeData(meshCandidates[m]);
+            if (!data) continue;
+            MeshCollider* mesh = static_cast<MeshCollider *>(data);
+            if(!mesh || mesh->triangleCount_ <= 0) continue;
             if(!collider->readsMeshCollider(mesh) && !mesh->readsCollider(collider)) continue;
-            if(!aabbOverlap(collider->worldAabb_, mesh->worldAabb_)) continue;
             if(collideDetectObjectToMesh(collider, body, *mesh, false)) {
               //debugf("CCD substep %d/%d: body %u hit mesh %u", k, substeps, collider->owner_->id, mesh->owner_ ? static_cast<unsigned>(mesh->owner_->id) : 0u);
               hit = true;
@@ -1002,40 +1035,33 @@ namespace P64::Coll {
     }
     ticksDetectBodyPairs = get_ticks() - bodyDetectStart;
 
+    std::vector<NodeProxy> candidateMeshColliders;
+    candidateMeshColliders.resize(meshColliders_.size());
+
     const uint64_t meshDetectStart = get_ticks();
-    for (std::size_t m = 0; m < meshColliders_.size(); ++m)
-    {
+    for (Collider *collider : colliders_) {
+      if (!collider || !collider->owner_) continue;
 
-      MeshCollider *mesh = meshColliders_[m];
+      RigidBody *rigidBodyA = findRigidBodyByOwner(collider->owner_);
 
-      if (!mesh || mesh->triangleCount_ <= 0)
-        continue;
+      if (!collider->isTrigger_ && rigidBodyA && rigidBodyA->isSleeping_) continue;
 
-      const int candidateCount = colliderAABBTree.queryBounds(
-          mesh->worldAabb_,
-          candidateColliders.data(),
-          static_cast<int>(candidateColliders.size()));
+      const int candidateCount = meshColliderAABBTree.queryBounds(
+          collider->worldAabb_,
+          candidateMeshColliders.data(),
+          static_cast<int>(candidateMeshColliders.size()));
 
-      for (int candidateIdx = 0; candidateIdx < candidateCount; ++candidateIdx)
-      {
-        void *data = colliderAABBTree.getNodeData(candidateColliders[candidateIdx]);
-        if (!data)
-          continue;
+      for (int candidateIdx = 0; candidateIdx < candidateCount; ++candidateIdx) {
+        void *data = meshColliderAABBTree.getNodeData(candidateMeshColliders[candidateIdx]);
+        if (!data) continue;
 
-        Collider *collA = static_cast<Collider *>(data);
-        if(!collA || !collA->owner_)
-          continue;
+        MeshCollider *meshA = static_cast<MeshCollider *>(data);
+        if (!meshA || meshA->triangleCount_ <= 0) continue;
 
-        if (!collA->readsMeshCollider(mesh) && !mesh->readsCollider(collA))
-          continue;
+        if (!meshA->readsCollider(collider) && !collider->readsMeshCollider(meshA)) continue;
 
-        RigidBody *rigidBodyA = findRigidBodyByOwner(collA->owner_);
-        //prevent perpetural collision checks of sleeping objects with meshes
-        if(!mesh->transformChanged_ && rigidBodyA && rigidBodyA->isSleeping_ && !collA->isTrigger_)
-          continue;
-        collideDetectObjectToMesh(collA, rigidBodyA, *mesh, true);
+        collideDetectObjectToMesh(collider, rigidBodyA, *meshA, true);
       }
-
     }
     ticksDetectMeshPairs = get_ticks() - meshDetectStart;
     //TODO: possibly offer mesh-mesh collision detection in the future, but not needed for current use cases
@@ -1240,7 +1266,7 @@ namespace P64::Coll {
 
           fm_vec3_t contactVelA = VEC3_ZERO;
           fm_vec3_t contactVelB = VEC3_ZERO;
-          if(a && !a->isKinematic_) {
+          if(a && a->isEnabled_ && !a->isKinematic_) {
             contactVelA = a->linearVelocity_;
             if(aHasMotionAngular) {
               fm_vec3_t aCross;
@@ -1248,7 +1274,7 @@ namespace P64::Coll {
               contactVelA += aCross;
             }
           }
-          if(b && !b->isKinematic_) {
+          if(b && b->isEnabled_ && !b->isKinematic_) {
             contactVelB = b->linearVelocity_;
             if(bHasMotionAngular) {
               fm_vec3_t bCross;
@@ -1417,7 +1443,7 @@ namespace P64::Coll {
         appliedCorrection = true;
 
         // Apply linear + angular corrections to A
-        if(a && !a->isKinematic_) {
+        if(a && a->isEnabled_ && !a->isKinematic_) {
           if(invMassA > 0.0f) {
             fm_vec3_t corrA = constrainLinearWorld(a, cc.normal * (correctionMag * invMassA));
             a->position_ += corrA;
@@ -1438,7 +1464,7 @@ namespace P64::Coll {
         }
 
         // Apply linear + angular corrections to B
-        if(b && !b->isKinematic_) {
+        if(b && b->isEnabled_ && !b->isKinematic_) {
           if(invMassB > 0.0f) {
             fm_vec3_t corrB = constrainLinearWorld(b, cc.normal * (correctionMag * invMassB));
             b->position_ -= corrB;
@@ -1473,8 +1499,20 @@ namespace P64::Coll {
       mesh->transformChanged_ = mesh->hasOwnerTransformChanged();
       if(!mesh->transformChanged_ && mesh->hasCachedOwnerTransform_) continue;
 
+      fm_vec3_t prevOwnerPhysicsPos = mesh->owner_ ? mesh->owner_->pos * getInvGfxScale() : VEC3_ZERO;
+
       mesh->recalculateWorldAabb();
       mesh->syncOwnerTransform();
+
+      if (mesh->aabbTreeNodeId_ != NULL_NODE) {
+        if (mesh->owner_) {
+          fm_vec3_t ownerPhysicsPos = mesh->owner_->pos * getInvGfxScale();
+          const fm_vec3_t disp = ownerPhysicsPos - prevOwnerPhysicsPos;
+          meshColliderAABBTree.moveNode(mesh->aabbTreeNodeId_, mesh->worldAabb_, disp);
+        } else {
+          meshColliderAABBTree.moveNode(mesh->aabbTreeNodeId_, mesh->worldAabb_, VEC3_ZERO);
+        }
+      }
     }
   }
 
@@ -1489,9 +1527,11 @@ namespace P64::Coll {
 
     // Test mesh colliders
     if(hasFlag(ray.collTypes, RaycastColliderTypeFlags::MESH_COLLIDERS)) {
-      for(std::size_t m = 0; m < meshColliders_.size(); ++m) {
-        const MeshCollider *mesh = meshColliders_[m];
-        if(!mesh || mesh->triangleCount_ == 0 || !mesh->owner_) continue;
+      NodeProxy meshCandidates[RAYCAST_MAX_COLLIDER_TESTS];
+      int meshCount = meshColliderAABBTree.queryRay(ray, meshCandidates, RAYCAST_MAX_COLLIDER_TESTS);
+      for(int m = 0; m < meshCount; ++m) {
+        const MeshCollider* mesh = static_cast<const MeshCollider*>(meshColliderAABBTree.getNodeData(meshCandidates[m]));
+        if(!mesh || mesh->triangleCount_ == 0) continue;
         Raycast localRay = ray;
         if(mesh->hasScale()) {
           const fm_vec3_t &scale = mesh->owner_->scale;
@@ -1531,7 +1571,7 @@ namespace P64::Coll {
           currentHit.normal = mesh->hasTransform() ? mesh->localNormalToWorld(currentHit.normal) : currentHit.normal;
           const fm_vec3_t hitDelta = currentHit.point - ray.origin;
           currentHit.distance = fm_vec3_len(&hitDelta);
-          currentHit.hitObjectId = mesh->owner_->id;
+          currentHit.hitObjectId = mesh->owner_ ? mesh->owner_->id : 0;
 
           hit.didHit = true;
           if(currentHit.didHit && currentHit.distance < hit.distance && currentHit.distance <= ray.maxDistance) {
@@ -1559,6 +1599,204 @@ namespace P64::Coll {
         hit.didHit = hit.didHit | ray_collider_intersection(ray, coll, currentHit);
         if(currentHit.didHit && currentHit.distance < hit.distance && currentHit.distance <= ray.maxDistance) {
           hit = currentHit;
+        }
+      }
+    }
+
+    return hit.didHit;
+  }
+
+  struct CapsuleGjkData {
+    fm_vec3_t center;
+    fm_vec3_t axis;
+    float innerHalfHeight;
+    float radius;
+  };
+
+  static void capsuleGjkSupport(const void *data, const fm_vec3_t &dir, fm_vec3_t &out) {
+    const auto &c = *static_cast<const CapsuleGjkData*>(data);
+    float proj = fm_vec3_dot(&dir, &c.axis);
+    proj = fminf(fmaxf(proj, -c.innerHalfHeight), c.innerHalfHeight);
+    fm_vec3_t segPt = c.center + c.axis * proj;
+    const float len2 = fm_vec3_len2(&dir);
+    if (len2 > FM_EPSILON * FM_EPSILON) {
+      out = segPt + dir * (1.0f / sqrtf(len2) * c.radius);
+    } else {
+      out = segPt;
+    }
+  }
+
+  // World-space support for a Collider. The shape support functions return LOCAL-space points (centered at origin), 
+  // so we rotate the query direction into local space, sample, then transform the result back to world space.
+  static void colliderWorldGjkSupport(const void *data, const fm_vec3_t &dir, fm_vec3_t &out) {
+    const Collider *coll = static_cast<const Collider *>(data);
+    const fm_vec3_t localDir = coll->rotateToLocal(dir);
+    const fm_vec3_t localSup = coll->support(localDir);
+    out = coll->toWorldSpace(localSup);
+  }
+
+  bool CollisionScene::capsuleSweep(
+    const fm_vec3_t& center,
+    const fm_vec3_t& axisUp,
+    float radius,
+    float innerHalfHeight,
+    const fm_vec3_t& displacement,
+    RaycastColliderTypeFlags collTypes,
+    uint8_t readMask,
+    CapsuleSweepHit& hit,
+    const Object* ignoreOwner
+  ) const {
+    hit = CapsuleSweepHit{};
+
+    const bool doMesh    = hasFlag(collTypes, RaycastColliderTypeFlags::MESH_COLLIDERS);
+    const bool doBodies  = hasFlag(collTypes, RaycastColliderTypeFlags::COLLIDER_BODIES);
+    if (!doMesh && !doBodies) return false;
+
+    // Compute world-space swept AABB for broadphase
+    fm_vec3_t extents = {
+      radius + fabsf(axisUp.x) * innerHalfHeight,
+      radius + fabsf(axisUp.y) * innerHalfHeight,
+      radius + fabsf(axisUp.z) * innerHalfHeight
+    };
+    AABB capsuleBox = { center - extents, center + extents };
+    AABB sweptBox;
+    aabbExtendDirection(capsuleBox, displacement, sweptBox);
+
+    CapsuleSweepHit candidate{};
+
+    // ── Mesh colliders ──────────────────────────────────────────────────────
+    if (doMesh) {
+      constexpr int MAX_TRI = 64;
+      NodeProxy triCandidates[MAX_TRI];
+      constexpr int MAX_MESH_CANDIDATES = 32;
+      NodeProxy meshCandidates[MAX_MESH_CANDIDATES];
+
+      int meshCount = meshColliderAABBTree.queryBounds(sweptBox, meshCandidates, MAX_MESH_CANDIDATES);
+      for (int m = 0; m < meshCount; ++m) {
+        const MeshCollider* mesh = static_cast<const MeshCollider*>(
+          meshColliderAABBTree.getNodeData(meshCandidates[m]));
+        if (!mesh || mesh->triangleCount() == 0 || !mesh->ownerObject()) continue;
+
+        AABB localSweptBox = mesh->worldAabbToLocal(sweptBox);
+        int triCount = mesh->queryTriangleNodes(localSweptBox, triCandidates, MAX_TRI);
+
+        for (int i = 0; i < triCount; ++i) {
+          int triIdx = mesh->triangleIndexForNode(triCandidates[i]);
+          if (triIdx < 0 || triIdx >= static_cast<int>(mesh->triangleCount())) continue;
+
+          const MeshTriangleIndices& tri = mesh->triangleIndices(triIdx);
+
+          fm_vec3_t wv0 = mesh->hasTransform() ? mesh->toWorldSpace(mesh->vertex(tri.indices[0])) : mesh->vertex(tri.indices[0]);
+          fm_vec3_t wv1 = mesh->hasTransform() ? mesh->toWorldSpace(mesh->vertex(tri.indices[1])) : mesh->vertex(tri.indices[1]);
+          fm_vec3_t wv2 = mesh->hasTransform() ? mesh->toWorldSpace(mesh->vertex(tri.indices[2])) : mesh->vertex(tri.indices[2]);
+          fm_vec3_t wn  = mesh->hasTransform() ? mesh->localNormalToWorld(mesh->triangleNormal(triIdx)) : mesh->triangleNormal(triIdx);
+
+          candidate = CapsuleSweepHit{};
+          if (!capsuleSweepTriangle(center, axisUp, radius, innerHalfHeight,
+                                    displacement, wv0, wv1, wv2, wn, candidate))
+            continue;
+
+          if (!hit.didHit || candidate.t < hit.t ||
+              (candidate.t == 0.0f && candidate.depth > hit.depth)) {
+            hit = candidate;
+          }
+        }
+      }
+    }
+
+    // Collider bodies (GJK + EPA)
+    if (doBodies) {
+      constexpr int MAX_CB_CANDIDATES = 16;
+      NodeProxy cbCandidates[MAX_CB_CANDIDATES];
+
+      const fm_vec3_t endCenter = center + displacement;
+      const CapsuleGjkData capsuleStart{ center,    axisUp, innerHalfHeight, radius };
+      const CapsuleGjkData capsuleEnd  { endCenter, axisUp, innerHalfHeight, radius };
+
+      int cbCount = colliderAABBTree.queryBounds(sweptBox, cbCandidates, MAX_CB_CANDIDATES);
+      for (int ci = 0; ci < cbCount; ++ci) {
+        void *cbData = colliderAABBTree.getNodeData(cbCandidates[ci]);
+        if (!cbData) continue;
+        Collider *coll = static_cast<Collider *>(cbData);
+        if (!coll || !coll->ownerObject() || coll->isTrigger()) continue;
+        // Skip the character's own other colliders
+        if (ignoreOwner && coll->ownerObject() == ignoreOwner) continue;
+        if ((coll->writeMask() & readMask) == 0) continue;
+
+        // Stable fallback direction for when EPA degenerates at a near-zero-depth touch.
+        // Points from the collider toward the capsule
+        // this can happen if .e.g the capsule hangs on the edge of an AABB
+        fm_vec3_t fallbackN = center - coll->worldCenter();
+        if (fm_vec3_len2(&fallbackN) < FM_EPSILON * FM_EPSILON) fallbackN = axisUp;
+        else fm_vec3_norm(&fallbackN, &fallbackN);
+
+        // Below this, an "overlap" is really just a surface touch, not a penetration to push out of. 
+        // Use the swept check here, which produces a stable contact normal for blocking/sliding.
+        constexpr float MIN_REAL_PENETRATION = 0.001f;
+
+        fm_vec3_t initDir = coll->worldCenter() - center;
+        if (fm_vec3_len2(&initDir) < FM_EPSILON * FM_EPSILON) initDir = axisUp;
+
+        Simplex simplex{};
+        bool overlapAtStart = gjkCheckForOverlap(simplex,
+          &capsuleStart, capsuleGjkSupport,
+          coll, colliderWorldGjkSupport,
+          initDir);
+
+        if (overlapAtStart) {
+          // Already inside: EPA gives the push-out normal and dept
+          EpaResult epa{};
+          if (epaSolve(simplex, &capsuleStart, capsuleGjkSupport, coll, colliderWorldGjkSupport, epa)
+              && epa.penetration > MIN_REAL_PENETRATION) {
+            fm_vec3_t n = epa.normal;
+            if (fm_vec3_len2(&n) < FM_EPSILON * FM_EPSILON) n = fallbackN;
+
+            if (!hit.didHit || hit.t > 0.0f || epa.penetration > hit.depth) {
+              hit.didHit = true;
+              hit.t      = 0.0f;
+              hit.normal = n;
+              hit.depth  = epa.penetration;
+              hit.point  = epa.contactB;
+            }
+            continue;
+          }
+          // Shallow / degenerate touch -> fall through to the swept check below
+        }
+
+        // End-position (swept) overlap check:
+        fm_vec3_t endInitDir = coll->worldCenter() - endCenter;
+        if (fm_vec3_len2(&endInitDir) < FM_EPSILON * FM_EPSILON) endInitDir = axisUp;
+
+        Simplex endSimplex{};
+        bool overlapAtEnd = gjkCheckForOverlap(endSimplex,
+          &capsuleEnd, capsuleGjkSupport,
+          coll, colliderWorldGjkSupport,
+          endInitDir);
+
+        if (!overlapAtEnd) continue;
+
+        EpaResult epa{};
+        if (!epaSolve(endSimplex, &capsuleEnd, capsuleGjkSupport, coll, colliderWorldGjkSupport, epa)) continue;
+
+        fm_vec3_t n = epa.normal;
+        if (fm_vec3_len2(&n) < FM_EPSILON * FM_EPSILON) n = fallbackN;
+
+        // Estimate the touch fraction by backing the end-penetration out along the normal
+        const float dispAlongNormal = fabsf(fm_vec3_dot(&displacement, &n));
+        float t = 1.0f;
+        if (dispAlongNormal > FM_EPSILON) {
+          t = fmaxf(0.0f, fminf(1.0f - epa.penetration / dispAlongNormal, 1.0f));
+        }
+
+        if (!hit.didHit || t < hit.t) {
+          hit.didHit = true;
+          hit.t      = t;
+          hit.normal = n;
+          // Swept contact: the capsule is NOT penetrating at the start position,
+          // it only reaches the surface partway through the move. 
+          // `depth` is reserved for pre-existing overlaps, so set 0 here
+          hit.depth  = 0.0f;
+          hit.point  = epa.contactB;
         }
       }
     }
@@ -1601,7 +1839,7 @@ namespace P64::Coll {
     // Update compound CoM/inertia on demand and refresh world inertia tensors.
     for (RigidBody *body : rigidBodies_){
       syncCompoundProperties(body);
-      if(body->isSleeping_) continue;
+      if(!body->isEnabled_ || body->isSleeping_) continue;
       body->updateWorldInertia();
     }
     ticksWorldUpdate = get_ticks() - stageStart;
@@ -1609,6 +1847,7 @@ namespace P64::Coll {
     stageStart = get_ticks();
     // Integrate velocities (also resets sleeping bodies — see RigidBody::integrateVelocity)
     for(RigidBody *body : rigidBodies_) {
+      if (!body->isEnabled_) continue;
       body->integrateVelocity(fixedDt_, gravity_);
       body->integrateAngularVelocity(fixedDt_);
     }
@@ -1636,7 +1875,7 @@ namespace P64::Coll {
     stageStart = get_ticks();
     // Reset push velocities for split impulse (Bullet-style)
     for(RigidBody *body : rigidBodies_) {
-      if(!body->isSleeping_) body->resetPushVelocities();
+      if(body->isEnabled_ && !body->isSleeping_) body->resetPushVelocities();
     }
     warmStart();
     ticksWarmStart = get_ticks() - stageStart;
@@ -1650,7 +1889,7 @@ namespace P64::Coll {
     // Integrate positions and rotations (including split impulse push velocities)
     stageStart = get_ticks();
     for(RigidBody *body : rigidBodies_) {
-      if(body->isSleeping_) continue;
+      if(!body->isEnabled_ || body->isSleeping_) continue;
 
       body->integratePosition(fixedDt_);
       body->integrateRotation(fixedDt_);
@@ -1737,31 +1976,15 @@ namespace P64::Coll {
 
         color_t color = Debug::paletteColor(static_cast<uint32_t>(meshIdx));
 
-        const bool useRotation = meshCollider->hasRotation();
-
-  const fm_quat_t rot = meshCollider->owner_->rot;
-  const fm_vec3_t pos = meshCollider->owner_->pos;
-  const fm_vec3_t scale = meshCollider->owner_->scale;
-
-        auto toWorldMesh = [&](const fm_vec3_t &local)
-        {
-          fm_vec3_t scaled = fm_vec3_t{{local.x * scale.x, local.y * scale.y, local.z * scale.z}};
-          if (useRotation)
-          {
-            scaled = rot * scaled;
-          }
-          return (scaled + pos) * getGfxScale();
-        };
-
         for (uint16_t t = 0; t < meshCollider->triangleCount_; ++t)
         {
           int idxA = meshCollider->triangles_[t].indices[0];
           int idxB = meshCollider->triangles_[t].indices[1];
           int idxC = meshCollider->triangles_[t].indices[2];
 
-          fm_vec3_t v0 = toWorldMesh(meshCollider->vertices_[idxA]);
-          fm_vec3_t v1 = toWorldMesh(meshCollider->vertices_[idxB]);
-          fm_vec3_t v2 = toWorldMesh(meshCollider->vertices_[idxC]);
+          fm_vec3_t v0 = meshCollider->toWorldSpace(meshCollider->vertices_[idxA]) * getGfxScale();
+          fm_vec3_t v1 = meshCollider->toWorldSpace(meshCollider->vertices_[idxB]) * getGfxScale();
+          fm_vec3_t v2 = meshCollider->toWorldSpace(meshCollider->vertices_[idxC]) * getGfxScale();
 
           Debug::drawLine(v0, v1, color);
           Debug::drawLine(v1, v2, color);

@@ -352,7 +352,7 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
 
       for (uint32_t i=0; i<obj->compCount; ++i)
       {
-        if(obj->flags & ObjectFlags::IS_CULLED)break;
+        if(obj->flags & (ObjectFlags::IS_CULLED | ObjectFlags::HIDDEN))break;
         const auto &compDef = COMP_TABLE[compRefs[i].type];
         if(compDef.draw)
         {
@@ -531,12 +531,16 @@ void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
   }
 
   const auto wasEnabledBefore = obj.isEnabled();
-  obj.setFlag(ObjectFlags::PARENTS_ACTIVE, parent ? parent->isEnabled() : true);
-  if(!obj.performStateChange() && !parent) {
-    return; // without a parent, no cascading change can happen if the own state didn't change
-  }
+  const auto wasVisibleBefore = obj.isVisible();
 
-  if(wasEnabledBefore == obj.isEnabled()) {
+  obj.setFlag(ObjectFlags::PARENTS_ACTIVE, parent ? parent->isEnabled() : true);
+  obj.setFlag(ObjectFlags::PARENTS_HIDDEN, parent ? !parent->isVisible() : false);
+  obj.performStateChange();
+
+  const bool enabledChanged = wasEnabledBefore != obj.isEnabled();
+  const bool visibleChanged = wasVisibleBefore != obj.isVisible();
+
+  if(!enabledChanged && !visibleChanged) {
     return;
   }
 
@@ -544,7 +548,7 @@ void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
   for (uint32_t i=0; i< obj.compCount; ++i) {
     const auto &compDef = P64::COMP_TABLE[compRefs[i].type];
     char* dataPtr = (char*)&obj + compRefs[i].offset;
-      
+
     if(obj.isEnabled() && compDef.onEnable) compDef.onEnable(obj, dataPtr);
     else if(!obj.isEnabled() && compDef.onDisable) compDef.onDisable(obj, dataPtr);
   }

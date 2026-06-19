@@ -162,7 +162,7 @@ void Renderer::N64Mesh::draw(
       if (light.type == 0) {
         uniforms.mat.ambientColor = light.color;
       } else {
-        if (lightIdx < MAX_LIGHTS)
+        if (lightIdx < (int)MAX_LIGHTS)
         {
           if(light.type == 2) {// point light
             uniforms.mat.lightDir[lightIdx] = light.pos;

@@ -11,6 +11,7 @@
 #include "contact.h"
 #include "aabbTree.h"
 #include "raycast.h"
+#include "capsuleSweep.h"
 #include <array>
 #include <deque>
 #include <functional>
@@ -66,6 +67,16 @@ namespace P64::Coll {
     RigidBody *findRigidBodyByObjectId(uint16_t id) const;
     const std::vector<RigidBody *> &getRigidBodies() const { return rigidBodies_; }
 
+    static void enableRigidBody(RigidBody *rigidBody);
+
+    /// @brief Temporarily exclude the given RigidBody from the simulation.
+    ///
+    /// While disabled, the body will be immune to collision (allowing it to pass through objects) and will not receive
+    /// changes to force, velocity, or acceleration.
+    /// Manually moving the body (via RigidBody::setPosition()/RigidBody::setRotation()) is still allowed.
+    /// Call enableRigidBody() to re-enable the RigidBody.
+    void disableRigidBody(RigidBody *rigidBody);
+
     void addCollider(Collider *collider);
     void removeCollider(Collider *collider);
     const std::vector<Collider *> &getColliders() const { return colliders_; }
@@ -89,6 +100,31 @@ namespace P64::Coll {
 
     bool raycast(Raycast &ray, RaycastHit &hit) const;
 
+    /**
+     * Sweeps a capsule through the scene and returns the earliest contact.
+     *
+     * @param center          Capsule center in physics space
+     * @param axisUp          Normalized capsule-axis direction
+     * @param radius          Capsule radius
+     * @param innerHalfHeight Half-length of the cylindrical section (not including sphere caps)
+     * @param displacement    Displacement vector in physics space (not normalized)
+     * @param collTypes       Which collider types to test against
+     * @param readMask        Collision read mask (@TODO: not implemented)
+     * @param hit             Output contact result
+     * @return true if any contact was found
+     */
+    bool capsuleSweep(
+      const fm_vec3_t& center,
+      const fm_vec3_t& axisUp,
+      float radius,
+      float innerHalfHeight,
+      const fm_vec3_t& displacement,
+      RaycastColliderTypeFlags collTypes,
+      uint8_t readMask,
+      CapsuleSweepHit& hit,
+      const Object* ignoreOwner = nullptr
+    ) const;
+
   private:
 
     std::vector<RigidBody *> rigidBodies_{};
@@ -100,6 +136,7 @@ namespace P64::Coll {
     std::vector<ContactConstraint *> solverConstraints_{};
 
     AABBTree colliderAABBTree;
+    AABBTree meshColliderAABBTree;
 
     // Multiple mesh colliders
     std::vector<MeshCollider *> meshColliders_{};

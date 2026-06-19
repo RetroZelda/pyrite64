@@ -269,3 +269,8 @@ bool Utils::Proc::openInFileBrowser(const std::string &path)
   return true;
 #endif
 }
+
+void Utils::Proc::openURL(const std::string &url)
+{
+  SDL_OpenURL(url.c_str());
+}

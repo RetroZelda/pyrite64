@@ -47,7 +47,7 @@ void Renderer::Animation::update(
 
   // fetch new keyframes when needed,
   // those make sure the current and next KFs are fetched in advanced
-  while(kfPos < anim.keyframes.size())
+  while(kfPos < (int)anim.keyframes.size())
   {
     auto &kf = anim.keyframes[kfPos];
     if(kf.timeNeeded > animTime)break;

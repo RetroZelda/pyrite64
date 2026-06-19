@@ -72,7 +72,9 @@ jobs:
 
   build-linux:
     needs: setup
-    runs-on: ubuntu-latest
+    # Built on the oldest supported glibc (ubuntu-22.04 => glibc 2.35)
+    # so the resulting AppImage runs on a wide range of distros
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -81,30 +83,71 @@ jobs:
           submodules: recursive
           lfs: true
 
+      # 22.04's apt cmake (3.22) and gcc (11) are too old: the project needs
+      # CMake >= 3.28 and C++23. Pull a modern cmake/ninja and gcc-13.
+      - name: Setup CMake + Ninja
+        uses: lukka/get-cmake@latest
+
       - name: Install dependencies
         run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gcc g++ \
+          sudo apt-get install -y g++-13 \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxss-dev libxtst-dev
 #            libwayland-dev libwayland-client-dev libwayland-cursor-dev libwayland-egl-dev
 
-      - name: Configure CMake
-        run: cmake --preset linux-release -DBUILD_TIMESTAMP_OVERRIDE=${{ needs.setup.outputs.build_timestamp }}
-
-      - name: Build
-        run: cmake --build --preset linux-release
-
-      - name: Package
-        run: tar czf pyrite64-linux.tar.gz pyrite64 data/ n64/ LICENSE
+      - name: Build AppImage
+        env:
+          CC: gcc-13
+          CXX: g++-13
+          BUILD_TIMESTAMP_OVERRIDE: ${{ needs.setup.outputs.build_timestamp }}
+        run: |
+          ./scripts/build_appimage.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: pyrite64-linux-tarball
-          path: pyrite64-linux.tar.gz
+          name: pyrite64-linux
+          path: |
+            Pyrite64-x86_64.AppImage
+
+  build-macos:
+    # Apple Silicon runner; CMAKE_OSX_ARCHITECTURES builds a universal
+    # (arm64 + x86_64) binary so it runs on both Apple Silicon and Intel Macs.
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          lfs: true
+
+      # Ensures a CMake >= 3.28 (C++23) and Ninja
+      - name: Setup CMake + Ninja
+        uses: lukka/get-cmake@latest
+
+      - name: Configure CMake
+        run: |
+          cmake --preset macos-release
+
+      - name: Build
+        run: |
+          cmake --build --preset macos-release
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: pyrite64-macos
+          include-hidden-files: true
+          path: |
+            pyrite64
+            data
+            n64
+            LICENSE
 
   release:
-    needs: [setup, build-windows, build-linux]
+    needs: [setup, build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -118,7 +161,12 @@ jobs:
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: pyrite64-linux-tarball
+          name: pyrite64-linux
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pyrite64-macos
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -127,4 +175,5 @@ jobs:
           name: Pyrite64 ${{ needs.setup.outputs.version_tag }}
           files: |
             pyrite64-windows.zip
-            pyrite64-linux.tar.gz
+            Pyrite64-x86_64.AppImage
+            pyrite64

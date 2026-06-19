@@ -258,8 +258,9 @@ namespace Project::Component::CollMesh
         aabbCol = ctx.prefs.meshLineColorSelected;
       }
 
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol, {1, 0, 0, 0}, ctx.prefs.meshLineThickness);
-      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol, {1, 0, 0, 0}, ctx.prefs.meshLineThickness);
+      auto rot = obj.rot.resolve(obj.propOverrides);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt, aabbCol, rot, ctx.prefs.meshLineThickness);
+      Utils::Mesh::addLineBox(*vp.getLines(), center, halfExt + 0.002f, aabbCol, rot, ctx.prefs.meshLineThickness);
     }
   }
 

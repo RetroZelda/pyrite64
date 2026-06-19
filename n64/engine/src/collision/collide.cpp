@@ -1149,6 +1149,8 @@ namespace P64::Coll {
   /// @param triangleIndex Index of the triangle within the mesh to test against.
   /// @return True if a collision is detected, false otherwise.
   bool collideDetectObjectToTriangle(ColliderProxy *colliderProxyMeshSpace, RigidBody *rigidBody, const MeshCollider &mesh, int triangleIndex, bool recordConstraints) {
+    if(rigidBody && !rigidBody->isEnabled()) return false;
+
     const bool isTriggerContact = colliderProxyMeshSpace->collider->isTrigger();
     const bool colliderRespondsToMesh = colliderProxyMeshSpace->collider->readsMeshCollider(&mesh);
 
@@ -1283,6 +1285,8 @@ namespace P64::Coll {
   /// @param rigidBody The rigid body associated with the collider.
   /// @param mesh The mesh collider to test against.
   bool collideDetectObjectToMesh(Collider *collider, RigidBody *rigidBody, const MeshCollider &mesh, bool recordConstraints) {
+    if(rigidBody && !rigidBody->isEnabled()) return false;
+
     // Transform the collider's world AABB into the mesh's local space for tree query
     AABB queryAABB = mesh.hasTransform()
       ? mesh.worldAabbToLocal(collider->worldAabb())
@@ -1358,6 +1362,8 @@ namespace P64::Coll {
     const bool aReadsB = colliderA->readsCollider(colliderB);
     const bool bReadsA = colliderB->readsCollider(colliderA);
 
+    if(rbA && !rbA->isEnabled()) return false;
+    if(rbB && !rbB->isEnabled()) return false;
     if(rbA && rbB && rbA->isSleeping() && rbB->isSleeping() && !colliderA->isTrigger() && !colliderB->isTrigger()) return false;
 
     if(colliderA && colliderB) {
