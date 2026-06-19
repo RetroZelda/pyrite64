@@ -179,7 +179,7 @@ namespace
 
     // Emit static AssetRef declarations for all baked (non-variable) sprite props on an element
     void emitBakedSprites(std::string& out, const CanvasElement& e,
-                          Project::AssetManager& assets)
+                          AssetManager& assets)
     {
         for (const auto* key : {"sprite"})
         {
@@ -591,7 +591,7 @@ namespace
     }
 
     void generateUIBindings(const std::vector<const Canvas*>& canvases,
-                            Project::AssetManager& assets,
+                            AssetManager& assets,
                             const std::string& outPath)
     {
         std::string src;
@@ -642,9 +642,9 @@ namespace
 // Public entry point
 // =====================================================================
 
-bool Build::buildCanvasAssets(Project::Project& project, SceneCtx& sceneCtx)
+bool Build::buildCanvasAssets(::Project::Project& project, SceneCtx& sceneCtx)
 {
-    auto canvasAssets = project.getAssets().getTypeEntries(Project::FileType::CANVAS);
+    auto canvasAssets = project.getAssets().getTypeEntries(FileType::CANVAS);
     if (canvasAssets.empty())
     {
         sceneCtx.hasCanvases = false;
