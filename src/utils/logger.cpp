@@ -15,7 +15,7 @@ namespace
   constexpr size_t MAX_BUFF_SIZE = 1024 * 100; // 100kb
 
   constinit Utils::Logger::LogOutputFunc outputFunc = nullptr;
-  constinit std::string logStripped{};
+  std::string logStripped{};
 
   std::string buildBuff{};
   std::atomic_bool buildLogChanged{false};

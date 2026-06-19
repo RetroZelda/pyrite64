@@ -112,6 +112,7 @@ jobs:
             Pyrite64-x86_64.AppImage
 
   build-macos:
+    needs: setup
     # Apple Silicon runner; CMAKE_OSX_ARCHITECTURES builds a universal
     # (arm64 + x86_64) binary so it runs on both Apple Silicon and Intel Macs.
     runs-on: macos-14
@@ -129,7 +130,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake --preset macos-release
+          cmake --preset macos-release -DBUILD_TIMESTAMP_OVERRIDE=${{ needs.setup.outputs.build_timestamp }}
 
       - name: Build
         run: |
