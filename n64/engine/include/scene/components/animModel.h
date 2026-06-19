@@ -36,6 +36,12 @@ namespace P64::Comp
       uint8_t layerIdx{0};
       uint8_t flags{0};
 
+      // Lazy file handles: only the selected main/blend anim keeps its .sdata FILE* open.
+      // 'activate' opens (if needed) + attaches + resets to frame 0; 'deactivate' closes the
+      // file unless it is still referenced by the other (main/blend) slot.
+      void activateAnim(int16_t idx, T3DSkeleton* skel);
+      void deactivateAnim(int16_t idx);
+
     public:
       // Stagger fields written by AnimController::setAnimStagger
       uint8_t staggerRate{1};   // 0=disabled, 1=every frame, N=every N frames

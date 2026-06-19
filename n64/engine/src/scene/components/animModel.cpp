@@ -7,6 +7,7 @@
 #include "scene/components/animModel.h"
 #include "assets/assetManager.h"
 #include <t3d/t3dmodel.h>
+#include <libdragon.h> // asset_fopen / fclose for lazy animation file handles
 
 #include "../../renderer/bigtex/bigtex.h"
 #include "renderer/material.h"
@@ -28,19 +29,48 @@ namespace
 
 namespace P64::Comp
 {
+  void AnimModel::activateAnim(int16_t idx, T3DSkeleton* skel) {
+    if (anims[idx].file == nullptr) {
+      anims[idx].file = asset_fopen(anims[idx].animRef->filePath, nullptr);
+    }
+    t3d_anim_attach(&anims[idx], skel);
+    t3d_anim_set_time(&anims[idx], 0.0f); // restart from frame 0 on (re)selection
+  }
+
+  void AnimModel::deactivateAnim(int16_t idx) {
+    if (idx < 0) return;
+    if (idx == animIdxMain || idx == animIdxBlend) return; // still in use by the other slot
+    if (anims[idx].file) {
+      fclose(anims[idx].file);
+      anims[idx].file = nullptr;
+    }
+  }
+
   void AnimModel::setMainAnim(int16_t idx) {
-    animIdxMain = idx;
-    mainAnimDuration = animIdxMain >= 0 ? anims[animIdxMain].animRef->duration : 0.0f;
+    if (idx == animIdxMain) {
+      mainAnimDuration = idx >= 0 ? anims[idx].animRef->duration : 0.0f;
+      return;
+    }
+    int16_t old = animIdxMain;
+    animIdxMain = idx; // set before deactivate so its guard sees the new selection
+    if (idx >= 0) activateAnim(idx, &skelMain);
+    deactivateAnim(old);
+    mainAnimDuration = idx >= 0 ? anims[idx].animRef->duration : 0.0f;
   }
 
   void AnimModel::setBlendAnim(int16_t idx) {
     if (idx < 0) {
+      int16_t old = animIdxBlend;
       animIdxBlend = -1;
       blendAnimDuration = 0.0f;
+      deactivateAnim(old);
       return;
     }
     if (animIdxBlend != idx) {
-      t3d_anim_attach(&anims[idx], &skelAnim[idx]);
+      int16_t old = animIdxBlend;
+      animIdxBlend = idx; // set before deactivate so its guard sees the new selection
+
+      activateAnim(idx, &skelAnim[idx]); // blend attaches to its per-anim skeleton clone
 
       // Snap blend anim to the same normalized phase as main so they start in sync
       if (animIdxMain >= 0 && mainAnimDuration > 0.0f) {
@@ -48,8 +78,9 @@ namespace P64::Comp
         float blendDur = anims[idx].animRef->duration;
         t3d_anim_set_time(&anims[idx], normPhase * blendDur);
       }
+
+      deactivateAnim(old);
     }
-    animIdxBlend = idx;
     blendAnimDuration = anims[idx].animRef->duration;
   }
 
@@ -90,7 +121,8 @@ namespace P64::Comp
     while(t3d_model_iter_next(&it)) {
       skelAnim[i] = t3d_skeleton_clone(&skelMain, false);
       anims[i]    = t3d_anim_create(model, it.anim->name);
-      t3d_anim_attach(&anims[i], &skelMain);
+      // Lazy file handles: release until the anim is selected (see activateAnim/deactivateAnim)
+      if (anims[i].file) { fclose(anims[i].file); anims[i].file = nullptr; }
       ++i;
     }
 
@@ -178,7 +210,11 @@ namespace P64::Comp
     while(t3d_model_iter_next(&it)) {
       data->skelAnim[i] = t3d_skeleton_clone(&data->skelMain, false);
       data->anims[i] = t3d_anim_create(data->model, it.anim->name); // @TOOD: add  create by-index to t3d API
-      t3d_anim_attach(&data->anims[i], &data->skelMain); // by default assuming anything is attached to the main skeleton
+      // Lazy file handles: only the selected main/blend anim keeps its .sdata FILE* open
+      // (see activateAnim/deactivateAnim). Release the handle t3d_anim_create just opened and
+      // defer attach until selection — otherwise every anim of every object eats one of
+      // libdragon's 64 libc-lock slots and a busy scene exhausts the pool.
+      if (data->anims[i].file) { fclose(data->anims[i].file); data->anims[i].file = nullptr; }
       //debugf(" - %s: %lu\n", it.anim->name, i);
       ++i;
     }
