@@ -13,6 +13,13 @@ namespace {
   constexpr uint32_t FB_COUNT = 3;
   volatile uint8_t fbIdxVI = 0;
 
+  // Floor for the gameplay delta-time. Above this framerate, delta-time tracks the real
+  // framerate as usual. Once the framerate drops below it, delta-time is clamped to a
+  // 25fps frame so animations don't skip too many frames at once - this prevents the slow
+  // framerate from being exploited and avoids missing animation-driven events.
+  constexpr float MIN_DELTA_FPS = 25.0f;
+  constexpr float MAX_DELTA_TIME = 1.0f / MIN_DELTA_FPS;
+
   std::array<uint8_t, FB_COUNT> fbState{}; // current render-pass index
   P64::Lib::FIFO<uint8_t, 0xFF, FB_COUNT> fbIdxForVI{};
   volatile uint32_t fbFreeCount = 0; // amount of 'fbState' at zero, used for a faster loop
@@ -108,7 +115,10 @@ void P64::VI::SwapChain::setVBlank(bool enabled)
 
 float P64::VI::SwapChain::getDeltaTime()
 {
-  return avgDeltaTime;
+  // Clamp to a 25fps frame when the framerate drops below that, so animations and their
+  // events don't get skipped. avgFps is intentionally left untouched so the debug overlay
+  // still reports the true framerate.
+  return fminf(avgDeltaTime, MAX_DELTA_TIME);
 }
 
 float P64::VI::SwapChain::getFPS()
