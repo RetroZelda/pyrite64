@@ -178,3 +178,57 @@ jobs:
             pyrite64-windows.zip
             Pyrite64-x86_64.AppImage
             pyrite64
+
+  notify:
+    needs: [setup, build-windows, build-linux, build-macos, release]
+    # Run regardless of upstream outcome so we can report failures too.
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notify Discord on success
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          VERSION_TAG: ${{ needs.setup.outputs.version_tag }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.setup.outputs.version_tag }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK not set; skipping notification."
+            exit 0
+          fi
+          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- <<EOF
+          {
+            "embeds": [
+              {
+                "title": "✅ Pyrite64 build succeeded — ${VERSION_TAG}",
+                "description": "A new build is ready. [Download the release here](${RELEASE_URL}).",
+                "url": "${RELEASE_URL}",
+                "color": 3066993
+              }
+            ]
+          }
+          EOF
+
+      - name: Notify Discord on failure
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK not set; skipping notification."
+            exit 0
+          fi
+          curl -sf -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- <<EOF
+          {
+            "embeds": [
+              {
+                "title": "❌ Pyrite64 build failed",
+                "description": "The build did not complete. [Open the run logs](${RUN_URL}) to see the error.",
+                "url": "${RUN_URL}",
+                "color": 15158332
+              }
+            ]
+          }
+          EOF
