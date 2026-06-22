@@ -81,7 +81,10 @@ namespace Project
         propOverrides.erase(prop.id);
       }
 
-      Utils::AABB getLocalAABB() const {
+      // Returns the local-space bounding box. When no component contributes a real
+      // volume, a small {-1,1} fallback box is returned; pass hasVolumeOut to detect
+      // that case (set to true only when a real component volume was found).
+      Utils::AABB getLocalAABB(bool *hasVolumeOut = nullptr) const {
         Utils::AABB aabb{};
         bool hasVolume = false;
         for (const auto &entry : components) {
@@ -98,12 +101,14 @@ namespace Project
            std::isinf(aabb.max.x) || std::isinf(aabb.max.y) || std::isinf(aabb.max.z)) {
           aabb.min = {-1,-1,-1};
           aabb.max = {1,1,1};
+          hasVolume = false;
         }
+        if(hasVolumeOut) *hasVolumeOut = hasVolume;
         return aabb;
       }
 
-      Utils::AABB getWorldAABB() {
-        Utils::AABB aabb = getLocalAABB();
+      Utils::AABB getWorldAABB(bool *hasVolumeOut = nullptr) {
+        Utils::AABB aabb = getLocalAABB(hasVolumeOut);
         glm::vec3 t = pos.resolve(propOverrides);
         glm::quat r = rot.resolve(propOverrides);
         glm::vec3 s = scale.resolve(propOverrides);

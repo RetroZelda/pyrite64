@@ -369,6 +369,27 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
     }
   });
 
+  // Facing-direction gizmo: draw the local axes for every selected object so its
+  // orientation stays visible while rotating, even when it has no visual component.
+  // Green (thicker) = local up (+Y), blue = local forward (+Z, the facing direction).
+  // Only shown in rotate mode (gizmoOp == 1), where the facing cue is actually needed.
+  if (gizmoOp == 1) {
+    constexpr float AXIS_LEN = 70.0f;
+    constexpr float UP_THICKNESS = 4.0f;
+    constexpr float FWD_THICKNESS = 2.5f;
+    const glm::vec4 COLOR_UP {0.0f, 1.0f, 0.0f, 1.0f};
+    const glm::vec4 COLOR_FWD{0.1f, 0.45f, 1.0f, 1.0f};
+
+    for (auto *selObj : Editor::SelectionUtils::collectSelectedObjects(*scene)) {
+      auto pos = selObj->pos.resolve(selObj->propOverrides);
+      auto rot = selObj->rot.resolve(selObj->propOverrides);
+      glm::vec3 up      = rot * glm::vec3{0, 1,  0};
+      glm::vec3 forward = rot * glm::vec3{0, 0, 1};
+      Utils::Mesh::addLine(*getLines(), pos, pos + up      * AXIS_LEN, COLOR_UP,  UP_THICKNESS);
+      Utils::Mesh::addLine(*getLines(), pos, pos + forward * AXIS_LEN, COLOR_FWD, FWD_THICKNESS);
+    }
+  }
+
   if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
 
   meshLines->recreate(renderScene);

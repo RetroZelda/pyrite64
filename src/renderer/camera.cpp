@@ -14,6 +14,9 @@ namespace
   constexpr glm::vec3 WORLD_FORWARD{0,0,-1};
   constexpr float ORTHO_SIZE = 310.0f;
   constexpr float FOV = 70.0f;
+  // Framing for the "focus selection" action
+  constexpr float AABB_FOCUS_MARGIN = 1.25f;     // extra space around a real bounding box
+  constexpr float NO_VOLUME_FOCUS_DIST = 220.0f; // overview distance for volume-less objects
 }
 
 Renderer::Camera::Camera() {
@@ -161,27 +164,45 @@ void Renderer::Camera::focusSelection(Context &ctx) {
   if (!scene) return;
 
   Utils::AABB aabb{};
+  bool hasVolume = false;
   for (uint32_t uuid : selectedUUIDs) {
     auto obj = scene->getObjectByUUID(uuid);
     if (!obj) continue;
 
-    Utils::AABB objAABB = obj->getWorldAABB();
+    bool objHasVolume = false;
+    Utils::AABB objAABB = obj->getWorldAABB(&objHasVolume);
+    hasVolume |= objHasVolume;
     aabb.addPoint(objAABB.min);
     aabb.addPoint(objAABB.max);
   }
-  
-  glm::vec3 h = aabb.getHalfExtend();
-  glm::vec3 up  = rot * glm::vec3{0, 1, 0};
-  float height = glm::abs(glm::dot(up, glm::vec3(h.x, 0, 0))) +
-                 glm::abs(glm::dot(up, glm::vec3(0, h.y, 0))) +
-                 glm::abs(glm::dot(up, glm::vec3(0, 0, h.z)));
-  
-  glm::vec3 fwd = rot * glm::vec3{0, 0, 1};
-  float depth = glm::abs(glm::dot(fwd, glm::vec3(h.x, 0, 0))) +
-                glm::abs(glm::dot(fwd, glm::vec3(0, h.y, 0))) +
-                glm::abs(glm::dot(fwd, glm::vec3(0, 0, h.z)));
 
-  float fov = glm::radians(FOV);
-  float dist = 1.1f * depth + (height) / tanf(fov * 0.5f);
+  // Objects with no real bounding volume (no mesh/collider) have no meaningful size
+  // to frame, so fitting their tiny fallback box zooms in absurdly close. Instead pull
+  // back to a comfortable overview distance so the object and its surroundings are visible.
+  if (!hasVolume) {
+    focus(aabb.getCenter(), NO_VOLUME_FOCUS_DIST);
+    return;
+  }
+
+  // Project the half-extent onto the camera's local axes so the whole AABB is framed
+  // regardless of viewing angle, fitting both the horizontal and vertical field of view.
+  glm::vec3 h = aabb.getHalfExtend();
+  glm::vec3 right = rot * glm::vec3{1, 0, 0};
+  glm::vec3 up    = rot * glm::vec3{0, 1, 0};
+  glm::vec3 fwd   = rot * glm::vec3{0, 0, 1};
+  float width  = glm::abs(right.x)*h.x + glm::abs(right.y)*h.y + glm::abs(right.z)*h.z;
+  float height = glm::abs(up.x)*h.x    + glm::abs(up.y)*h.y    + glm::abs(up.z)*h.z;
+  float depth  = glm::abs(fwd.x)*h.x   + glm::abs(fwd.y)*h.y   + glm::abs(fwd.z)*h.z;
+
+  float aspect = (screenSize.y > 0.0f) ? (screenSize.x / screenSize.y) : 1.0f;
+  float fovY = glm::radians(FOV);
+  float tanY = tanf(fovY * 0.5f);
+  float tanX = tanY * aspect;
+
+  // distance needed for each axis to fit inside the frustum, plus the object's own depth
+  float distForHeight = height / tanY;
+  float distForWidth  = width / tanX;
+  float dist = depth + glm::max(distForHeight, distForWidth);
+  dist *= AABB_FOCUS_MARGIN; // a little breathing room around the AABB
   focus(aabb.getCenter(), dist);
 }
