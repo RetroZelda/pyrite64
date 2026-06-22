@@ -85,7 +85,7 @@ namespace P64::Comp
   }
 
 
-  void AnimModel::swapModel(uint16_t assetIdx) {
+  void AnimModel::swapModel(uint16_t newAssetIdx) {
     if (anims) {
       auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
       uint32_t i = 0;
@@ -101,7 +101,9 @@ namespace P64::Comp
       anims    = nullptr;
     }
 
-    model = (T3DModel*)AssetManager::getByIndex(assetIdx);
+    if(model)AssetManager::release(assetIdx);
+    assetIdx = newAssetIdx;
+    model = (T3DModel*)AssetManager::acquire(newAssetIdx);
     assert(model != nullptr);
 
     animIdxMain       = -1;
@@ -162,13 +164,15 @@ namespace P64::Comp
       free(data->skelAnim);
       free(data->anims);
 
+      AssetManager::release(data->assetIdx);
       data->~AnimModel();
       return;
     }
 
     new(data) AnimModel();
 
-    data->model = (T3DModel*)AssetManager::getByIndex(initData->assetIdx);
+    data->assetIdx = initData->assetIdx;
+    data->model = (T3DModel*)AssetManager::acquire(initData->assetIdx);
     assert(data->model != nullptr);
     data->layerIdx = initData->layer;
     data->flags = initData->flags;

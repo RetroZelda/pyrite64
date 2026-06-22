@@ -141,6 +141,15 @@ void Editor::Scene::draw()
     pendingRestoreCanvasUUID = 0;
   }
 
+  // Keep prefab instance subobjects in sync with their prefab definitions so edits
+  // to a prefab (structure + transform) propagate live to all placed instances.
+  // Done once at the top of the frame, before any scene-graph/viewport iteration.
+  if(ctx.project && !ctx.isBuildOrRunning()) {
+    if(auto loadedScene = ctx.project->getScenes().getLoadedScene()) {
+      loadedScene->reconcilePrefabInstances();
+    }
+  }
+
   float HEIGHT_TOP_BAR = 28_px;
   float HEIGHT_STATUS_BAR = 24_px;
 

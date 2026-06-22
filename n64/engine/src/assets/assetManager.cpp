@@ -96,6 +96,37 @@ namespace
 
   constinit AssetTable* assetTable{nullptr};
   constinit bool isInit{false};
+
+  // Per-entry reference counts, parallel to assetTable->entries (AssetEntry::data is
+  // fully packed, so there is no room for a count inside it). Only assets that are
+  // acquire()'d participate; getByIndex()-only assets keep a count of 0 and are freed
+  // exclusively by freeAll() (i.e. on a scene change), preserving the old behavior.
+  constinit uint16_t* refCount{nullptr};
+
+  // Frees a single loaded entry using its type's free function, unless it is
+  // flagged keep-loaded. Mirrors the per-entry body of freeAll().
+  void freeEntry(uint32_t idx)
+  {
+    auto &entry = assetTable->entries[idx];
+    if(!entry.getPointer())return;
+    if(entry.getFlags() & AssetEntry::FLAG_KEEP_LOADED)return;
+
+    auto type = entry.getType();
+    const auto &loader = assetHandler[type];
+    if(!loader.fnFree)return;
+
+    // Rendering is asynchronous and triple-buffered: the RSP/RDP may still be reading this
+    // asset's vertex data / recorded command blocks from a prior frame's render pass. Freeing
+    // it now (e.g. when an object is removed and its refcount hits zero) would pull memory out
+    // from under an in-flight pass -> the RSP reads freed/realloc'd data and the T3D microcode
+    // asserts. Drain the GPU first so nothing in flight still references it. This only runs when
+    // an asset is genuinely freed (refcount 0 / freeAll), so it is not a per-object-removal cost.
+    rspq_wait();
+
+    void *data = (void*)((uint32_t)entry.getPointer() | 0x8000'0000);
+    loader.fnFree(data);
+    entry.setPointer(nullptr);
+  }
 }
 
 void P64::AssetManager::init() {
@@ -108,24 +139,38 @@ void P64::AssetManager::init() {
     uint32_t offset = (uint32_t)entry.path;
     entry.path = (char*)assetTable + offset;
   }
+
+  refCount = (uint16_t*)calloc(assetTable->count, sizeof(uint16_t));
 }
 
 void P64::AssetManager::freeAll() {
   for (uint32_t i = 0; i < assetTable->count; ++i)
   {
-    auto &entry = assetTable->entries[i];
-    if(entry.getPointer())
-    {
-      auto flags = entry.getFlags();
-      if(flags & AssetEntry::FLAG_KEEP_LOADED)continue;
-
-      auto type = entry.getType();
-      const auto &loader = assetHandler[type];
-      void *data = (void*)((uint32_t)entry.getPointer() | 0x8000'0000);
-      loader.fnFree(data);
-      entry.setPointer(nullptr);
-    }
+    freeEntry(i);
+    if(refCount)refCount[i] = 0;
   }
+}
+
+void* P64::AssetManager::acquire(uint32_t idx) {
+  void* res = getByIndex(idx);
+  if(idx < assetTable->count && refCount && refCount[idx] < 0xFFFF) {
+    refCount[idx]++;
+  }
+  return res;
+}
+
+void P64::AssetManager::release(uint32_t idx) {
+  if(idx >= assetTable->count || !refCount)return;
+  if(refCount[idx] == 0)return;
+  if(--refCount[idx] == 0) {
+    freeEntry(idx);
+  }
+}
+
+void P64::AssetManager::freeByIndex(uint32_t idx) {
+  if(idx >= assetTable->count)return;
+  freeEntry(idx);
+  if(refCount)refCount[idx] = 0;
 }
 
 void* P64::AssetManager::getByIndex(uint32_t idx) {

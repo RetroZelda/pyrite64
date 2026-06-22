@@ -43,6 +43,7 @@ namespace P64::Comp
         data->meshCollider = nullptr;
       }
 
+      AssetManager::release(data->assetIdx);
       data->~CollMesh();
       return;
     }
@@ -50,7 +51,8 @@ namespace P64::Comp
     new(data) CollMesh();
     data->flags = initData->flags;
 
-    void *rawData = AssetManager::getByIndex(initData->assetIdx);
+    data->assetIdx = initData->assetIdx;
+    void *rawData = AssetManager::acquire(initData->assetIdx);
     data->meshCollider = Coll::MeshCollider::createFromRawData(rawData, &obj);
 
     data->meshCollider->setCollisionMask(initData->maskRead, initData->maskWrite);

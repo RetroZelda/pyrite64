@@ -720,6 +720,109 @@ void Project::AssetManager::save()
   }
 }
 
+namespace
+{
+  // Depth-first search for a prefab template node by uuid.
+  Project::Object* findPrefabNode(Project::Object &node, uint32_t uuid)
+  {
+    if (node.uuid == uuid) return &node;
+    for (auto &child : node.children) {
+      if (auto *found = findPrefabNode(*child, uuid)) return found;
+    }
+    return nullptr;
+  }
+}
+
+Project::PrefabResolve Project::AssetManager::resolveTemplateNode(Object &templateNode, uint64_t prefabUUID)
+{
+  PrefabResolve r{};
+  r.node = &templateNode;
+  r.prefabUUID = prefabUUID;
+  r.overrides = templateNode.propOverrides; // start with this node's own overrides
+
+  // Follow nested prefab references. A template node may itself be an instance of an
+  // inner prefab; descend until we reach a plain node. Outermost overrides win.
+  int guard = 32;
+  while (r.node && r.node->isPrefabInstance() && guard-- > 0) {
+    auto inner = getPrefabByUUID(r.node->uuidPrefab.value);
+    if (!inner) break;
+
+    Object *innerNode =
+      (r.node->uuidPrefabNode == 0 || r.node->uuidPrefabNode == inner->obj.uuid)
+        ? &inner->obj
+        : findPrefabNode(inner->obj, r.node->uuidPrefabNode);
+    if (!innerNode) break;
+
+    for (auto &[key, val] : innerNode->propOverrides) {
+      if (!r.overrides.count(key)) r.overrides[key] = val;
+    }
+    r.prefabUUID = r.node->uuidPrefab.value;
+    r.node = innerNode;
+  }
+  return r;
+}
+
+Project::PrefabResolve Project::AssetManager::resolveInstance(const Object &inst)
+{
+  if (!inst.uuidPrefab.value) return {};
+
+  auto prefab = getPrefabByUUID(inst.uuidPrefab.value);
+  if (!prefab) return {};
+
+  Object *templateNode =
+    (inst.uuidPrefabNode == 0 || inst.uuidPrefabNode == prefab->obj.uuid)
+      ? &prefab->obj
+      : findPrefabNode(prefab->obj, inst.uuidPrefabNode);
+  if (!templateNode) return {};
+
+  return resolveTemplateNode(*templateNode, inst.uuidPrefab.value);
+}
+
+Project::Object* Project::AssetManager::getPrefabSourceNode(const Object &inst)
+{
+  return resolveInstance(inst).node;
+}
+
+Project::Object* Project::AssetManager::getPrefabSlotNode(const Object &inst)
+{
+  if (!inst.uuidPrefab.value) return nullptr;
+  auto prefab = getPrefabByUUID(inst.uuidPrefab.value);
+  if (!prefab) return nullptr;
+  if (inst.uuidPrefabNode == 0 || inst.uuidPrefabNode == prefab->obj.uuid) {
+    return &prefab->obj;
+  }
+  return findPrefabNode(prefab->obj, inst.uuidPrefabNode);
+}
+
+bool Project::AssetManager::prefabContains(uint64_t outer, uint64_t inner)
+{
+  if (outer == inner) return true;
+
+  std::unordered_set<uint64_t> visited;
+  std::vector<uint64_t> stack{outer};
+  while (!stack.empty()) {
+    uint64_t cur = stack.back();
+    stack.pop_back();
+    if (!visited.insert(cur).second) continue;
+
+    auto prefab = getPrefabByUUID(cur);
+    if (!prefab) continue;
+
+    // Walk this prefab's template tree, following every nested prefab reference.
+    std::vector<Object*> nodes{&prefab->obj};
+    while (!nodes.empty()) {
+      Object *n = nodes.back();
+      nodes.pop_back();
+      if (n->uuidPrefab.value != 0) {
+        if (n->uuidPrefab.value == inner) return true;
+        stack.push_back(n->uuidPrefab.value);
+      }
+      for (auto &c : n->children) nodes.push_back(c.get());
+    }
+  }
+  return false;
+}
+
 void Project::AssetManager::markPrefabDirty(uint64_t uuid)
 {
   auto entry = getEntryByUUID(uuid);

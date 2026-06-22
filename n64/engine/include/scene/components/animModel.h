@@ -21,6 +21,7 @@ namespace P64::Comp
 
     private:
       T3DModel *model{};
+      uint16_t assetIdx{0};
 
       T3DSkeleton skelMain{};
       T3DSkeleton *skelAnim{};
@@ -53,7 +54,7 @@ namespace P64::Comp
 
       void setMainAnim(int16_t idx);
       void setBlendAnim(int16_t idx);
-      void swapModel(uint16_t assetIdx);
+      void swapModel(uint16_t newAssetIdx);
 
       bool shouldUpdate(uint64_t globalFrame, uint8_t &framesSince) {
         if (staggerRate == 0) { framesSince = 0; return false; }

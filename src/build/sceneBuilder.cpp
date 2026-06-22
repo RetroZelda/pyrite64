@@ -32,8 +32,8 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
   auto srcObj = &obj;
   if(!savePrefabItself && obj.isPrefabInstance())
   {
-    auto prefab = ctx.project->getAssets().getPrefabByUUID(srcObj->uuidPrefab.value);
-    if(prefab)srcObj = &prefab->obj;
+    auto *node = ctx.project->getAssets().getPrefabSourceNode(obj);
+    if(node)srcObj = node;
   }
 
   uint16_t objFlags = 0;
@@ -104,7 +104,11 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
 
   uint32_t count = 1;
   for (const auto &child : obj.children) {
-    count += writeObject(ctx, *child, savePrefabItself);
+    // Descendants are always resolved (savePrefabItself=false) so nested prefab INSTANCES
+    // inside a prefab get expanded into the .pf with their components + overrides. Without
+    // this they'd serialize as empty objects and spawn with no scripts/colliders at runtime.
+    // (Scenes already passed false here; only prefab builds change.)
+    count += writeObject(ctx, *child, false);
   }
   return count;
 }

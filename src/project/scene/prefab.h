@@ -23,8 +23,8 @@ namespace Project
       PROP_U32(uuid);
       Object obj{};
 
-      std::string serialize(const Object &obj) const;
-      std::string serialize() const { return serialize(obj); }
+      std::string serialize(const Object &obj) const; // scene-context (createPrefabFromObject)
+      std::string serialize() const;                  // this template (save / dirty-check)
 
       void deserialize(const std::string &str);
 

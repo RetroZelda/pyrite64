@@ -22,6 +22,14 @@ namespace Project
   class Project;
   struct Canvas;  // forward declaration — full type in canvas/canvas.h
 
+  // Result of resolving a prefab instance/template node through any nested prefab references.
+  struct PrefabResolve
+  {
+    Object* node{nullptr};   // the concrete template node that provides the data (deepest)
+    uint64_t prefabUUID{0};  // the prefab that owns `node` (used to materialize its children)
+    std::unordered_map<uint64_t, GenericValue> overrides{}; // merged overrides (outermost wins)
+  };
+
   enum class ComprTypes : int
   {
     DEFAULT = 0,
@@ -117,6 +125,7 @@ namespace Project
       std::string defaultObjScript{};
       std::string defaultGlobalScript{};
       std::shared_ptr<Renderer::Texture> fallbackTex{};
+      bool reloadRequested{false};
 
       void reloadEntry(AssetManagerEntry &entry, const std::string &path);
       void resetDirtyTracking();
@@ -129,6 +138,12 @@ namespace Project
       ~AssetManager();
 
       void reload();
+      // Requests a full reload to run at the next safe point (before the next frame is built).
+      // Use this instead of reload() when called mid-frame (e.g. from an ImGui callback), since
+      // reload() frees GPU resources that already-recorded draw commands may still reference.
+      void requestReload() { reloadRequested = true; }
+      // Runs a pending requestReload(); must be called outside of frame rendering (see main loop).
+      void processPendingReload() { if(reloadRequested) { reloadRequested = false; reload(); } }
       void reloadAssetByUUID(uint64_t uuid);
       bool pollWatch();
       bool isDirty() const {
@@ -173,6 +188,28 @@ namespace Project
         }
         return entry->prefab;
       }
+
+      // Resolves the prefab template node that a prefab-instance node mirrors.
+      // Uses inst.uuidPrefab to find the prefab and inst.uuidPrefabNode to locate
+      // the specific subobject inside the prefab tree (root when 0/unset).
+      // Follows nested prefab references to the deepest concrete node.
+      // Returns nullptr if the instance is not linked or the prefab is missing.
+      Object* getPrefabSourceNode(const Object &inst);
+
+      // Resolves a template node (within prefabUUID) through any nested prefab references,
+      // returning the deepest concrete node, the prefab owning it, and merged overrides.
+      PrefabResolve resolveTemplateNode(Object &templateNode, uint64_t prefabUUID);
+      // Like resolveTemplateNode but starting from an instance node (locates its template
+      // node within its own prefab first, then resolves the chain).
+      PrefabResolve resolveInstance(const Object &inst);
+
+      // The template node within the instance's OWN prefab (the "slot"), WITHOUT following
+      // nested references. Used for structural edits (move/remove the reference itself).
+      Object* getPrefabSlotNode(const Object &inst);
+
+      // True if prefab `outer` is, or transitively references, prefab `inner`. Used to reject
+      // edits that would create a cyclic prefab reference.
+      bool prefabContains(uint64_t outer, uint64_t inner);
 
       const std::shared_ptr<Renderer::Texture> &getFallbackTexture();
 

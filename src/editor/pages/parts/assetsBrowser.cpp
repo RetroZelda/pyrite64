@@ -125,6 +125,9 @@ void Editor::AssetsBrowser::draw() {
   auto &dirState = tabDirs[activeTab];
   dirState = normalizeDir(dirState);
 
+  // Expose the Prefabs tab's current folder so "To Prefab" creates new prefabs there.
+  ctx.prefabCreateDir = normalizeDir(tabDirs[TAB_IDX_PREFABS]);
+
   fs::path basePath{};
   fs::path basePathAbs{};
   const char* baseLabel = nullptr;

@@ -282,8 +282,23 @@ void Editor::ObjectInspector::draw() {
   if(obj->uuidPrefab.value)
   {
     prefab = ctx.project->getAssets().getPrefabByUUID(obj->uuidPrefab.value);
-    if(prefab)srcObj = &prefab->obj;
+    auto *node = ctx.project->getAssets().getPrefabSourceNode(*obj);
+    if(node)srcObj = node;
     isPrefabInst = true;
+  }
+
+  // True when this object's prefab is being edited (the edit flag may sit on an ancestor).
+  const bool editingPrefab = isPrefabInst && scene->isEditingPrefabOf(*obj);
+
+  // While editing a prefab, edits/overrides target a TEMPLATE node (not the materialized
+  // instance, which reconcile overwrites and never serializes), routed per-level via
+  // resolveEditTarget: the node's own prefab definition if that prefab is in edit mode, else
+  // an override on the owner prefab's copy. Displayed property values still come from srcObj.
+  Project::Object* editTarget = obj.get();
+  uint64_t editPrefabUUID = 0;
+  if (isPrefabInst) {
+    auto t = scene->resolveEditTarget(*obj);
+    if (t.parent) { editTarget = t.parent; editPrefabUUID = t.prefabUUID; }
   }
 
 
@@ -295,7 +310,10 @@ void Editor::ObjectInspector::draw() {
       //ImTable::add("UUID");
       //ImGui::Text("0x%16lX", obj->uuid);
 
-      if(isPrefabInst) {
+      // Only an actual prefab INSTANCE (placed instance or nested-prefab reference) offers the
+      // "Edit prefab" toggle. Plain subobjects carry uuidPrefab=owner for reconcile but are not
+      // prefabs the user edits as a unit.
+      if(isPrefabInst && scene->isPrefabInstanceRoot(*obj)) {
         ImTable::add("Prefab");
 
         auto name = std::string{ICON_MDI_PENCIL " "};
@@ -315,7 +333,7 @@ void Editor::ObjectInspector::draw() {
 
   if(ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
   {
-    if(ImTable::start("Transform", obj.get()))
+    if(ImTable::start("Transform", editTarget))
     {
       ImTable::addObjProp("Pos", srcObj->pos);
 
@@ -429,18 +447,27 @@ void Editor::ObjectInspector::draw() {
   };
 
   for (auto &comp : srcObj->components) {
-    drawComp(obj.get(), comp, false);
+    drawComp(editTarget, comp, false);
   }
 
-  if(isPrefabInst && !obj->isPrefabEdit) {
+  if(isPrefabInst && !editingPrefab) {
     for (auto &comp : obj->components) {
       drawComp(obj.get(), comp, true);
     }
     srcObj = obj.get();
   }
 
-  if (isPrefabInst && obj->isPrefabEdit && prefab) {
-    ctx.project->getAssets().markPrefabDirty(prefab->uuid.value);
+  if (isPrefabInst && editPrefabUUID) {
+    auto &assets = ctx.project->getAssets();
+    // Attribute overrides land in editPrefabUUID (resolveEditTarget). Edits written straight to
+    // srcObj (component add/remove/duplicate, the proportionalScale toggle) belong to the prefab
+    // srcObj lives in (the resolved/inner prefab). Mark both; markPrefabDirty diffs vs saved
+    // state, so an unchanged prefab is a no-op.
+    assets.markPrefabDirty(editPrefabUUID);
+    uint64_t srcPrefabUUID = assets.resolveInstance(*obj).prefabUUID;
+    if (srcPrefabUUID && srcPrefabUUID != editPrefabUUID) {
+      assets.markPrefabDirty(srcPrefabUUID);
+    }
   }
 
   if (compCopy) {

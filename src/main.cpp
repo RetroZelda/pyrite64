@@ -386,6 +386,9 @@ int main(int argc, char** argv)
 
       Utils::FilePicker::poll();
       if (ctx.project) {
+        // Run any reload requested mid-frame here, before NewFrame, so freeing GPU
+        // resources can't invalidate draw commands recorded during the previous frame.
+        ctx.project->getAssets().processPendingReload();
         ctx.project->getAssets().pollWatch();
       }
 

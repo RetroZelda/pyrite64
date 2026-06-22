@@ -99,13 +99,15 @@ namespace P64::Comp
     auto *initData = (InitData*)initData_;
     if (initData == nullptr) {
       data->getMatInstance().~MaterialInstance();
+      AssetManager::release(data->assetIdx);
       data->~Model();
       return;
     }
 
     new(data) Model();
 
-    data->model = (T3DModel*)AssetManager::getByIndex(initData->assetIdx);
+    data->assetIdx = initData->assetIdx;
+    data->model = (T3DModel*)AssetManager::acquire(initData->assetIdx);
     assert(data->model != nullptr);
     data->layerIdx = initData->layer;
     data->flags = initData->flags;

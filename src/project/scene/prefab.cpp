@@ -12,9 +12,22 @@ using Builder = Utils::JSON::Builder;
 
 std::string Project::Prefab::serialize(const Object &obj) const
 {
+  // createPrefabFromObject passes a SCENE object to turn into a prefab: serialize in scene
+  // mode so its placed-instance children become thin references (their materialized content
+  // is stripped), exactly as a freshly authored template should look.
   Builder builder{};
   builder.set(uuid);
-  builder.doc["obj"] = obj.serialize();
+  builder.doc["obj"] = obj.serialize(/*isTemplate*/false);
+  return builder.toString();
+}
+
+std::string Project::Prefab::serialize() const
+{
+  // Persisting THIS prefab's template tree: never strip — it holds only authored content
+  // (incl. additive override children on nested-reference nodes).
+  Builder builder{};
+  builder.set(uuid);
+  builder.doc["obj"] = obj.serialize(/*isTemplate*/true);
   return builder.toString();
 }
 

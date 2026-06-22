@@ -196,15 +196,44 @@ void P64::Scene::update(float deltaTime)
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
 
   for(auto data : objectsToAdd) {
-    loadObject((uint8_t*&)data.prefabData, [&](Object &obj)
+    // Prefab header: object count (root + all descendants). The root keeps the id that
+    // addObject() already handed back to the caller; children get fresh unique ids. The
+    // prefab stores pre-order local ids (root=1..N) and parent links via 'group'; we remap
+    // those local ids to the new runtime ids so the spawned hierarchy stays connected.
+    uint8_t* objFile = (uint8_t*)data.prefabData;
+    uint32_t prefabObjCount = *(uint32_t*)objFile;
+    objFile += 4; // skip the count header (kept 4-byte aligned)
+
+    std::vector<uint16_t> idMap(prefabObjCount + 1, 0); // local id -> new runtime id
+
+    for(uint32_t objIdx = 0; objIdx < prefabObjCount; ++objIdx)
     {
-      obj.id = data.objectId;
-      obj.group = data.groupId;
-      obj.pos = data.pos;
-      obj.scale = data.scale;
-      obj.rot = data.rot;
-      obj.flags = ObjectFlags::ACTIVE;
-    }, true);
+      bool isRoot = (objIdx == 0);
+      loadObject(objFile, [&](Object &obj)
+      {
+        uint16_t localId = obj.id;       // pre-order local id from the prefab
+        uint16_t localGroup = obj.group; // local parent id (0 = prefab root)
+
+        uint16_t newId = isRoot ? data.objectId : (uint16_t)(++nextId);
+        if(localId <= prefabObjCount) idMap[localId] = newId;
+        obj.id = newId;
+
+        if(isRoot)
+        {
+          obj.group = data.groupId;
+          obj.pos = data.pos;
+          obj.scale = data.scale;
+          obj.rot = data.rot;
+          obj.flags = ObjectFlags::ACTIVE;
+        }
+        else
+        {
+          // parent was loaded earlier (pre-order), so its remapped id is already known
+          obj.group = (localGroup == 0 || localGroup > prefabObjCount)
+                        ? data.groupId : idMap[localGroup];
+        }
+      }, true);
+    }
   }
 
   runPendingComponentInit();

@@ -23,6 +23,7 @@ namespace P64::Comp
 
     T3DModel *model{};
     RingMat4FP matFP{};
+    uint16_t assetIdx{0};
     uint8_t layerIdx{0};
     uint8_t flags{0};
     uint8_t meshIdxCount{0};

@@ -88,6 +88,15 @@ namespace Project::Component::Code
       } else if(field.type == Utils::DataType::PREFAB){
         uint64_t uuid = Utils::parseU64(val);
         ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
+      } else if(field.type == Utils::DataType::string){
+        // Fixed-size char[N] member: write exactly field.dataSize bytes (truncating a longer
+        // value, zero-padding a shorter one, always leaving a null terminator). The runtime
+        // memcpy's the whole arg blob into the script's Data struct (engine code.h), so a
+        // variable-length string write would misalign every field after it.
+        for (uint32_t i = 0; i < field.dataSize; ++i) {
+          uint8_t c = (i + 1 < field.dataSize && i < val.size()) ? (uint8_t)val[i] : 0;
+          ctx.fileObj.write<uint8_t>(c);
+        }
       } else {
         ctx.fileObj.writeAs(val, field.type);
       }

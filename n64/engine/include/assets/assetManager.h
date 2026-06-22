@@ -31,6 +31,31 @@ namespace P64::AssetManager
    */
   void* getByIndex(uint32_t idx);
 
+  /**
+   * Like getByIndex(), but also increments the asset's reference count.
+   * Use this from components that own a per-object asset so the asset can be
+   * reclaimed once nothing references it anymore. Every acquire() must be paired
+   * with exactly one release(). Transient/one-off lookups can keep using
+   * getByIndex() (those do not participate in reference-count freeing).
+   *
+   * @param idx index, the `_asset` suffix can be used
+   * @return pointer to asset, nullptr if not found
+   */
+  void* acquire(uint32_t idx);
+
+  /**
+   * Decrements an asset's reference count (pairs with acquire()).
+   * When the count reaches zero the asset is freed, unless it is flagged
+   * keep-loaded. Safe to call on an index that was never acquired (no-op).
+   */
+  void release(uint32_t idx);
+
+  /**
+   * Force-frees a single asset by index (mirrors freeAll() for one entry) and
+   * resets its reference count to zero. Keep-loaded assets are left untouched.
+   */
+  void freeByIndex(uint32_t idx);
+
   const char* getPathByIndex(uint32_t idx);
 }
 

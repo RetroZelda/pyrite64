@@ -33,6 +33,10 @@ namespace Project
       uint16_t runtimeId{};
 
       PROP_U64(uuidPrefab);
+      // For prefab instances with subobjects: the uuid of the prefab template node
+      // this instance node mirrors. 0 (or matching the prefab root uuid) means this is
+      // the instance root. Used to resolve the live source node inside the prefab tree.
+      uint32_t uuidPrefabNode{0};
 
       PROP_VEC3(pos);
       PROP_QUAT(rot);
@@ -54,7 +58,10 @@ namespace Project
       void addComponent(int compID);
       void removeComponent(uint64_t uuid);
 
-      nlohmann::json serialize() const;
+      // isTemplate=true => serializing a prefab TEMPLATE tree (only authored/additive content
+      // exists there, so NEVER strip children). false => scene tree (strip reconcile-derived
+      // children that live under a prefab instance, since reconcile recreates them).
+      nlohmann::json serialize(bool isTemplate = false) const;
       void deserialize(Scene *scene, nlohmann::json &doc);
 
       bool isPrefabInstance() const {

@@ -11,6 +11,23 @@
 
 namespace fs = std::filesystem;
 
+namespace
+{
+  // Assign pre-order runtime ids (root=1, then children) to the prefab tree so the
+  // serialized parent links (group = parent's runtimeId) are consistent, and the runtime
+  // can remap them when spawning the prefab. Returns the total object count.
+  uint32_t assignPrefabRuntimeIds(Project::Object &obj, Project::Object *parent, uint32_t &nextId)
+  {
+    obj.parent = parent;
+    obj.runtimeId = static_cast<uint16_t>(nextId++);
+    uint32_t count = 1;
+    for (auto &child : obj.children) {
+      count += assignPrefabRuntimeIds(*child, &obj, nextId);
+    }
+    return count;
+  }
+}
+
 bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
 {
   auto &assets = sceneCtx.project->getAssets().getTypeEntries(Project::FileType::PREFAB);
@@ -29,6 +46,12 @@ bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
     //if(!assetBuildNeeded(asset, outPath))continue;
 
     sceneCtx.fileObj = {};
+    // Header: number of objects in this prefab, so the runtime can instantiate the full
+    // hierarchy (root + all children), not just the root. Ids are assigned pre-order to
+    // keep parent/group links resolvable and remappable at spawn time.
+    uint32_t idCounter = 1;
+    uint32_t prefabObjCount = assignPrefabRuntimeIds(asset.prefab->obj, nullptr, idCounter);
+    sceneCtx.fileObj.write<uint32_t>(prefabObjCount);
     writeObject(sceneCtx, asset.prefab->obj, true);
     sceneCtx.fileObj.writeToFile(outPath);
     sceneCtx.fileObj = {};

@@ -11,6 +11,7 @@
 #include "../utils/proc.h"
 #include "../utils/string.h"
 #include "../utils/textureFormats.h"
+#include "../context.h"
 
 namespace fs = std::filesystem;
 using AT = Project::FileType;
@@ -57,6 +58,18 @@ bool Build::buildProject(const std::string &configPath)
   Project::Project project{configPath};
   auto path = project.getPath();
   Utils::Logger::log("Building project...");
+
+  // Prefab-instance resolution (Scene::reconcilePrefabInstances / resolveInstance and
+  // sceneBuilder) looks prefabs up through the GLOBAL ctx.project. The editor sets that
+  // when a project is opened, but a headless/CLI build does not, which would null-deref.
+  // Point the global at the project being built for the duration of the build, restoring
+  // any prior value on exit (e.g. when the editor itself triggers a build).
+  Project::Project *prevGlobalProject = ctx.project;
+  ctx.project = &project;
+  struct GlobalProjectRestore {
+    Project::Project *prev;
+    ~GlobalProjectRestore() { ctx.project = prev; }
+  } globalProjectRestore{prevGlobalProject};
 
   if(project.conf.pathN64Inst.empty())
   {

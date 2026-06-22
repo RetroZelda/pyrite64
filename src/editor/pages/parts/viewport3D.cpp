@@ -122,8 +122,8 @@ namespace
 
       auto srcObj = child.get();
       if(child->isPrefabInstance()) {
-        auto prefab = ctx.project->getAssets().getPrefabByUUID(child->uuidPrefab.value);
-        if(prefab)srcObj = &prefab->obj;
+        auto *node = ctx.project->getAssets().getPrefabSourceNode(*child);
+        if(node)srcObj = node;
       }
 
       for(auto &comp : srcObj->components) {
@@ -937,8 +937,14 @@ void Editor::Viewport3D::draw()
       )) {
         gizmoTransformActive = true;
 
+        // When editing a prefab, its subobjects are normally read-only (no override). Allow
+        // the gizmo to move them when the node is editable in the current (per-level) edit
+        // scope; the edit is committed to the right prefab template afterwards.
+        bool editingPrefabSubobject =
+          scene->isPrefabSubobject(*obj) && scene->resolveEditTarget(*obj).parent != nullptr;
+
         if (!isMultiSelect) {
-          if(!obj->uuidPrefab.value || isOverride)
+          if(!obj->uuidPrefab.value || isOverride || editingPrefabSubobject)
           {
             std::unordered_map<uint64_t, glm::vec3> relPosMap{};
             if(!isOnlySelf)
@@ -963,6 +969,13 @@ void Editor::Viewport3D::draw()
             if(!isOnlySelf)
             {
               applyDeltaToChildren(*obj, relPosMap, gizmoMat);
+            }
+
+            // Persist the move into the prefab template so it survives reconcile and
+            // propagates to every instance.
+            if(editingPrefabSubobject)
+            {
+              scene->commitInstanceSubtreeToPrefab(*obj);
             }
           }
         } else {
@@ -1058,6 +1071,15 @@ void Editor::Viewport3D::draw()
               if(!isOnlySelf) {
                 applyDeltaToChildren(*selObj, relPosMap, newObjMat);
               }
+            }
+          }
+
+          // Commit prefab-subobject transforms to their templates (per-level), like the
+          // single-select path, so multi-select moves of subobjects survive reconcile.
+          for (auto *selObj : selectedObjects) {
+            if (scene->isPrefabSubobject(*selObj)
+                && scene->resolveEditTarget(*selObj).parent != nullptr) {
+              scene->commitInstanceSubtreeToPrefab(*selObj);
             }
           }
         }
