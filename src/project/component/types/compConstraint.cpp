@@ -21,6 +21,7 @@ namespace
   constexpr uint32_t TYPE_COPY_CAM = 2;
   constexpr uint32_t TYPE_BILLBOARD_Y = 3;
   constexpr uint32_t TYPE_BILLBOARD_XYZ = 4;
+  constexpr uint32_t TYPE_COPY_CAM_OFFSET = 5;
 }
 
 namespace Project::Component::Constraint
@@ -32,6 +33,7 @@ namespace Project::Component::Constraint
     PROP_BOOL(usePos);
     PROP_BOOL(useScale);
     PROP_BOOL(useRot);
+    PROP_VEC3(offset); // camera-local offset for TYPE_COPY_CAM_OFFSET
   };
 
   std::shared_ptr<void> init(Object &obj) {
@@ -47,6 +49,7 @@ namespace Project::Component::Constraint
       .set(data.usePos)
       .set(data.useScale)
       .set(data.useRot)
+      .set(data.offset)
       .doc;
   }
 
@@ -57,6 +60,7 @@ namespace Project::Component::Constraint
     Utils::JSON::readProp(doc, data->usePos);
     Utils::JSON::readProp(doc, data->useScale);
     Utils::JSON::readProp(doc, data->useRot);
+    Utils::JSON::readProp(doc, data->offset, glm::vec3{0.0f, 0.0f, 0.0f});
     return data;
   }
 
@@ -74,6 +78,7 @@ namespace Project::Component::Constraint
     ctx.fileObj.write<uint16_t>(objId);
     ctx.fileObj.write<uint8_t>(data.type.value);
     ctx.fileObj.write<uint8_t>(flags);
+    ctx.fileObj.write(data.offset.resolve(obj.propOverrides)); // camera-local offset (TYPE_COPY_CAM_OFFSET)
   }
 
   void draw(Object &obj, Entry &entry)
@@ -86,6 +91,7 @@ namespace Project::Component::Constraint
       std::vector<ImTable::ComboEntry> typeList{
         {TYPE_COPY_OBJ, "Copy Trans. (Object)"},
         {TYPE_COPY_CAM, "Copy Trans. (Camera)"},
+        {TYPE_COPY_CAM_OFFSET, "Copy Trans. (Camera) + Offset"},
         {TYPE_REL_OFFSET, "Relative Offset"},
         {TYPE_BILLBOARD_Y, "Billboard Y"},
         {TYPE_BILLBOARD_XYZ, "Billboard Full"},
@@ -131,6 +137,14 @@ namespace Project::Component::Constraint
         ImTable::addObjProp("Position", data.usePos);
         ImTable::addObjProp("Scale",    data.useScale);
         ImTable::addObjProp("Rotation", data.useRot);
+      }
+
+      if(data.type.value == TYPE_COPY_CAM_OFFSET)
+      {
+        // Offset is in camera-local space: +X right, +Y up, -Z forward.
+        // e.g. {0, 0, -50} keeps the object 50 units in front of the camera.
+        ImTable::addObjProp("Offset", data.offset);
+        ImTable::addObjProp("Match Rotation", data.useRot);
       }
 
       ImTable::end();

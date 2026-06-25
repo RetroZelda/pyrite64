@@ -15,6 +15,7 @@ namespace
     uint16_t refObjId;
     uint8_t type;
     uint8_t flags;
+    fm_vec3_t offset; // camera-local offset, used by TYPE_COPY_CAM_OFFSET
   };
 }
 namespace P64::Comp
@@ -31,6 +32,9 @@ namespace P64::Comp
     data->refObjId = initData->refObjId == 0 ? obj.group : initData->refObjId;
     data->type = initData->type;
     data->flags = initData->flags;
+    // reused as the camera-local offset for TYPE_COPY_CAM_OFFSET;
+    // recomputed below from the ref object for TYPE_REL_OFFSET
+    data->localRefPos = initData->offset;
 
     if(data->type == TYPE_REL_OFFSET)
     {
@@ -82,6 +86,15 @@ namespace P64::Comp
     {
       auto &cam = obj.getScene().getActiveCamera();
       if(data->flags & FLAG_USE_POS)obj.pos = cam.getPos();
+    }
+    else if(data->type == TYPE_COPY_CAM_OFFSET)
+    {
+      // Sit at a fixed offset relative to the camera (e.g. always in front of it).
+      // The offset (localRefPos) is in camera-local space: +X right, +Y up, -Z forward.
+      auto &cam = obj.getScene().getActiveCamera();
+      auto camRot = Math::quatFromInvRotMat(cam.getViewMatrix());
+      obj.pos = cam.getPos() + (camRot * data->localRefPos);
+      if(data->flags & FLAG_USE_ROT)obj.rot = camRot;
     }
     else if(data->type == TYPE_BILLBOARD_Y)
     {

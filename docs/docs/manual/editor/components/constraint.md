@@ -15,13 +15,19 @@ so that a scene with multiple cameras is handled correctly.
 
 The **Copy Trans. (Camera)** should therefore be used for things like sky-boxes.
 
+The **Copy Trans. (Camera) + Offset** keeps the object pinned at a fixed offset
+relative to the camera — useful for things that should always stay in front of
+the view (a held weapon, a first-person prop, a HUD-like 3D element).
+
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| **Type** | The kind of constraint:<br>• **Copy Trans. (Object)**: copy the transform of a referenced object.<br>• **Copy Trans. (Camera)**: copy the active camera's transform.<br>• **Relative Offset**: keep a fixed offset relative to the referenced object.<br>• **Billboard Y**: face the camera, rotating only around the Y axis.<br>• **Billboard Full**: always fully face the camera. |
+| **Type** | The kind of constraint:<br>• **Copy Trans. (Object)**: copy the transform of a referenced object.<br>• **Copy Trans. (Camera)**: copy the active camera's transform.<br>• **Copy Trans. (Camera) + Offset**: follow the camera, but kept at a fixed camera-local offset.<br>• **Relative Offset**: keep a fixed offset relative to the referenced object.<br>• **Billboard Y**: face the camera, rotating only around the Y axis.<br>• **Billboard Full**: always fully face the camera. |
 | **Ref. Object** | The object this constraint refers to (for the object-based types). |
 | **Position / Scale / Rotation** | Which transform channels the constraint applies. Disable a channel to leave that part of the object's own transform untouched. |
+| **Offset** | (Camera + Offset only) The position in camera-local space: **+X** right, **+Y** up, **-Z** forward. For example `{0, 0, -50}` keeps the object 50 units in front of the camera. |
+| **Match Rotation** | (Camera + Offset only) Also orient the object to match the camera's rotation, so it always faces the same way as the view. |
 
 ## See also
 
