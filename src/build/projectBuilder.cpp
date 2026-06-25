@@ -29,6 +29,7 @@ namespace
     {Build::buildFontAssets,    "Font"},
     {Build::buildTextureAssets, "Texture"},
     {Build::buildAudioAssets,   "Audio"},
+    {Build::buildEmitterAssets, "Emitter"},
     // Canvas: code-gen only, must run before scripts so UISceneTypes.h is available
     {Build::buildCanvasAssets,  "Canvas"},
     // must be last: (@TODO: handle prefab referencing prefab, [not in the editor yet])

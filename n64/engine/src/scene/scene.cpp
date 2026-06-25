@@ -21,6 +21,7 @@
 #include "assets/assetManager.h"
 #include "audio/audioManager.h"
 #include "../audio/audioManagerPrivate.h"
+#include "renderer/particles/emitterManager.h"
 #include "../debug/overlay.h"
 #include "debug/debugMenu.h"
 
@@ -89,6 +90,7 @@ P64::Scene::Scene(uint16_t sceneId, Scene** ref)
 
   loadSceneConfig();
   P64::AudioManager::init(conf.audioFreq);
+  P64::EmitterManager::init();
 
   DrawLayer::init(conf.layerSetup);
 
@@ -156,6 +158,7 @@ P64::Scene::~Scene()
   }
 
   AudioManager::stopAll();
+  EmitterManager::destroyAll(); // free emitter blocks/buffers before the textures they reference
   MatrixManager::reset();
   AssetManager::freeAll();
   Debug::destroy();
@@ -193,6 +196,7 @@ void P64::Scene::update(float deltaTime)
   ticksGlobalUpdate = get_user_ticks();
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
   AnimController::update(deltaTime);
+  EmitterManager::update(deltaTime);
   ticksGlobalUpdate = get_user_ticks() - ticksGlobalUpdate;
 
   for(auto data : objectsToAdd) {

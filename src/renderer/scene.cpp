@@ -77,6 +77,32 @@ Renderer::Scene::Scene()
     {SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offsetof(Renderer::LineVertex, color)},
   }
 });
+
+  // World-space textured billboards for live particle previews in the editor viewport.
+  // Depth-TEST against scene geometry (occlusion) but no depth-WRITE + alpha blend, so
+  // overlapping transparent particles don't self-reject — matches the engine's particle pass.
+  shaderParticles = std::make_unique<Shader>(ctx.gpu, Shader::Config{
+    .name = "particles",
+    .vertUboCount = 1,
+    .fragUboCount = 0,
+    .vertTexCount = 0,
+    .fragTexCount = 1,
+    .vertSboCount = 0,
+  });
+  pipelineParticles = std::make_unique<Pipeline>(Pipeline::Info{
+    .shader = *shaderParticles,
+    .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+    .useDepth = true,
+    .drawsObjID = true,   // 2 color targets, matching the viewport's render pass
+    .translucent = true,  // alpha blend
+    .depthWrite = false,  // test against geometry, but don't write (alpha-blended particles)
+    .vertPitch = sizeof(Renderer::ParticleVertex),
+    .vertLayout = {
+      {SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3     , offsetof(Renderer::ParticleVertex, pos)},
+      {SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offsetof(Renderer::ParticleVertex, color)},
+      {SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2     , offsetof(Renderer::ParticleVertex, uv)},
+    }
+  });
 }
 
 Renderer::Scene::~Scene() {

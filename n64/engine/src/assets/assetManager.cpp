@@ -92,6 +92,10 @@ namespace
     [AssetType::PREFAB]      = {(LoadFunc)assetLoad,      (FreeFunc)free          },
     [AssetType::NODE_GRAPH]  = {P64::NodeGraph::load,     (FreeFunc)free          },
     [AssetType::MUSIC_XM]    = {(LoadFunc)xmLoad,         (FreeFunc)xmFree        },
+    // CANVAS is editor/code-gen only and never baked; keep a null entry so the array
+    // stays contiguous (GCC rejects sparse/gapped designated initializers).
+    [AssetType::CANVAS]      = {nullptr,                  nullptr                 },
+    [AssetType::EMITTER]     = {(LoadFunc)assetLoad,      (FreeFunc)free          },
   };
 
   constinit AssetTable* assetTable{nullptr};

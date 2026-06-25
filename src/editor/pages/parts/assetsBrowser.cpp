@@ -20,6 +20,7 @@
 #include "../../../utils/proc.h"
 #include "../../../utils/hash.h"
 #include "../../../project/canvas/canvas.h"
+#include "../../../project/assets/emitter.h"
 
 using FileType = Project::FileType;
 namespace fs = std::filesystem;
@@ -31,6 +32,7 @@ namespace
   constexpr int TAB_IDX_SCRIPTS = 2;
   constexpr int TAB_IDX_PREFABS = 3;
   constexpr int TAB_IDX_CANVAS = 4;
+  constexpr int TAB_IDX_PARTICLES = 5;
 
   struct TabDef
   {
@@ -63,7 +65,7 @@ namespace
 void Editor::AssetsBrowser::draw() {
   auto &scenes = ctx.project->getScenes().getEntries();
 
-  const std::array<TabDef, 5> TABS{
+  const std::array<TabDef, 6> TABS{
     TabDef{
       .name = ICON_MDI_EARTH_BOX "  Scenes",
       .showScenes = true
@@ -83,6 +85,10 @@ void Editor::AssetsBrowser::draw() {
     TabDef{
       .name = ICON_MDI_LAYERS_OUTLINE "  Canvas",
       .fileTypes = {FileType::CANVAS}
+    },
+    TabDef{
+      .name = ICON_MDI_CREATION "  Particles",
+      .fileTypes = {FileType::EMITTER}
     },
   };
 
@@ -131,7 +137,7 @@ void Editor::AssetsBrowser::draw() {
   fs::path basePath{};
   fs::path basePathAbs{};
   const char* baseLabel = nullptr;
-  if (activeTab == TAB_IDX_ASSETS || activeTab == TAB_IDX_PREFABS) {
+  if (activeTab == TAB_IDX_ASSETS || activeTab == TAB_IDX_PREFABS || activeTab == TAB_IDX_PARTICLES) {
     basePath = fs::path(ctx.project->getPath()) / "assets";
     baseLabel = ICON_MDI_FOLDER " Assets";
   } else if (activeTab == TAB_IDX_SCRIPTS) {
@@ -460,6 +466,8 @@ void Editor::AssetsBrowser::draw() {
         iconTxt = ICON_MDI_GRAPH_OUTLINE;
       } else if (asset.type == FileType::CANVAS) {
         iconTxt = ICON_MDI_LAYERS_OUTLINE;
+      } else if (asset.type == FileType::EMITTER) {
+        iconTxt = ICON_MDI_CREATION;
       }
     }
 
@@ -626,8 +634,10 @@ void Editor::AssetsBrowser::draw() {
 
   static std::string newScriptDir{};
   static std::string newCanvasName{};
+  static std::string newEmitterName{};
+  static std::string newEmitterDir{};
 
-  if (activeTab == TAB_IDX_SCRIPTS || activeTab == TAB_IDX_SCENES || activeTab == TAB_IDX_CANVAS)
+  if (activeTab == TAB_IDX_SCRIPTS || activeTab == TAB_IDX_SCENES || activeTab == TAB_IDX_CANVAS || activeTab == TAB_IDX_PARTICLES)
   {
     checkLineBreak();
 
@@ -635,6 +645,7 @@ void Editor::AssetsBrowser::draw() {
     const char* btnIcon = ICON_MDI_EARTH_BOX_PLUS;
     if (activeTab == TAB_IDX_SCRIPTS) btnIcon = ICON_MDI_FILE_DOCUMENT_PLUS_OUTLINE;
     if (activeTab == TAB_IDX_CANVAS)  btnIcon = ICON_MDI_LAYERS_PLUS;
+    if (activeTab == TAB_IDX_PARTICLES) btnIcon = ICON_MDI_CREATION;
     if (ImGui::Button(btnIcon, textBtnSize)) {
       if(activeTab == TAB_IDX_SCRIPTS) {
         newScriptDir = dirState;
@@ -644,6 +655,10 @@ void Editor::AssetsBrowser::draw() {
       } else if (activeTab == TAB_IDX_CANVAS) {
         newCanvasName = "NewCanvas";
         ImGui::OpenPopup("NewCanvas");
+      } else if (activeTab == TAB_IDX_PARTICLES) {
+        newEmitterDir = dirState;
+        newEmitterName = "NewEmitter";
+        ImGui::OpenPopup("NewEmitter");
       } else {
         ctx.project->getScenes().add();
       }
@@ -663,6 +678,10 @@ void Editor::AssetsBrowser::draw() {
   if (activeTab == TAB_IDX_CANVAS && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
   {
     ImGui::SetTooltip("Create new Canvas");
+  }
+  if (activeTab == TAB_IDX_PARTICLES && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+  {
+    ImGui::SetTooltip("Create new Particle Emitter");
   }
 
   ImGui::Dummy({0, 10_px});
@@ -695,6 +714,50 @@ void Editor::AssetsBrowser::draw() {
       else
       {
         Editor::Noti::add(Editor::Noti::Type::ERROR, "A canvas with that name already exists.");
+      }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+
+  ImGui::SetNextWindowSize(ImVec2(250_px, 0));
+  if (ImGui::BeginPopup("NewEmitter"))
+  {
+    ImTable::start("EMITTER");
+    ImTable::add("Name");
+    ImGui::InputText("##EmitterName", &newEmitterName);
+    ImTable::end();
+
+    ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 112_px);
+    if (ImGui::Button("Create"))
+    {
+      // Emitters live under assets/ (folder-browsable); default to assets/particles.
+      auto subDir = newEmitterDir.empty() ? std::string{"particles"} : newEmitterDir;
+      auto dir = fs::path{ctx.project->getPath()} / "assets" / subDir;
+      fs::create_directories(dir);
+      auto emitterPath = dir / (newEmitterName + ".emitter");
+
+      if (!fs::exists(emitterPath))
+      {
+        Project::Assets::Emitter e;
+        e.name = newEmitterName;
+        e.uuid = Utils::Hash::randomU64();
+        e.save(emitterPath.string());
+        // Persist any in-progress emitter edits first: the reload re-reads emitters from
+        // disk, which would otherwise discard unsaved changes to the one being edited.
+        if(ctx.selAssetUUID != 0) {
+          auto *sel = ctx.project->getAssets().getEntryByUUID(ctx.selAssetUUID);
+          if(sel && sel->type == FileType::EMITTER && sel->emitter) sel->emitter->save();
+        }
+        // Defer the reload: reload() frees GPU textures that the emitter preview's
+        // already-recorded ImGui draw commands still reference this frame (segfault otherwise).
+        ctx.project->getAssets().requestReload();
+        ImGui::CloseCurrentPopup();
+      }
+      else
+      {
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "An emitter with that name already exists.");
       }
     }
     ImGui::SameLine();

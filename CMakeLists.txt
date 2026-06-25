@@ -214,6 +214,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/component/types/compModel.cpp
         src/renderer/pipeline.h
         src/renderer/pipeline.cpp
+        src/renderer/particleBatch.cpp
         src/utils/aabb.h
         src/utils/container.h
         src/renderer/n64Mesh.h
@@ -245,6 +246,7 @@ add_executable(pyrite64 src/main.cpp
         src/build/tools/bci.h
         src/build/audioBuilder.cpp
         src/project/component/types/compAudio2d.cpp
+        src/project/component/types/compParticle.cpp
         src/editor/pages/parts/layerInspector.cpp
         src/build/prefabBuilder.cpp
         src/build/canvasBuilder.cpp
@@ -288,6 +290,15 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/assets/modelEditor.cpp
         src/project/assets/material.h
         src/project/assets/material.cpp
+        src/project/assets/emitter.h
+        src/project/assets/emitter.cpp
+        src/build/emitterBuilder.cpp
+        src/editor/pages/parts/assets/editorHelpers.h
+        src/editor/pages/parts/assets/emitterEditor.h
+        src/editor/pages/parts/assets/emitterEditor.cpp
+        src/editor/pages/parts/emitterPreview.h
+        src/editor/pages/parts/emitterPreview.cpp
+        n64/engine/include/renderer/particles/particleSim.h
         src/project/assets/model3d.h
         src/n64/libdragon.h
         src/n64/ccMapping.cpp

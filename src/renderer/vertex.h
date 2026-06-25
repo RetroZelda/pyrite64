@@ -24,4 +24,12 @@ namespace Renderer
     uint32_t objectId{};
     glm::u8vec4 color{};
   };
+
+  // World-space, CPU-expanded billboard vertex for the "particles" pipeline (24 bytes).
+  struct ParticleVertex
+  {
+    glm::vec3 pos{};     // world-space corner (camera-facing quad built on the CPU)
+    glm::u8vec4 color{}; // RGBA8 (UBYTE4_NORM)
+    glm::vec2 uv{};
+  };
 }

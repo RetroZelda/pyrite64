@@ -26,6 +26,18 @@ namespace P64::PTX
 
     const Type type;
 
+    // Optional local->world transform pushed around draw() via the tpx matrix stack.
+    // When set, particle positions are interpreted in LOCAL space (cheap to "move" the
+    // whole emitter by just updating this matrix). nullptr => positions are world-space
+    // (the original behaviour, used by PTX::Sprites/jam25 — unchanged).
+    T3DMat4FP *mat{nullptr};
+
+    // bytes per particle for this type (S8 pair = 16B, S16 pair = 24B)
+    [[nodiscard]] uint32_t strideBytes() const {
+      return (type == COLOR_A_S16 || type == TEX_A_S16) ? (sizeof(TPXParticleS16) / 2)
+                                                        : (sizeof(TPXParticleS8) / 2);
+    }
+
     System(Type ptxType, uint32_t maxSize = 0);
     ~System();
 

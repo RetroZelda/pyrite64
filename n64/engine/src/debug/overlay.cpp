@@ -53,6 +53,8 @@ namespace {
   constinit P64::Debug::Menu menuAnim{};
   constinit P64::Debug::Menu menuAnimControllerRegistered{};
 
+  constinit P64::Debug::Menu menuParticles{};
+
   constexpr float usToWidth(long timeUs) {
     double timeMs = (double)timeUs / 1000.0;
     return (float)(timeMs * (1.0 / (double)barRefTimeMs)) * barWidth;
@@ -119,12 +121,17 @@ void P64::Debug::Overlay::init()
   menuAnim.items.clear();
   menuAnimControllerRegistered.items.clear();
 
+  menuParticles.items.clear();
+  menuParticles.onDraw = ovlParticles;
+  buildParticlesMenu(menuParticles); // one shape-toggle per emitter slot
+
   menu.add("Scenes", menuScenes)
       .add("CPU", menuCPU)
       .add("Collision", menuColl)
       .add("Animation", menuAnim)
       .add("Audio", menuAudio)
       .add("Memory", menuMemory)
+      .add("Particles", menuParticles)
       .add("Bar CPU", showBarCPU)
       .add("Bar RAM", showBarRAM)
       .add("FPS", showFrameTime)
@@ -223,6 +230,7 @@ void P64::Debug::Overlay::draw(surface_t* surf)
   menu.update();
 
   collScene.debugDraw(showCollMesh, showColliders);
+  drawParticleShapes(); // emission-shape/direction gizmos for toggled emitters (next-frame flush, like collision)
 
   Debug::printStart();
 

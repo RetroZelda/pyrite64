@@ -21,6 +21,7 @@ namespace Project
 {
   class Project;
   struct Canvas;  // forward declaration — full type in canvas/canvas.h
+  namespace Assets { struct Emitter; }  // forward declaration — full type in assets/emitter.h
 
   // Result of resolving a prefab instance/template node through any nested prefab references.
   struct PrefabResolve
@@ -52,6 +53,7 @@ namespace Project
     NODE_GRAPH,
     MUSIC_XM,
     CANVAS,
+    EMITTER,
 
     _SIZE
   };
@@ -91,6 +93,7 @@ namespace Project
     std::shared_ptr<Renderer::N64Mesh> mesh3D{};
     std::shared_ptr<Prefab> prefab{nullptr};
     std::shared_ptr<Canvas> canvas{nullptr};
+    std::shared_ptr<Assets::Emitter> emitter{nullptr};
     AssetConf conf{};
     Utils::CPP::Struct params{};
 
@@ -138,6 +141,10 @@ namespace Project
       ~AssetManager();
 
       void reload();
+      // Records the current mtime of a file we just wrote ourselves, so the file watcher
+      // does not treat our own save as an external modification (which would rebuild the
+      // entry and could clobber in-memory edits). No-op if the watcher isn't initialized yet.
+      void noteFileSaved(const std::string &path);
       // Requests a full reload to run at the next safe point (before the next frame is built).
       // Use this instead of reload() when called mid-frame (e.g. from an ImGui callback), since
       // reload() frees GPU resources that already-recorded draw commands may still reference.

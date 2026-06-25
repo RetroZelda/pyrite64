@@ -25,6 +25,7 @@ namespace Utils
     ASSET_SPRITE,
     OBJECT_REF,
     PREFAB,
+    ASSET_EMITTER, // append only — values are baked into shipped scenes/components
   };
 
   class BinaryFile

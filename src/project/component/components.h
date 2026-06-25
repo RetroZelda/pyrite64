@@ -88,6 +88,7 @@ namespace Project::Component
   MAKE_COMP(NodeGraph)
   MAKE_COMP(AnimModel)
   MAKE_COMP(CharBody)
+  MAKE_COMP(Particle)
 
   constexpr std::array TABLE{
     CompInfo{
@@ -261,6 +262,20 @@ namespace Project::Component
       .funcSerialize = CharBody::serialize,
       .funcDeserialize = CharBody::deserialize,
       .funcBuild = CharBody::build,
+      .funcGetAABB = nullptr
+    },
+    CompInfo{
+      .id = 13,
+      .icon = ICON_MDI_CREATION " ",
+      .name = "Particle Emitter",
+      .docSlug = "/manual/editor/components/particle",
+      .funcInit = Particle::init,
+      .funcDraw = Particle::draw,
+      .funcDraw3D = Particle::draw3D,
+      .funcDrawCopyPass = Particle::drawCopyPass,
+      .funcSerialize = Particle::serialize,
+      .funcDeserialize = Particle::deserialize,
+      .funcBuild = Particle::build,
       .funcGetAABB = nullptr
     },
   };

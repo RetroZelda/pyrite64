@@ -20,6 +20,7 @@
 #include "parts/sceneGraph.h"
 #include "parts/sceneInspector.h"
 #include "parts/viewport3D.h"
+#include "parts/emitterPreview.h"
 
 namespace Editor
 {
@@ -41,6 +42,10 @@ namespace Editor
       // Editors
       std::vector<std::shared_ptr<NodeEditor>> nodeEditors{};
       std::map<uint64_t, std::shared_ptr<ModelEditor>> modelEditors{};
+      EmitterPreview emitterPreview{};
+      uint64_t previewEmitterUUID{0};  // emitter currently shown in the preview (from selection)
+      uint64_t editingEmitterUUID{0};  // emitter whose unsaved edits need persisting on deselect
+      bool focusParticlesTab{false};   // bring the Particles tab forward when a new emitter is selected
       PreferenceOverlay prefOverlay{};
       ProjectSettings projectSettings{};
       AssetsBrowser assetsBrowser{};

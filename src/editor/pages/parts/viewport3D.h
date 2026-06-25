@@ -4,6 +4,8 @@
 */
 #pragma once
 #include <memory>
+#include <vector>
+#include <unordered_map>
 
 #include "../../../renderer/camera.h"
 #include "../../../renderer/vertBuffer.h"
@@ -11,7 +13,11 @@
 #include "../../../renderer/mesh.h"
 #include "../../../renderer/object.h"
 #include "../../../renderer/skeleton.h"
+#include "../../../renderer/particleBatch.h"
 #include "../../../utils/container.h"
+#include "engine/include/renderer/particles/particleSim.h"
+
+namespace Renderer { class Texture; }
 
 namespace Editor
 {
@@ -55,13 +61,44 @@ namespace Editor
       int gizmoOp{0};
       bool gizmoTransformActive{false};
 
+      // --- Live particle billboards for placed ParticleEmitter components ---
+      // Per-OBJECT sim state (keyed by object UUID, so two objects sharing an emitter asset
+      // animate independently). compParticle::draw3D feeds submissions each frame; the particle
+      // section of onRenderPass advances the sims, builds world-space billboards, and draws them.
+      struct EmitterSimState {
+        std::vector<P64::ParticleSim::Particle> particles{};
+        P64::ParticleSim::Rng rng{};
+        float simTime{0.0f};
+        float spawnAccum{0.0f};
+        bool oneShotPending{true};
+        uint64_t emitterUUID{0}; // detect asset swap -> reset
+        bool seen{false};        // for stale-sweep
+      };
+      struct EmitterSubmission { uint64_t objectUUID; uint64_t emitterUUID; glm::vec3 worldPos; };
+      // tex resolved + used in the same frame (copy pass builds, render pass draws) — never dangles.
+      struct ParticleDrawGroup { Renderer::Texture* tex; uint32_t firstVert; uint32_t vertCount; };
+
+      std::unordered_map<uint64_t, EmitterSimState> emitterStates{};
+      std::vector<EmitterSubmission> emitterSubmissions{};
+      std::vector<Renderer::ParticleVertex> particleVerts{};
+      std::vector<ParticleDrawGroup> particleGroups{};
+      std::shared_ptr<Renderer::ParticleBatch> particleBatch{};
+
       void onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& renderScene);
       void onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass *copyPass);
       void onPostRender(Renderer::Scene& renderScene);
+      // simulate emitters + build/upload billboard verts (copy pass), then bind+draw (render pass)
+      void buildParticles(SDL_GPUCopyPass* copyPass);
+      void drawParticles(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Renderer::Scene& renderScene);
 
     public:
       Viewport3D();
       ~Viewport3D();
+
+      // Called by compParticle::draw3D each frame for every placed emitter (during the object loop).
+      void submitEmitter(uint64_t objectUUID, uint64_t emitterUUID, const glm::vec3 &worldPos) {
+        emitterSubmissions.push_back({objectUUID, emitterUUID, worldPos});
+      }
 
       std::shared_ptr<Renderer::Mesh> getLines() {
         return meshLines;

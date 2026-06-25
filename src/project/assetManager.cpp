@@ -4,6 +4,7 @@
 */
 #include "assetManager.h"
 #include "canvas/canvas.h"
+#include "assets/emitter.h"
 #include "../context.h"
 #include "../editor/thumbnailCache.h"
 #include <filesystem>
@@ -139,6 +140,9 @@ namespace
     } else if (ext == ".canvas") {
       type = Project::FileType::CANVAS;
       outPath = ""; // code-gen only — no ROM binary output
+    } else if (ext == ".emitter") {
+      type = Project::FileType::EMITTER;
+      outPath = changeExt(outPath, ".emit64");
     }
 
     if (type == Project::FileType::UNKNOWN) {
@@ -159,8 +163,8 @@ namespace
 
     entry.conf.baseScale = 16;
 
-    // Canvas files store their UUID inside the canvas JSON itself — no .conf needed.
-    if (type != Project::FileType::CANVAS)
+    // Canvas and emitter files store their UUID inside their own JSON — no .conf needed.
+    if (type != Project::FileType::CANVAS && type != Project::FileType::EMITTER)
     {
       auto pathMeta = path;
       pathMeta += ".conf";
@@ -313,6 +317,14 @@ void Project::AssetManager::reloadEntry(AssetManagerEntry &entry, const std::str
         entry.conf.uuid = entry.canvas->uuid;
     } break;
 
+    case FileType::EMITTER:
+    {
+      entry.emitter = std::make_shared<Assets::Emitter>();
+      entry.emitter->load(path);
+      if (entry.emitter->uuid != 0)
+        entry.conf.uuid = entry.emitter->uuid;
+    } break;
+
     case FileType::MODEL_3D:
     {
       try{
@@ -367,6 +379,12 @@ void Project::AssetManager::reloadEntry(AssetManagerEntry &entry, const std::str
   }
 }
 
+void Project::AssetManager::noteFileSaved(const std::string &path) {
+  if (watchInitialized) {
+    watchFiles[path] = Utils::FS::getFileAge(path);
+  }
+}
+
 void Project::AssetManager::reload() {
   for (auto &e : entries)e.clear();
   entriesMap.clear();
@@ -404,6 +422,13 @@ void Project::AssetManager::reload() {
 
       if (assetEntry.type == FileType::CANVAS) {
         reloadEntry(assetEntry, path.string());
+      }
+
+      if (assetEntry.type == FileType::EMITTER) {
+        reloadEntry(assetEntry, path.string());
+        if (assetEntry.emitter && assetEntry.emitter->uuid != 0) {
+          assetEntry.conf.uuid = assetEntry.emitter->uuid;
+        }
       }
 
       entries[(int)assetEntry.type].push_back(assetEntry);
@@ -576,10 +601,13 @@ bool Project::AssetManager::pollWatch()
       return;
     }
 
-    if (entry->type == FileType::IMAGE || entry->type == FileType::PREFAB) {
+    if (entry->type == FileType::IMAGE || entry->type == FileType::PREFAB || entry->type == FileType::EMITTER) {
       reloadEntry(*entry, entry->path);
       if (entry->type == FileType::PREFAB && entry->prefab) {
         entry->conf.uuid = entry->prefab->uuid.value;
+      }
+      if (entry->type == FileType::EMITTER && entry->emitter && entry->emitter->uuid != 0) {
+        entry->conf.uuid = entry->emitter->uuid;
       }
     }
 

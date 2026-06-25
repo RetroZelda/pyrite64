@@ -15,6 +15,10 @@
 #include "../../../renderer/uniforms.h"
 #include "../../../utils/meshGen.h"
 #include "../../../utils/colors.h"
+#include "../../../utils/emitterUtil.h"
+#include "../../../renderer/texture.h"
+#include <algorithm>
+#include <cmath>
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/matrix_decompose.hpp"
 #include "SDL3/SDL_gpu.h"
@@ -238,6 +242,8 @@ Editor::Viewport3D::Viewport3D()
 
   meshSprites = std::make_shared<Renderer::Mesh>();
   objSprites.setMesh(meshSprites);
+
+  particleBatch = std::make_shared<Renderer::ParticleBatch>(ctx.gpu);
 }
 
 Editor::Viewport3D::~Viewport3D() {
@@ -425,6 +431,12 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
 
   if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
 
+  // live particle billboards for placed ParticleEmitter components (submissions were collected
+  // during the object loop above). Depth-tested against the scene; alpha-blended; textured.
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Particles");
+  drawParticles(cmdBuff, renderPass3D, renderScene);
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
+
   SDL_EndGPURenderPass(renderPass3D);
 }
 
@@ -446,7 +458,151 @@ void Editor::Viewport3D::onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPa
     }
   });
 
+  // ParticleEmitter components submitted themselves above; simulate + upload their billboards now
+  // (same frame), so the render pass can bind+draw them with no upload latency.
+  buildParticles(copyPass);
+
   if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
+}
+
+// Advance each placed emitter's shared ParticleSim and build camera-facing, world-space billboard
+// quads (using the live editor camera's right/up so the GPU shader's view-projection keeps them
+// depth-correct). Runs in the copy pass; the resulting batch is bound+drawn in the render pass.
+void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
+{
+  namespace PS = P64::ParticleSim;
+
+  particleVerts.clear();
+  particleGroups.clear();
+  for(auto &kv : emitterStates) kv.second.seen = false;
+
+  if(ctx.project && !emitterSubmissions.empty())
+  {
+    auto &assets = ctx.project->getAssets();
+    const float dt = std::min(ImGui::GetIO().DeltaTime, 0.05f);
+    const glm::vec3 camRight = camera.rot * glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 camUp    = camera.rot * glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 camFwd   = camera.rot * glm::vec3(0.0f, 0.0f, -1.0f);
+
+    for(const auto &sub : emitterSubmissions)
+    {
+      auto *entry = assets.getEntryByUUID(sub.emitterUUID);
+      if(!entry || entry->type != Project::FileType::EMITTER || !entry->emitter) continue;
+      auto &em = *entry->emitter;
+
+      auto &state = emitterStates[sub.objectUUID]; // keyed by OBJECT (independent per instance)
+      state.seen = true;
+      if(state.emitterUUID != sub.emitterUUID) { // first appearance or asset swap -> (re)init
+        state.particles.clear();
+        state.simTime = 0.0f; state.spawnAccum = 0.0f; state.oneShotPending = true;
+        state.emitterUUID = sub.emitterUUID;
+        state.rng.seed((uint32_t)(sub.objectUUID ^ (sub.objectUUID >> 32)) | 1u);
+      }
+
+      PS::Config cfg = Utils::Emitter::toConfig(em);
+      if(cfg.maxParticles > 64u) cfg.maxParticles = 64u; // editor cap (many emitters can be placed)
+      auto seq = em.textureSequence();
+      cfg.swapCount = seq.empty() ? 1u : (uint32_t)seq.size();
+
+      // advance the shared simulation (identical math to the preview + engine)
+      state.simTime += dt;
+      uint32_t used = (uint32_t)state.particles.size();
+      uint32_t freeSlots = cfg.maxParticles > used ? cfg.maxParticles - used : 0;
+      uint32_t n = PS::spawnCount(cfg, dt, state.spawnAccum, freeSlots, state.oneShotPending);
+      PS::Vec3 origin = cfg.worldSpace ? PS::Vec3{sub.worldPos.x, sub.worldPos.y, sub.worldPos.z} : PS::Vec3{};
+      for(uint32_t i = 0; i < n; ++i) state.particles.push_back(PS::spawn(cfg, state.rng, origin));
+      for(size_t i = 0; i < state.particles.size(); ) {
+        if(!PS::step(state.particles[i], cfg, dt)) { state.particles[i] = state.particles.back(); state.particles.pop_back(); }
+        else ++i;
+      }
+      if(cfg.fireMode == PS::FIRE_ONE_SHOT && state.particles.empty() && !state.oneShotPending) state.oneShotPending = true;
+      if(state.particles.empty()) continue;
+
+      // resolve the current swap texture (no texture -> skip; the placed icon still marks it)
+      Renderer::Texture* tex = nullptr;
+      if(!seq.empty()) {
+        uint32_t si = PS::swapIndexForTime(cfg, state.simTime);
+        if(si >= seq.size()) si = 0;
+        auto *te = assets.getEntryByUUID(seq[si]);
+        if(te && te->texture && te->texture->getGPUTex()) tex = te->texture.get();
+      }
+      if(!tex) continue;
+
+      // back-to-front along the view axis for correct alpha compositing (depth-write is off)
+      std::sort(state.particles.begin(), state.particles.end(), [&](const PS::Particle &a, const PS::Particle &b){
+        glm::vec3 ca{a.pos.x, a.pos.y, a.pos.z}; if(!cfg.worldSpace) ca += sub.worldPos;
+        glm::vec3 cb{b.pos.x, b.pos.y, b.pos.z}; if(!cfg.worldSpace) cb += sub.worldPos;
+        return glm::dot(ca, camFwd) > glm::dot(cb, camFwd);
+      });
+
+      const float scroll = PS::uvScrollOffset(cfg, state.simTime);
+      const uint32_t groupFirst = (uint32_t)particleVerts.size();
+
+      for(auto &p : state.particles) {
+        float t = PS::lifeT(p);
+        glm::vec3 center{p.pos.x, p.pos.y, p.pos.z};
+        if(!cfg.worldSpace) center += sub.worldPos; // relative particles follow the emitter object
+        float ws = PS::sizeAt(cfg, t) * Utils::Emitter::SIZE_TO_WORLD;
+        if(ws < 0.01f) continue;
+
+        float col4[4]; PS::colorAt(cfg, t, col4);
+        glm::u8vec4 col{
+          (uint8_t)(std::clamp(col4[0], 0.0f, 1.0f) * 255.0f),
+          (uint8_t)(std::clamp(col4[1], 0.0f, 1.0f) * 255.0f),
+          (uint8_t)(std::clamp(col4[2], 0.0f, 1.0f) * 255.0f),
+          (uint8_t)(std::clamp(col4[3], 0.0f, 1.0f) * 255.0f)};
+
+        uint32_t f = PS::frameForParticle(cfg, p, state.simTime);
+        float u0 = (float)f / (float)cfg.texFrames + scroll;
+        float u1 = (float)(f + 1) / (float)cfg.texFrames + scroll;
+
+        // rotate the quad in the billboard plane by the particle's spin
+        float ang = PS::angleAt(p) * 0.01745329f;
+        float cs = std::cos(ang), sn = std::sin(ang);
+        auto worldCorner = [&](float lx, float ly) {
+          float rx = lx * cs - ly * sn, ry = lx * sn + ly * cs;
+          return center + camRight * (rx * ws) + camUp * (ry * ws);
+        };
+        glm::vec3 tl = worldCorner(-1.0f,  1.0f), tr = worldCorner( 1.0f,  1.0f),
+                  br = worldCorner( 1.0f, -1.0f), bl = worldCorner(-1.0f, -1.0f);
+
+        // two triangles (cull disabled): tl,tr,br + tl,br,bl
+        particleVerts.push_back({tl, col, {u0, 0.0f}});
+        particleVerts.push_back({tr, col, {u1, 0.0f}});
+        particleVerts.push_back({br, col, {u1, 1.0f}});
+        particleVerts.push_back({tl, col, {u0, 0.0f}});
+        particleVerts.push_back({br, col, {u1, 1.0f}});
+        particleVerts.push_back({bl, col, {u0, 1.0f}});
+      }
+
+      uint32_t cnt = (uint32_t)particleVerts.size() - groupFirst;
+      if(cnt > 0) particleGroups.push_back({tex, groupFirst, cnt});
+    }
+  }
+
+  // drop sim state for objects that stopped submitting (deleted / emitter cleared)
+  for(auto it = emitterStates.begin(); it != emitterStates.end(); ) {
+    if(!it->second.seen) it = emitterStates.erase(it); else ++it;
+  }
+  emitterSubmissions.clear();
+
+  particleBatch->setVertices(particleVerts);
+  particleBatch->upload(copyPass);
+}
+
+void Editor::Viewport3D::drawParticles(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Renderer::Scene& renderScene)
+{
+  if(particleGroups.empty() || !particleBatch->isReady() || particleBatch->getVertexCount() == 0) return;
+
+  renderScene.getPipeline("particles").bind(pass);
+  SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
+  particleBatch->bind(pass);
+
+  for(const auto &g : particleGroups) {
+    if(!g.tex || !g.tex->getGPUTex()) continue; // defensive: never bind a freed/empty texture
+    g.tex->bind(pass); // fragment sampler (set=2, binding=0)
+    SDL_DrawGPUPrimitives(pass, g.vertCount, 1, g.firstVert, 0);
+  }
 }
 
 void Editor::Viewport3D::onPostRender(Renderer::Scene &renderScene) {

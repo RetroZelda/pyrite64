@@ -34,17 +34,19 @@ void Renderer::Camera::update() {
   velocity *= 0.9f;
   
   if (fabs(zoomSpeed) < 0.01) {
+    zoomSpeed = 0.0f;
     return;
-  } 
-
-  float camDist = glm::length(pos - pivot);
-  glm::vec3 forward = rot * WORLD_FORWARD * zoomSpeed;
-  if (zoomSpeed < 0 || camDist > fabs(zoomSpeed)) {
-    pos += forward;
-  } else {
-    pos += forward;
-    pivot += forward;
   }
+
+  // Zoom moves the camera along its view axis toward/away from the (fixed) pivot, so the pivot
+  // stays the orbit centre. Clamp zoom-IN to a minimum distance so it can't reach or pass through
+  // the centre. (The old code translated the pivot forward when close, dollying past the centre.)
+  constexpr float MIN_PIVOT_DIST = 2.0f;
+  glm::vec3 fwd = rot * WORLD_FORWARD; // unit, points from the camera toward the pivot
+  float camDist = glm::length(pos - pivot);
+  float step = zoomSpeed; // >0 zoom in (toward pivot), <0 zoom out (away)
+  if (step > 0.0f) step = glm::min(step, glm::max(0.0f, camDist - MIN_PIVOT_DIST));
+  pos += fwd * step;
   zoomSpeed *= 0.9f;
 }
 

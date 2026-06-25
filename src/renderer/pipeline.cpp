@@ -14,7 +14,7 @@ Renderer::Pipeline::Pipeline(const Info &info) {
   // Depth
   pipelineInfo.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
   pipelineInfo.depth_stencil_state.enable_depth_test = true;
-  pipelineInfo.depth_stencil_state.enable_depth_write = true;
+  pipelineInfo.depth_stencil_state.enable_depth_write = info.depthWrite;
   pipelineInfo.target_info.has_depth_stencil_target = true;
   pipelineInfo.target_info.depth_stencil_format = Renderer::getDepthStencilFormat();
 

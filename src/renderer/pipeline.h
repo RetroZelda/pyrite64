@@ -29,6 +29,7 @@ namespace Renderer
         bool useDepth{};
         bool drawsObjID{};
         bool translucent{};
+        bool depthWrite{true}; // write to the depth buffer (set false for alpha-blended particles)
         uint32_t vertPitch{};
         std::vector<InfoVertDef> vertLayout{};
       };

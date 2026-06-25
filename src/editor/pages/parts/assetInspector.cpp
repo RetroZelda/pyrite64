@@ -10,6 +10,8 @@
 #include "../../../context.h"
 #include "../../../utils/textureFormats.h"
 #include "../../thumbnailCache.h"
+#include "../../../project/assets/emitter.h"
+#include "assets/emitterEditor.h"
 
 using FileType = Project::FileType;
 
@@ -44,12 +46,20 @@ void Editor::AssetInspector::draw() {
   bool hasAssetConf = true;
   if (asset->type == FileType::CODE_OBJ
     || asset->type == FileType::CODE_GLOBAL
-    || asset->type == FileType::PREFAB)
+    || asset->type == FileType::PREFAB
+    || asset->type == FileType::EMITTER) // settings live inside the .emitter file
   {
     hasAssetConf = false;
   }
 
   ImGui::Text("File: %s", asset->name.c_str());
+
+  // Particle emitters host all of their settings here in the Asset tab (no separate window).
+  if (asset->type == FileType::EMITTER && asset->emitter) {
+    Editor::drawEmitterSettings(*asset->emitter);
+    return;
+  }
+
   if (hasAssetConf && ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen))
   {
     auto confBefore = asset->conf.serialize();

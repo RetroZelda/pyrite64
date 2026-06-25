@@ -15,16 +15,17 @@ namespace Editor
     private:
       int activeTab{1};
       int prevActiveTab{-1};
-      std::array<std::string, 5> tabDirs{};
+      std::array<std::string, 6> tabDirs{};
       std::string searchFilter{};
       std::string renamePath{};
       std::string deletePath{};
       char renameBuffer[256];
 
     public:
-      static constexpr int TAB_SCENES  = 0;
-      static constexpr int TAB_ASSETS  = 1;
-      static constexpr int TAB_CANVAS  = 4;
+      static constexpr int TAB_SCENES    = 0;
+      static constexpr int TAB_ASSETS    = 1;
+      static constexpr int TAB_CANVAS    = 4;
+      static constexpr int TAB_PARTICLES = 5;
 
       int getActiveTab() const { return activeTab; }
       // Sets the active tab without triggering the change-detection event next frame.

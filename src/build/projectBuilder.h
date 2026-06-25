@@ -23,6 +23,7 @@ namespace Build
   bool buildFontAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildTextureAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildAudioAssets(Project::Project &project, SceneCtx &sceneCtx);
+  bool buildEmitterAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildNodeGraphAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildCanvasAssets(Project::Project &project, SceneCtx &sceneCtx);

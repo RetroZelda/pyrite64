@@ -10,6 +10,7 @@
 
 #include "lib/logger.h"
 #include "scene/scene.h"
+#include "renderer/particles/emitterManager.h"
 
 namespace
 {
@@ -134,6 +135,21 @@ void P64::DrawLayer::drawPtx()
   for(int i=0; i<layerSetup->layerCountPtx; ++i) {
     draw(idxStart + i);
   }
+
+  // Live particle emitters: base_size MUST track the camera's far plane (matches jam25), else
+  // on-screen size is wrong-by-far and a fixed 128 makes particles hugely oversized (e.g. ~16x
+  // at the default far=4000). base_size = 64 * 500 / far cancels the far term in tpx's
+  // perspective math, so particle size becomes camera-correct & far-independent like the editor
+  // preview. (Scoped to emitters; the baked PTX layers above keep their tuned base_size of 128.)
+  float emitFar = 500.0f;
+  if(Camera* cam = SceneManager::getCurrent().getActiveCameraPtr()) {
+    if(cam->far >= 1.0f) emitFar = cam->far;
+  }
+  uint32_t emitBase = (uint32_t)(64.0f * 500.0f / emitFar);
+  if(emitBase < 1) emitBase = 1; else if(emitBase > 0xFFFF) emitBase = 0xFFFF;
+  tpx_state_set_base_size((uint16_t)emitBase);
+
+  EmitterManager::draw();
 }
 
 void P64::DrawLayer::draw2D()

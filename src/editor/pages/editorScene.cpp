@@ -12,6 +12,7 @@
 #include "../undoRedo.h"
 #include "../canvasHistory.h"
 #include "../../context.h"
+#include "../../project/assets/emitter.h"
 
 #define IMVIEWGUIZMO_IMPLEMENTATION 1
 #include "ImGuizmo.h"
@@ -222,18 +223,68 @@ void Editor::Scene::draw()
 
   const ImGuiCond dockCond = canvasJustOpened ? ImGuiCond_Always : ImGuiCond_Appearing;
 
+  // The viewport-area windows (3D-Viewport / Canvas / Particles) share ONE dock node, so ImGui
+  // shows them as tabs and only one is in the foreground at a time. Each draw() is gated on
+  // ImGui::Begin()'s return: a *background* tab must NOT run its per-frame input/gizmo logic,
+  // because two of them processing the mouse + ImGuizmo in the same frame corrupts the active
+  // one (objects move wrong, the gizmo fights the click-drag). Only the foreground tab runs.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
+
+  // 3D-Viewport — always a tab. FirstUseEver keeps a user-customized layout intact.
+  ImGui::SetNextWindowDockID(dockSpaceID, ImGuiCond_FirstUseEver);
+  if (ImGui::Begin("3D-Viewport")) {
+    viewport3d.draw();
+  }
+  ImGui::End();
+
+  // Canvas — a tab only while a canvas is open; bring it forward the frame it opens.
   if (openedCanvas) {
     ImGui::SetNextWindowDockID(dockSpaceID, dockCond);
-    ImGui::Begin("Canvas");
+    if (canvasJustOpened) ImGui::SetNextWindowFocus();
+    if (ImGui::Begin("Canvas")) {
       canvasViewport.draw(*openedCanvas);
-    ImGui::End();
-  } else {
-    ImGui::Begin("3D-Viewport");
-      viewport3d.draw();
+    }
     ImGui::End();
   }
   ImGui::PopStyleVar(1);
+
+  // The selected asset drives the emitter preview. When selection moves off an emitter,
+  // persist its edits (the settings are edited live in the Asset inspector).
+  uint64_t curEmitter = 0;
+  if(ctx.selAssetUUID != 0) {
+    auto *e = ctx.project->getAssets().getEntryByUUID(ctx.selAssetUUID);
+    if(e && e->type == Project::FileType::EMITTER && e->emitter) curEmitter = ctx.selAssetUUID;
+  }
+  if(curEmitter != editingEmitterUUID) {
+    if(editingEmitterUUID != 0) {
+      auto *prev = ctx.project->getAssets().getEntryByUUID(editingEmitterUUID);
+      if(prev && prev->emitter) {
+        prev->emitter->save();
+        ctx.project->getAssets().noteFileSaved(prev->path); // don't let our own save trigger a watch reload
+      }
+    }
+    editingEmitterUUID = curEmitter;
+    if(curEmitter != 0) focusParticlesTab = true; // a new emitter was selected -> bring its tab forward
+  }
+  previewEmitterUUID = curEmitter;
+
+  // Particles — a tab only while an emitter is selected. Same dock node as the viewport, gated
+  // on Begin() so it only simulates/renders + handles input when it's the foreground tab.
+  if(previewEmitterUUID != 0) {
+    auto *entry = ctx.project->getAssets().getEntryByUUID(previewEmitterUUID);
+    if(entry && entry->emitter) {
+      ImGui::SetNextWindowDockID(dockSpaceID, ImGuiCond_Appearing);
+      if(focusParticlesTab) { ImGui::SetNextWindowFocus(); focusParticlesTab = false; }
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
+      if (ImGui::Begin("Particles")) {
+        emitterPreview.draw(*entry->emitter, previewEmitterUUID);
+      }
+      ImGui::End();
+      ImGui::PopStyleVar(1);
+    } else {
+      focusParticlesTab = false;
+    }
+  }
 
   std::vector<uint32_t> delIndices{};
   for(uint32_t i = 0; i < nodeEditors.size(); ++i) {
@@ -663,6 +714,13 @@ void Editor::Scene::save()
   if (openedCanvas) openedCanvas->save();
   for(auto &nodeEditor : nodeEditors) {
     nodeEditor->save();
+  }
+  if(editingEmitterUUID != 0) {
+    auto *e = ctx.project->getAssets().getEntryByUUID(editingEmitterUUID);
+    if(e && e->emitter) {
+      e->emitter->save();
+      ctx.project->getAssets().noteFileSaved(e->path);
+    }
   }
   UndoRedo::getHistory().markSaved();
 }

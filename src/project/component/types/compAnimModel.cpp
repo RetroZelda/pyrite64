@@ -181,6 +181,11 @@ namespace Project::Component::AnimModel
   void draw3D(Object& obj, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass)
   {
     Data &data = *static_cast<Data*>(entry.data.get());
+    // The loaded scene can be nulled mid-render-pass (e.g. a lazy prefab-source load or a
+    // build/reload) while onRenderPass still holds the old scene — re-fetching it below can
+    // return null. Capture once and bail this frame rather than deref a null.
+    auto *loadedScene = ctx.project->getScenes().getLoadedScene();
+    if(!loadedScene) return;
     if (!data.obj3D.isMeshLoaded()) {
       auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
       if (asset && asset->mesh3D) {
@@ -193,7 +198,7 @@ namespace Project::Component::AnimModel
       }
     }
 
-    if(ctx.project->getScenes().getLoadedScene()->conf.renderPipeline.value == 2)
+    if(loadedScene->conf.renderPipeline.value == 2)
     {
       data.obj3D.uniform.mat.flags = 0;
       if(data.layerIdx.value == 0)data.obj3D.uniform.mat.flags |= T3D_FLAG_NO_LIGHT;
