@@ -382,7 +382,9 @@ add_custom_target(generate_version ALL
 add_dependencies(pyrite64 generate_version)
 target_include_directories(pyrite64 PRIVATE ${CMAKE_BINARY_DIR})
 target_compile_definitions(pyrite64 PRIVATE "PYRITE_DOCS_URL=\"${PYRITE_DOCS_URL}\"")
-target_compile_definitions(pyrite64 PRIVATE "PYRITE_VERSION=\"${PROJECT_VERSION}\"")
+# PYRITE_VERSION comes from the generated pyrite64_version.h (timestamped) so it is a single
+# source of truth shared by the updater, the project version-check, and the UI. Files that use
+# it must #include "pyrite64_version.h".
 
 target_compile_definitions(pyrite64 PRIVATE IMGUI_DEFINE_MATH_OPERATORS GLM_FORCE_QUAT_DATA_XYZW)
 

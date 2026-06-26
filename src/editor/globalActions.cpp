@@ -3,6 +3,7 @@
 * @license MIT
 */
 #include "actions.h"
+#include "pyrite64_version.h"
 
 #include <unordered_set>
 #include "../project/project.h"

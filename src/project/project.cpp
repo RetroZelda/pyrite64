@@ -3,6 +3,7 @@
 * @license MIT
 */
 #include "project.h"
+#include "pyrite64_version.h"
 
 #include <filesystem>
 #include <fstream>
