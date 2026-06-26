@@ -5,17 +5,71 @@
 #include "theme.h"
 
 #include <array>
+#include <algorithm>
+#include <filesystem>
 
 #include "imgui.h"
 #include "IconsMaterialDesignIcons.h"
 #include "ImGuizmo.h"
 #include "notification.h"
+#include "json.hpp"
+#include "../../utils/prop.h"
+#include "../../utils/json.h"
+
+namespace fs = std::filesystem;
 
 constinit float ImGui::Theme::zoomFactor = 1.0f;
 
 namespace
 {
-  constexpr ImVec4 COLOR_HIGHLIGHT{1.0f, 0.5f, 0.0f, 1.0f};
+  std::string currentThemeId{"dark"};
+  nlohmann::json currentThemeJson{};
+
+  // Finds the ImGuiCol_ index for a color name as returned by ImGui::GetStyleColorName.
+  int colorIndexByName(const std::string &name)
+  {
+    for(int i = 0; i < ImGuiCol_COUNT; ++i) {
+      if(name == ImGui::GetStyleColorName(i)) return i;
+    }
+    return -1;
+  }
+
+  // Applies the currently loaded theme JSON (colors + a known set of style scalars) onto `style`.
+  void applyThemeJson(ImGuiStyle &style)
+  {
+    if(!currentThemeJson.is_object()) return;
+
+    if(auto it = currentThemeJson.find("colors"); it != currentThemeJson.end()) {
+      for(auto &[key, val] : it->items()) {
+        int idx = colorIndexByName(key);
+        if(idx >= 0 && val.is_array() && val.size() >= 4) {
+          style.Colors[idx] = ImVec4(val[0].get<float>(), val[1].get<float>(), val[2].get<float>(), val[3].get<float>());
+        }
+      }
+    }
+
+    if(auto it = currentThemeJson.find("style"); it != currentThemeJson.end()) {
+      const auto &s = *it;
+      auto setF = [&](const char* k, float &dst) { if(s.contains(k)) dst = s[k].get<float>(); };
+      auto setV = [&](const char* k, ImVec2 &dst) {
+        if(s.contains(k) && s[k].is_array() && s[k].size() >= 2) dst = ImVec2(s[k][0].get<float>(), s[k][1].get<float>());
+      };
+      setF("TabBarOverlineSize", style.TabBarOverlineSize);
+      setF("WindowRounding", style.WindowRounding);
+      setF("FrameRounding", style.FrameRounding);
+      setF("GrabRounding", style.GrabRounding);
+      setF("TabRounding", style.TabRounding);
+      setF("PopupRounding", style.PopupRounding);
+      setF("ScrollbarRounding", style.ScrollbarRounding);
+      setF("PopupBorderSize", style.PopupBorderSize);
+      setF("WindowBorderSize", style.WindowBorderSize);
+      setF("FrameBorderSize", style.FrameBorderSize);
+      setV("WindowPadding", style.WindowPadding);
+      setV("FramePadding", style.FramePadding);
+      setV("ItemSpacing", style.ItemSpacing);
+    }
+  }
+
   constexpr std::array<float, 12> ZOOM_VALUES{
     1.0f / 2.0f,
     1.0f / 1.75f,
@@ -31,22 +85,55 @@ namespace
     4.0f
   };
 
+  constexpr const char* DEFAULT_UI_FONT = "./data/Altinn-DINExp.ttf";
+
   constinit ImFont* fontMono{nullptr};
   constinit bool needsUpdate{true};
   constinit int zoomLevel{4};
+  std::string loadedFontPath{}; // UI font currently built into the atlas
+
+  std::string themeUiFont()
+  {
+    if(auto it = currentThemeJson.find("font"); it != currentThemeJson.end() && it->is_string()) {
+      auto f = it->get<std::string>();
+      if(!f.empty()) return "./data/" + f;
+    }
+    return DEFAULT_UI_FONT;
+  }
+
+  bool themeFontPixel()
+  {
+    return currentThemeJson.is_object() && currentThemeJson.value("fontPixel", false);
+  }
 
   void loadFonts(float contentScale = 1.0f)
   {
     ImGuiStyle& style = ImGui::GetStyle();
+    std::string uiFont = themeUiFont();
+    bool pixelFont = themeFontPixel();
 
-    if(!fontMono)
+    // Rebuild the atlas on first use or when the theme switches to a different UI font.
+    if(!fontMono || uiFont != loadedFontPath)
     {
       ImGuiIO& io = ImGui::GetIO();
-      style.ScaleAllSizes(1.0f);
-      style.FontScaleDpi = 1.0f;
+      io.Fonts->Clear();
+      fontMono = nullptr;
 
+      style.FontScaleDpi = 1.0f;
       style.FontSizeBase = 15.0f;
-      [[maybe_unused]] ImFont* font = io.Fonts->AddFontFromFileTTF("./data/Altinn-DINExp.ttf");
+
+      ImFontConfig uiCfg;
+      if(pixelFont) {
+        uiCfg.OversampleH = 1;
+        uiCfg.OversampleV = 1;
+        uiCfg.PixelSnapH = true;
+      }
+      ImFont* font = io.Fonts->AddFontFromFileTTF(uiFont.c_str(), 0.0f, pixelFont ? &uiCfg : nullptr);
+      if(!font && uiFont != DEFAULT_UI_FONT) { // theme font missing -> fall back
+        printf("Theme font '%s' not found, using default\n", uiFont.c_str());
+        uiFont = DEFAULT_UI_FONT;
+        font = io.Fonts->AddFontFromFileTTF(uiFont.c_str());
+      }
       IM_ASSERT(font != nullptr);
 
       static const ImWchar icons_ranges[] = { ICON_MIN_MDI, ICON_MAX_16_MDI, 0 };
@@ -59,15 +146,68 @@ namespace
 
       fontMono = io.Fonts->AddFontFromFileTTF("./data/GoogleSansCode.ttf", 16);
       IM_ASSERT(fontMono != nullptr);
+
+      loadedFontPath = uiFont;
     }
 
-    style.FontSizeBase = 15.0f * contentScale;
+    float size = 15.0f * contentScale;
+    // Snap to a whole pixel so a pixel font lands on the grid instead of between pixels.
+    if(pixelFont) size = (float)(int)(size + 0.5f);
+    style.FontSizeBase = size;
   }
 }
 
 void ImGui::Theme::setTheme(const std::string &name)
 {
+  currentThemeId = name;
+  try {
+    currentThemeJson = Utils::JSON::loadFile("data/themes/" + name + ".json");
+  } catch(const std::exception &e) {
+    printf("Failed to load theme '%s': %s\n", name.c_str(), e.what());
+    currentThemeJson = {};
+  }
   needsUpdate = true;
+}
+
+const std::string &ImGui::Theme::getCurrentTheme()
+{
+  return currentThemeId;
+}
+
+ImVec4 ImGui::Theme::getColor(const std::string &key, const ImVec4 &fallback)
+{
+  if(auto it = currentThemeJson.find("custom"); it != currentThemeJson.end()) {
+    if(auto c = it->find(key); c != it->end() && c->is_array() && c->size() >= 4) {
+      return ImVec4((*c)[0].get<float>(), (*c)[1].get<float>(), (*c)[2].get<float>(), (*c)[3].get<float>());
+    }
+  }
+  return fallback;
+}
+
+ImU32 ImGui::Theme::getColorU32(const std::string &key, ImU32 fallback)
+{
+  ImVec4 fb = ImGui::ColorConvertU32ToFloat4(fallback);
+  return ImGui::GetColorU32(getColor(key, fb));
+}
+
+std::vector<ImGui::Theme::ThemeInfo> ImGui::Theme::getThemes()
+{
+  std::vector<ThemeInfo> themes;
+  std::error_code ec;
+  for(const auto &entry : fs::directory_iterator("data/themes", ec)) {
+    if(entry.path().extension() != ".json") continue;
+    std::string id = entry.path().stem().string();
+    std::string name = id;
+    try {
+      auto j = Utils::JSON::loadFile(entry.path());
+      if(j.is_object()) name = j.value("name", id);
+    } catch(...) {}
+    themes.push_back({id, name});
+  }
+  std::sort(themes.begin(), themes.end(), [](const ThemeInfo &a, const ThemeInfo &b) {
+    return a.name < b.name;
+  });
+  return themes;
 }
 
 void ImGui::Theme::changeZoom(int levelDirection)
@@ -99,82 +239,12 @@ void ImGui::Theme::update()
   if(!needsUpdate)return;
   needsUpdate = false;
 
-  printf("Updating ImGui theme with zoom level: %.2f\n", zoomFactor);
+  printf("Updating ImGui theme '%s' with zoom level: %.2f\n", currentThemeId.c_str(), zoomFactor);
   ImGuiStyle &style = ImGui::GetStyle();
   style = ImGuiStyle();
-  ImVec4 *colors = style.Colors;
 
-  // Primary background
-  colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.07f, 0.09f, 1.00f);  // #131318
-  colors[ImGuiCol_MenuBarBg] = ImVec4(0.12f, 0.12f, 0.15f, 1.00f); // #131318
-
-  colors[ImGuiCol_PopupBg] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-  colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.40f, 0.40f, 0.40f, 0.60f);
-
-  // Headers
-  colors[ImGuiCol_Header] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-  colors[ImGuiCol_HeaderHovered] = ImVec4(0.30f, 0.30f, 0.40f, 1.00f);
-  colors[ImGuiCol_HeaderActive] = ImVec4(0.25f, 0.25f, 0.35f, 1.00f);
-
-  // Buttons
-  colors[ImGuiCol_Button] = ImVec4(0.20f, 0.22f, 0.27f, 1.00f);
-  colors[ImGuiCol_ButtonHovered] = ImVec4(0.30f, 0.32f, 0.40f, 1.00f);
-  colors[ImGuiCol_ButtonActive] = ImVec4(0.35f, 0.38f, 0.50f, 1.00f);
-
-  // Frame BG
-  colors[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
-  colors[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.22f, 0.27f, 1.00f);
-  colors[ImGuiCol_FrameBgActive] = ImVec4(0.25f, 0.25f, 0.30f, 1.00f);
-
-  // Tabs
-  colors[ImGuiCol_Tab] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
-  colors[ImGuiCol_TabHovered] = ImVec4(0.35f, 0.35f, 0.50f, 1.00f);
-  colors[ImGuiCol_TabSelected] = ImVec4(0.25f, 0.25f, 0.38f, 1.00f);
-  colors[ImGuiCol_TabUnfocused] = ImVec4(0.13f, 0.13f, 0.17f, 1.00f);
-  colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.20f, 0.20f, 0.25f, 1.00f);
-  colors[ImGuiCol_TabSelectedOverline] = COLOR_HIGHLIGHT;
-  colors[ImGuiCol_DragDropTarget] = COLOR_HIGHLIGHT;
-
-  // Title
-  colors[ImGuiCol_TitleBg] = ImVec4(0.12f, 0.12f, 0.15f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.15f, 0.15f, 0.20f, 1.00f);
-  colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-
-  // Borders
-  colors[ImGuiCol_Border] = ImVec4(0.20f, 0.20f, 0.25f, 0.50f);
-  colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-
-  // Text
-  colors[ImGuiCol_Text] = ImVec4(0.90f, 0.90f, 0.95f, 1.00f);
-  colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.55f, 1.00f);
-
-  // Highlights
-  colors[ImGuiCol_CheckMark] = ImVec4(0.50f, 0.70f, 1.00f, 1.00f);
-  colors[ImGuiCol_SliderGrab] = ImVec4(0.50f, 0.70f, 1.00f, 1.00f);
-  colors[ImGuiCol_SliderGrabActive] = ImVec4(0.60f, 0.80f, 1.00f, 1.00f);
-  colors[ImGuiCol_ResizeGrip] = ImVec4(0.50f, 0.70f, 1.00f, 0.50f);
-  colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.60f, 0.80f, 1.00f, 0.75f);
-  colors[ImGuiCol_ResizeGripActive] = ImVec4(0.70f, 0.90f, 1.00f, 1.00f);
-
-  // Scrollbar
-  colors[ImGuiCol_ScrollbarBg] = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.30f, 0.30f, 0.35f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.40f, 0.40f, 0.50f, 1.00f);
-  colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.45f, 0.45f, 0.55f, 1.00f);
-
-  // Style tweaks
-  constexpr float rounding = 3.0f;
-  style.TabBarOverlineSize = 2.0f;
-  style.WindowRounding = rounding;
-  style.FrameRounding = rounding;
-  style.GrabRounding = rounding;
-  style.TabRounding = 0;
-  style.PopupRounding = rounding;
-  style.ScrollbarRounding = rounding;
-  style.WindowPadding = ImVec2(10, 10);
-  style.FramePadding = ImVec2(6, 4);
-  style.ItemSpacing = ImVec2(8, 6);
-  style.PopupBorderSize = 0.f;
+  // Colors and style scalars come from the loaded theme JSON (data/themes/<id>.json).
+  applyThemeJson(style);
 
   // Guizmos
   auto &gStyle = ImGuizmo::GetStyle();

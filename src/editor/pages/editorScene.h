@@ -29,7 +29,16 @@ namespace Editor
   class Scene
   {
     private:
-      Viewport3D viewport3d{};
+      std::vector<std::shared_ptr<Viewport3D>> viewports{};
+      // Closed viewports are kept alive here until the next frame: their framebuffer texture
+      // is still referenced by this frame's ImGui draw list, which renders after draw() returns.
+      std::vector<std::shared_ptr<Viewport3D>> viewportsPendingClose{};
+      uint32_t nextViewportWinId{0};
+      std::shared_ptr<Viewport3D> hoveredViewport{};
+      bool wantNewViewport{false};
+      bool wantResetLayout{false};
+
+      void addViewport();
 
       // Canvas editor panels (active when a canvas is open)
       std::shared_ptr<Project::Canvas> openedCanvas{};
@@ -67,6 +76,20 @@ namespace Editor
       uint64_t pendingNodeEditorCloseUUID{0};
       bool pendingNodeEditorClosePopup{false};
 
+      // Which model/graph windows were open, remembered per project (keyed by project path)
+      // so switching projects never restores another project's windows.
+      struct WindowSet { std::vector<uint64_t> models{}; std::vector<uint64_t> graphs{}; };
+      std::map<std::string, WindowSet> sessionWindows{};
+      // Path of the project whose windows are currently restored ("" = none yet).
+      std::string restoredForProject{};
+
+      void loadSession();
+      void saveSession();
+      void restoreWindows();
+      void closeAllEditors();
+      // Save the currently-open windows for the active project.
+      void persistOpenWindows();
+
     public:
       Scene();
       ~Scene();
@@ -74,6 +97,10 @@ namespace Editor
       void openModelEditor(uint64_t assetUUID);
       void openCanvas(uint64_t assetUUID);
       void closeCanvas();
+
+      // Call before the active project is torn down (switch/close/exit): captures its open
+      // windows while still valid, then closes the editors so they can't leak into the next.
+      void onProjectClosing();
 
       void draw();
       void save();

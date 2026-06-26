@@ -13,7 +13,6 @@ namespace
   constexpr glm::vec3 WORLD_UP{0,1,0};
   constexpr glm::vec3 WORLD_FORWARD{0,0,-1};
   constexpr float ORTHO_SIZE = 310.0f;
-  constexpr float FOV = 70.0f;
   // Framing for the "focus selection" action
   constexpr float AABB_FOCUS_MARGIN = 1.25f;     // extra space around a real bounding box
   constexpr float NO_VOLUME_FOCUS_DIST = 220.0f; // overview distance for volume-less objects
@@ -55,7 +54,7 @@ void Renderer::Camera::apply(UniformGlobal &uniGlobal)
   float aspect = screenSize.x / screenSize.y;
   float near = 10.0f;
   float far = 90'000.0f;
-  float fov = glm::radians(FOV);
+  float fovRad = glm::radians(fov);
 
   if(isOrtho)
   {
@@ -71,7 +70,7 @@ void Renderer::Camera::apply(UniformGlobal &uniGlobal)
   } else
   {
     uniGlobal.spriteSize = {7000, 7000};
-    uniGlobal.projMat = glm::perspective(fov, aspect, near, far);
+    uniGlobal.projMat = glm::perspective(fovRad, aspect, near, far);
   }
   uniGlobal.spriteSize *= ctx.prefs.renderFactorAA;
 
@@ -197,7 +196,7 @@ void Renderer::Camera::focusSelection(Context &ctx) {
   float depth  = glm::abs(fwd.x)*h.x   + glm::abs(fwd.y)*h.y   + glm::abs(fwd.z)*h.z;
 
   float aspect = (screenSize.y > 0.0f) ? (screenSize.x / screenSize.y) : 1.0f;
-  float fovY = glm::radians(FOV);
+  float fovY = glm::radians(fov);
   float tanY = tanf(fovY * 0.5f);
   float tanX = tanY * aspect;
 

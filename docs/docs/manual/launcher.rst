@@ -7,11 +7,10 @@ Launcher
 .. image:: /_static/img/editor01.png
 	:width: 500
 
-
 Creating a new Project
 ~~~~~~~~~~~~~~~~~~~~~
 
-| This lets you create a new project, 
+| This lets you create a new project,
 | which is a directory of a self-contained game the editor lets you work on.
 
 | After doing so, it is a highly recommended to create a git repository as well.
@@ -22,7 +21,7 @@ Creating a new Project
 
 .. note::
   Due to technical issues with MSYS2/Makefiles, spaces in project paths are not allowed.
- 
+
 Opening a Project
 ~~~~~~~~~~~~~~~~
 
@@ -36,12 +35,43 @@ Opening a Project
 .. image:: /_static/img/editor00.png
 	:width: 500
 
+Recent Projects
+~~~~~~~~~~~~~~~~
+
+.. image:: /_static/img/launcher_recent.png
+	:width: 570
+
+| Once you have opened a project at least once, it appears in the recent-projects grid
+| at the bottom of the launcher, shown as a small cartridge card with the project name below it.
+| Clicking a card opens that project directly, without having to browse for the ``.p64proj`` file again.
+
+.. note::
+  If a project has moved or been deleted, opening its card will fail with an error.
+  The entry stays in the list so you can still see where it used to be.
+
+Setting a Card Image
+^^^^^^^^^^^^^^^^^^^^^
+
+| By default a card shows a blank cartridge. You can give a project its own artwork,
+| which is then shown on the cartridge label in the recent-projects grid.
+
+| The image is taken from the project's ROM metadata. To set it:
+
+#. Open the project, then go to ``Project`` > ``Settings`` in the menu bar.
+#. Switch to the ``Metadata`` section and enable ``Embed Metadata``.
+#. Under ``Cart Art``, pick an image for ``Front``. If no cart art is set, the ``Front`` image
+   from ``Box Art`` is used as a fallback instead.
+
+.. note::
+  This is the same image used for the ROM's embedded metadata, so it doubles as the
+  cartridge art seen by tools and supported flashcarts that read it.
+
 Toolchain Manager
 ~~~~~~~~~~~~~~~~~~~~~
 
-| This lets you manage the Libdragon_ and tiny3d_ toolchains, 
+| This lets you manage the Libdragon_ and tiny3d_ toolchains,
 | which are required to build and run games.
-| Due to a rather large filesize and the need to update them independently, 
+| Due to a rather large filesize and the need to update them independently,
 | they are not bundled with Pyrite64.
 
 | Instead you can use the toolchain manager to validate an install.

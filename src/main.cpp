@@ -290,6 +290,7 @@ int main(int argc, char** argv)
     ctx.editorScene = std::make_unique<Editor::Scene>();
 
     ctx.prefs.load();
+    ImGui::Theme::setTheme(ctx.prefs.themeName);
     if(!CLI::getProjectPath().empty())
     {
       if(!Editor::Actions::call(Editor::Actions::Type::PROJECT_OPEN, CLI::getProjectPath())) {
@@ -303,6 +304,12 @@ int main(int argc, char** argv)
     while(!done) {
 
       auto frameStart = SDL_GetTicksNS();
+
+      // force default theme for the launcher (i'm lazy)
+      std::string desiredTheme = ctx.project ? ctx.prefs.themeName : std::string("dark");
+      if(desiredTheme != ImGui::Theme::getCurrentTheme()) {
+        ImGui::Theme::setTheme(desiredTheme);
+      }
 
       ImGui::Theme::update();
 
@@ -460,6 +467,8 @@ int main(int argc, char** argv)
 
       if(ctx.wantsProjectClose)
       {
+        // Remember this project's open windows before tearing it down (covers app exit too).
+        if(ctx.editorScene) ctx.editorScene->onProjectClosing();
         Editor::UndoRedo::getHistory().clear();
         delete ctx.project;
         ctx.project = nullptr;

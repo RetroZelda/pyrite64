@@ -6,12 +6,14 @@
 
 #include <filesystem>
 #include <thread>
+#include <algorithm>
 #include "../utils/fs.h"
 #include "../utils/logger.h"
 #include "../utils/proc.h"
 #include "../utils/string.h"
 #include "../utils/textureFormats.h"
 #include "../context.h"
+#include "romMetaBuilder.h"
 
 namespace fs = std::filesystem;
 using AT = Project::FileType;
@@ -242,6 +244,7 @@ bool Build::buildProject(const std::string &configPath)
       {"{{PROJECT_NAME}}",      project.conf.name},
       {"{{ASSET_LIST}}",        Utils::join(filesSorted, " ")},
       {"{{USER_CODE_DIRS}}",    userCodeRules},
+      {"{{ROM_HEADER_FLAGS}}",  buildRomHeaderFlags(project)},
       {"{{P64_SELF_PATH}}",     Utils::Proc::getSelfPath().string()},
       {"{{PROJECT_SELF_PATH}}", fs::absolute(configPath).string()},
     }

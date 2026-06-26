@@ -586,6 +586,10 @@ void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
     else if(!obj.isEnabled() && compDef.onDisable) compDef.onDisable(obj, dataPtr);
   }
 
+  if (enabledChanged) {
+    sendEvent(obj.id, 0, obj.isEnabled() ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE, 0);
+  }
+
   iterObjectChildren(obj.id, [&](Object* child) {
     updateChildObjectStates(&obj, *child);
   });

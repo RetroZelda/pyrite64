@@ -34,8 +34,11 @@ namespace P64::NodeGraph
       Object *object{};
       uint32_t args[2]{};
       uint16_t objRefs[MAX_OBJ_REFS]{};
+      void* vars{};
+      // Seconds the graph has spent running. Advances per active frame, but is frozen
+      // while the graph waits/sleeps, so time-driven nodes (waves) stay continuous.
+      float time{};
       uint16_t asset{};
-      uint8_t repeatable{};
 
       Instance() = default;
       ~Instance();
@@ -46,6 +49,8 @@ namespace P64::NodeGraph
 
   typedef int(*UserFunc)(uint32_t);
 
+  [[deprecated("Use custom JS nodes instead")]]
   void registerFunction(uint32_t strCRC32, UserFunc fn);
+
   UserFunc getFunction(uint64_t uuid);
 }

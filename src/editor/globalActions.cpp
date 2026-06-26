@@ -10,6 +10,7 @@
 #include "../utils/logger.h"
 #include "../context.h"
 #include "../build/projectBuilder.h"
+#include "../project/graph/nodeRegistry.h"
 #include "../utils/fs.h"
 #include "../utils/json.h"
 #include "../utils/proc.h"
@@ -23,12 +24,37 @@ namespace Editor::Actions
   {
     registerAction(Type::PROJECT_OPEN, [](const std::string &path) {
        Utils::Logger::log("Open Project: " + path);
+       // Remember the outgoing project's open windows before it is torn down.
+       if(ctx.editorScene && ctx.project) ctx.editorScene->onProjectClosing();
        delete ctx.project;
        UndoRedo::getHistory().clear();
        try {
          ctx.project = new Project::Project(path);
+         // Custom node definitions (<project>/nodes/*.js) are loaded by the Project ctor.
          if(ctx.project && !ctx.project->getScenes().getEntries().empty()) {
            ctx.project->getScenes().loadScene(ctx.project->conf.sceneIdLastOpened);
+         }
+         if(ctx.project && ctx.project->wasSavedWithNewerVersion()) {
+           Editor::Noti::add(Editor::Noti::Type::ERROR,
+             "This project was saved with a newer editor version (" + ctx.project->conf.editorVersion +
+             ", current is v" PYRITE_VERSION ").\nIt was opened anyway, but things may break.");
+         }
+         // Remember this project in the launcher's recent list (normalized absolute path).
+         if(ctx.project) {
+           // Resolve the metadata cart/box art image to a file path for the launcher card.
+           std::string cardImage{};
+           const auto &meta = ctx.project->conf.metadata;
+           if(meta.enabled && !meta.langs.empty()) {
+             const auto &lang = meta.langs.front();
+             uint64_t imgUUID = lang.cartFront ? lang.cartFront : lang.boxFront;
+             if(imgUUID) {
+               if(auto *e = ctx.project->getAssets().getEntryByUUID(imgUUID)) {
+                 cardImage = fs::absolute(e->path).string();
+               }
+             }
+           }
+           ctx.prefs.addRecentProject(fs::absolute(path).string(), ctx.project->conf.name, cardImage);
+           ctx.prefs.save();
          }
        } catch (const std::exception &e) {
          auto error = "Failed to open project:\n" + std::string(e.what());
