@@ -170,13 +170,18 @@ namespace
 
 void Editor::CanvasVariables::draw(Project::Canvas& canvas)
 {
-    ImGui::Text("Variables (%zu)", canvas.variables.size());
-    ImGui::Separator();
+    // Fixed ID (###) so the count in the label doesn't reset the open/closed state.
+    std::string header = "Variables (" + std::to_string(canvas.variables.size()) + ")###canvasVars";
+    if (!ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        return;
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 3));
+    // Content-bounded height (capped) so this can stack with other sections in a shared window.
+    int varRows = (int)canvas.variables.size();
+    float varTblH = ImGui::GetFrameHeightWithSpacing() * ((varRows > 8 ? 8 : varRows) + 1.5f);
     if (ImGui::BeginTable("##vars", 4,
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-        ImVec2(0, -ImGui::GetFrameHeightWithSpacing())))
+        ImVec2(0, varTblH)))
     {
         ImGui::TableSetupColumn("Name",    ImGuiTableColumnFlags_WidthStretch, 0.38f);
         ImGui::TableSetupColumn("Type",    ImGuiTableColumnFlags_WidthStretch, 0.20f);

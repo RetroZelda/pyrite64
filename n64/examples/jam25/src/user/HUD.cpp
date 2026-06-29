@@ -13,7 +13,8 @@ namespace P64::Script::C7D6052B4FD1AF1C
   // HudData persists in UIModelView between frames so displayCoins animates correctly.
   // Sprites are baked into the canvas and drawn by the auto-generated view function.
   static void hudModel(Object& /*obj*/, Data* data,
-                       P64::UI::Types::HudData& hud, float deltaTime)
+                       P64::UI::Types::HudData& hud,
+                       P64::UI::EventSink& /*events*/, float deltaTime)
   {
     hud.health      = User::ctx.health;
     hud.healthTotal = User::ctx.healthTotal;

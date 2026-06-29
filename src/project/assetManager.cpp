@@ -601,13 +601,19 @@ bool Project::AssetManager::pollWatch()
       return;
     }
 
-    if (entry->type == FileType::IMAGE || entry->type == FileType::PREFAB || entry->type == FileType::EMITTER) {
+    if (entry->type == FileType::IMAGE || entry->type == FileType::PREFAB
+        || entry->type == FileType::EMITTER || entry->type == FileType::CANVAS) {
       reloadEntry(*entry, entry->path);
       if (entry->type == FileType::PREFAB && entry->prefab) {
         entry->conf.uuid = entry->prefab->uuid.value;
       }
       if (entry->type == FileType::EMITTER && entry->emitter && entry->emitter->uuid != 0) {
         entry->conf.uuid = entry->emitter->uuid;
+      }
+      // CANVAS was missing here: a modified .canvas would otherwise be rebuilt as a
+      // bare entry (canvas=null, uuid=0), breaking re-open after an editor save.
+      if (entry->type == FileType::CANVAS && entry->canvas && entry->canvas->uuid != 0) {
+        entry->conf.uuid = entry->canvas->uuid;
       }
     }
 

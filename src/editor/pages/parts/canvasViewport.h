@@ -5,14 +5,25 @@
 #pragma once
 #include "../../../project/canvas/canvas.h"
 #include "imgui.h"
+#include <unordered_map>
 
 namespace Editor
 {
+    // Per-element animation offsets for live timeline preview (set by CanvasTimeline).
+    struct CanvasAnimOverride {
+        float dx{0.f}, dy{0.f}, drot{0.f}, scale{1.f};
+        float alpha{1.f};                                  // 0..1 multiplier on the element's alpha
+        uint8_t color[4]{255, 255, 255, 255};              // animated Color channel (RGBA 0..255)
+        bool hasColor{false};                              // a Color track is driving this element
+    };
+
     class CanvasViewport
     {
     private:
         float zoom{2.0f};
         ImVec2 panOffset{0.f, 0.f};
+
+        std::unordered_map<uint64_t, CanvasAnimOverride> animOverrides{};
 
         bool isDragging{false};
         bool isPanning{false};
@@ -45,5 +56,9 @@ namespace Editor
         void setSelected(uint64_t uuid) { selectedUUID = uuid; }
         uint64_t getSelected() const { return selectedUUID; }
         bool consumeSelectionChange() { bool c = selectionChanged; selectionChanged = false; return c; }
+
+        // Live timeline preview: applied to element positions/scale while drawing.
+        void setAnimOverrides(const std::unordered_map<uint64_t, CanvasAnimOverride>& o) { animOverrides = o; }
+        void clearAnimOverrides() { animOverrides.clear(); }
     };
 }

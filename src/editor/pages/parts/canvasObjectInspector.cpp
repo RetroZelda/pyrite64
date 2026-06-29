@@ -12,6 +12,10 @@
 
 static const char* TYPE_NAMES_ELEM[] = {"Sprite","Text","ColorRect","TextureRect"};
 
+// Set while drawing a repeater element's props, so the bind popup can offer
+// item-field / index bindings (Phase 4). Null when the element isn't a repeater.
+static const Project::CanvasRepeater* g_inspectorRepeater = nullptr;
+
 // Blend mode options: {display label, C++ constant or "0"}
 static constexpr struct { const char* label; const char* constant; } BLEND_MODES[] = {
     {"None",     "0"},
@@ -85,7 +89,11 @@ namespace
     bool drawBindBadge(Project::PropValue& p)
     {
         if (!p.isBound) return false;
-        if (p.isOp) {
+        if (p.isIndex) {
+            ImGui::TextColored({0.6f, 1.0f, 0.6f, 1.0f}, "[item index i]");
+        } else if (p.isItemField) {
+            ImGui::TextColored({0.6f, 1.0f, 0.6f, 1.0f}, "[item.%s]", p.itemField.c_str());
+        } else if (p.isOp) {
             ImGui::TextColored({0.4f, 0.8f, 1.0f, 1.0f}, "[%s %s %s]",
                 p.opLhs.c_str(), p.opOp.c_str(), p.opRhs.c_str());
         } else {
@@ -96,6 +104,8 @@ namespace
             p.isBound  = false;
             p.boundVar = {};
             p.isOp     = false;
+            p.isItemField = false; p.itemField = {};
+            p.isIndex  = false;
             p.opLhs = p.opOp = p.opRhs = {};
             p.value    = 0;
             Editor::CanvasHistory::markChanged("Unbind");
@@ -257,6 +267,21 @@ namespace
                 }
             }
             if (vars.empty()) ImGui::TextDisabled("(no variables)");
+            if (g_inspectorRepeater && g_inspectorRepeater->enabled) {
+                ImGui::Separator();
+                ImGui::TextDisabled("Repeater:");
+                if (ImGui::MenuItem("Index (i)")) {
+                    p = {}; p.isBound = true; p.isIndex = true;
+                    Editor::CanvasHistory::markChanged("Bind to item index");
+                }
+                for (const auto& f : g_inspectorRepeater->itemFields) {
+                    std::string lbl = "item." + f.name;
+                    if (ImGui::MenuItem(lbl.c_str())) {
+                        p = {}; p.isBound = true; p.isItemField = true; p.itemField = f.name;
+                        Editor::CanvasHistory::markChanged("Bind to item field");
+                    }
+                }
+            }
             ImGui::EndPopup();
         }
     }
@@ -592,10 +617,116 @@ void Editor::CanvasObjectInspector::drawElementProps(
     Project::CanvasElement& e,
     const std::vector<Project::CanvasVariableDef>& vars)
 {
+    // Make the bind popup offer item-field/index bindings while this element is a repeater.
+    g_inspectorRepeater = e.repeater.enabled ? &e.repeater : nullptr;
+
     ImGui::Text("Type: %s", TYPE_NAMES_ELEM[static_cast<int>(e.type)]);
     if (ImGui::InputText("Name", &e.name))
         Editor::CanvasHistory::markChanged("Rename element");
     drawBoolProp("Visible", e.visible, vars, /*defaultVal=*/true);
+    ImGui::Separator();
+
+    // Component script + focus (Phase 3)
+    if (ImGui::CollapsingHeader("Component"))
+    {
+        const auto& scripts = ctx.project->getAssets().getTypeEntries(Project::FileType::CODE_OBJ);
+        std::string curName = "(none)";
+        if (e.scriptUuid != 0)
+            for (const auto& s : scripts)
+                if (s.getUUID() == e.scriptUuid) { curName = s.name; break; }
+
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::BeginCombo("Script", curName.c_str()))
+        {
+            if (ImGui::Selectable("(none)", e.scriptUuid == 0)) {
+                e.scriptUuid = 0;
+                Editor::CanvasHistory::markChanged("Set element script");
+            }
+            for (const auto& s : scripts) {
+                bool sel = (s.getUUID() == e.scriptUuid);
+                if (ImGui::Selectable(s.name.c_str(), sel)) {
+                    e.scriptUuid = s.getUUID();
+                    Editor::CanvasHistory::markChanged("Set element script");
+                }
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        auto fit = e.props.find("focusable");
+        bool focusable = (fit != e.props.end() && !fit->second.isBound
+                          && fit->second.value.is_boolean()) ? fit->second.value.get<bool>() : false;
+        if (ImGui::Checkbox("Focusable", &focusable)) {
+            Project::PropValue p; p.isBound = false; p.value = focusable;
+            e.props["focusable"] = p;
+            Editor::CanvasHistory::markChanged("Toggle focusable");
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Receives controller focus (D-pad nav + A to activate). Needs a script for onFocus/onActivate.");
+    }
+    ImGui::Separator();
+
+    // Repeater (Phase 4): draw this element N times from a count variable.
+    if (ImGui::CollapsingHeader("Repeater"))
+    {
+        bool en = e.repeater.enabled;
+        if (ImGui::Checkbox("Enabled##rep", &en)) {
+            e.repeater.enabled = en;
+            Editor::CanvasHistory::markChanged("Toggle repeater");
+        }
+        if (e.repeater.enabled)
+        {
+            ImGui::SetNextItemWidth(-1);
+            std::string cur = e.repeater.countVar.empty() ? "(count variable)" : e.repeater.countVar;
+            if (ImGui::BeginCombo("Count##rep", cur.c_str())) {
+                for (const auto& v : vars) {
+                    if (v.type != Project::CanvasVarType::Int) continue;
+                    bool sel = (v.name == e.repeater.countVar);
+                    if (ImGui::Selectable(v.name.c_str(), sel)) {
+                        e.repeater.countVar = v.name;
+                        Editor::CanvasHistory::markChanged("Repeater count var");
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::DragInt  ("Max##rep",     &e.repeater.maxCount, 1, 1, 64)) Editor::CanvasHistory::markChanged("Repeater max");
+            if (ImGui::DragInt  ("Columns##rep", &e.repeater.columns,  1, 1, 32)) Editor::CanvasHistory::markChanged("Repeater columns");
+            if (ImGui::DragFloat("Spacing X##rep", &e.repeater.spacingX, 0.5f))    Editor::CanvasHistory::markChanged("Repeater spacingX");
+            if (ImGui::DragFloat("Spacing Y##rep", &e.repeater.spacingY, 0.5f))    Editor::CanvasHistory::markChanged("Repeater spacingY");
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Per-item fields (gameplay fills items[]):");
+            static const char* ITEM_TYPES[] = {"float","int","bool","color","string","sprite","font"};
+            int delF = -1;
+            for (int fi = 0; fi < (int)e.repeater.itemFields.size(); ++fi) {
+                auto& f = e.repeater.itemFields[fi];
+                ImGui::PushID(fi);
+                ImGui::SetNextItemWidth(110);
+                if (ImGui::InputText("##fn", &f.name)) Editor::CanvasHistory::markChanged("Item field name");
+                ImGui::SameLine();
+                int t = (int)f.type;
+                ImGui::SetNextItemWidth(70);
+                if (ImGui::Combo("##ft", &t, ITEM_TYPES, 7)) {
+                    f.type = (Project::CanvasVarType)t;
+                    Editor::CanvasHistory::markChanged("Item field type");
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X")) delF = fi;
+                if (f.type == Project::CanvasVarType::SpriteRef) {
+                    ImGui::SameLine(); ImGui::TextColored({1,0.6f,0.2f,1}, "(sprite not allowed)");
+                }
+                ImGui::PopID();
+            }
+            if (delF >= 0) {
+                e.repeater.itemFields.erase(e.repeater.itemFields.begin() + delF);
+                Editor::CanvasHistory::markChanged("Delete item field");
+            }
+            if (ImGui::SmallButton("+ Field")) {
+                e.repeater.itemFields.push_back({"field", Project::CanvasVarType::Int});
+                Editor::CanvasHistory::markChanged("Add item field");
+            }
+        }
+    }
     ImGui::Separator();
 
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
@@ -695,6 +826,34 @@ void Editor::CanvasObjectInspector::drawElementProps(
                 drawColorProp ("Color",  e.props["color"],  vars);
                 break;
         }
+    }
+
+    // Texture: sprite-sheet frame grid + wrap (Sprite / TextureRect only) — Phase 5c.
+    if ((e.type == Project::CanvasElementType::Sprite ||
+         e.type == Project::CanvasElementType::TextureRect) &&
+        ImGui::CollapsingHeader("Texture"))
+    {
+        bool hasFrame = e.props.count("frameW") && e.props.count("frameH");
+        if (ImGui::Checkbox("Sprite-sheet frames", &hasFrame)) {
+            if (hasFrame) {
+                Project::PropValue fw; fw.value = 16; e.props["frameW"]   = fw;
+                Project::PropValue fh; fh.value = 16; e.props["frameH"]   = fh;
+                Project::PropValue fc; fc.value = 1;  e.props["frameCols"] = fc;
+            } else {
+                e.props.erase("frameW"); e.props.erase("frameH");
+                e.props.erase("frameCols"); e.props.erase("frameIndex");
+            }
+            Editor::CanvasHistory::markChanged("Toggle frame grid");
+        }
+        if (e.props.count("frameW")) {
+            drawIntProp("Frame W",     e.props["frameW"],     vars);
+            drawIntProp("Frame H",     e.props["frameH"],     vars);
+            drawIntProp("Columns",     e.props["frameCols"],  vars);
+            drawIntProp("Frame Index", e.props["frameIndex"], vars);
+            helpMarker("Bindable. A timeline FrameIndex track on this element overrides it.");
+        }
+        drawEnumProp("Wrap S", e.props["wrap_s"], vars, {"Clamp", "Repeat", "Mirror"});
+        drawEnumProp("Wrap T", e.props["wrap_t"], vars, {"Clamp", "Repeat", "Mirror"});
     }
 }
 

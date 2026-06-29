@@ -21,6 +21,7 @@ namespace P64::User::Utility
         public:
             virtual ~IDelegate() = default;
             virtual Ret operator()(ExtraArgs... args) const = 0;
+            virtual uint32_t targetId() const = 0;
         };
 
         template<typename TData>
@@ -48,6 +49,8 @@ namespace P64::User::Utility
                     return Ret{};
                 }
             }
+
+            uint32_t targetId() const override { return target.id; }
         };
 
         static constexpr std::size_t BufferSize = sizeof(Delegate<void>);
@@ -171,6 +174,13 @@ namespace P64::User::Utility
         explicit operator bool() const noexcept
         {
             return callback != nullptr;
+        }
+
+        // Object id this delegate is bound to (0 if unbound). Used by the UI
+        // system to record the canvas-owning object for event sender/target.
+        [[nodiscard]] uint32_t boundObjectId() const noexcept
+        {
+            return callback ? callback->targetId() : 0u;
         }
 
     private:

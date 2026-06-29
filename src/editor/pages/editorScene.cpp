@@ -141,7 +141,10 @@ void Editor::Scene::openCanvas(uint64_t assetUUID)
 {
   auto* entry = ctx.project->getAssets().getEntryByUUID(assetUUID);
   if (!entry || !entry->canvas) return;
-  if (openedCanvas) openedCanvas->save();
+  if (openedCanvas) {
+    openedCanvas->save();
+    ctx.project->getAssets().noteFileSaved(openedCanvas->path); // our own save; don't reload it
+  }
   openedCanvas = entry->canvas;
   ctx.openedCanvasUUID = assetUUID;
   CanvasHistory::clear();
@@ -152,6 +155,7 @@ void Editor::Scene::closeCanvas()
 {
   if (openedCanvas) {
     openedCanvas->save();
+    ctx.project->getAssets().noteFileSaved(openedCanvas->path); // our own save; don't reload it
     openedCanvas = nullptr;
   }
   // Keep ctx.openedCanvasUUID so "auto" can re-open it later
@@ -281,12 +285,13 @@ void Editor::Scene::draw()
     // Center
     ImGui::DockBuilderDockWindow("3D-Viewport", dockSpaceID);
     ImGui::DockBuilderDockWindow("Canvas",      dockSpaceID);
+    ImGui::DockBuilderDockWindow("Particles",   dockSpaceID);
 
     // Left
     ImGui::DockBuilderDockWindow("Scene",     dockLeftID);
     ImGui::DockBuilderDockWindow("Graph",     dockLeftID);
     ImGui::DockBuilderDockWindow("Layers",    dockLeftID);
-    ImGui::DockBuilderDockWindow("Variables", dockLeftID);
+    ImGui::DockBuilderDockWindow("Timeline",  dockBottomID);
 
     // Right
     ImGui::DockBuilderDockWindow("Asset", dockRightID);
@@ -343,12 +348,25 @@ void Editor::Scene::draw()
   // Canvas — a tab only while a canvas is open; shares the center dock node, brought forward
   // the frame it opens.
   if (openedCanvas) {
-    ImGui::SetNextWindowDockID(dockSpaceID, dockCond);
+    // Dock the Canvas as a tab alongside the primary 3D viewport (its current node),
+    // not the root dockspace node. Forcing it to the root on each (re)open could
+    // surface the re-opened canvas in the wrong/hidden spot — the bug where you
+    // "couldn't get back into canvas mode" after switching to the scene.
+    ImGuiID canvasDock = dockSpaceID;
+    if (ImGuiWindow* vpWin = ImGui::FindWindowByName("3D-Viewport"))
+      if (vpWin->DockId != 0) canvasDock = vpWin->DockId;
+    ImGui::SetNextWindowDockID(canvasDock, dockCond);
     if (canvasJustOpened) ImGui::SetNextWindowFocus();
     if (ImGui::Begin("Canvas")) {
       canvasViewport.draw(*openedCanvas);
     }
     ImGui::End();
+    // Consume the "just opened" flag HERE — right after the Canvas window draws.
+    // openCanvas() is called later in the frame (from the Files browser), after this
+    // window already drew, so the focus/dock must take effect on the NEXT frame's
+    // draw of this window. Resetting it in the lower panel block (same frame as the
+    // click) cleared it before this window ever saw it -> re-open never refocused.
+    canvasJustOpened = false;
   }
   ImGui::PopStyleVar(1);
 
@@ -402,7 +420,13 @@ void Editor::Scene::draw()
   if(previewEmitterUUID != 0) {
     auto *entry = ctx.project->getAssets().getEntryByUUID(previewEmitterUUID);
     if(entry && entry->emitter) {
-      ImGui::SetNextWindowDockID(dockSpaceID, ImGuiCond_Appearing);
+      // Dock as a tab alongside the primary 3D viewport (its current node), not the
+      // root dockspace node — same as the Canvas window, so re-opening reliably
+      // surfaces it beside the viewport instead of in a misplaced/hidden spot.
+      ImGuiID particlesDock = dockSpaceID;
+      if (ImGuiWindow* vpWin = ImGui::FindWindowByName("3D-Viewport"))
+        if (vpWin->DockId != 0) particlesDock = vpWin->DockId;
+      ImGui::SetNextWindowDockID(particlesDock, focusParticlesTab ? ImGuiCond_Always : ImGuiCond_Appearing);
       if(focusParticlesTab) { ImGui::SetNextWindowFocus(); focusParticlesTab = false; }
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
       if (ImGui::Begin("Particles")) {
@@ -486,7 +510,19 @@ void Editor::Scene::draw()
   }
 
   ImGui::Begin("Asset");
-    assetInspector.draw();
+    if (openedCanvas) {
+      // In canvas mode the Asset window IS the canvas inspector: settings + variables + events.
+      if (ImGui::Button("Close Canvas")) {
+        closeCanvas();
+        assetsBrowser.setActiveTab(AssetsBrowser::TAB_ASSETS); // leave prevActiveTab=4 so detection fires
+      }
+      ImGui::Separator();
+      canvasSettings.draw(*openedCanvas);
+      canvasVariables.draw(*openedCanvas);
+      canvasEvents.draw(*openedCanvas);
+    } else {
+      assetInspector.draw();
+    }
   ImGui::End();
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
@@ -497,26 +533,20 @@ void Editor::Scene::draw()
 
   if (openedCanvas)
   {
-    // Canvas editor mode: swap Scene/Layers/Graph panels
-    ImGui::Begin("Scene");
-      canvasSettings.draw(*openedCanvas);
-      ImGui::Separator();
-      if (ImGui::Button("Close Canvas")) {
-        closeCanvas();
-        assetsBrowser.setActiveTab(AssetsBrowser::TAB_ASSETS); // leave prevActiveTab=4 so detection fires
-      }
+    // Canvas editor mode. Canvas settings / variables / events now live in the Asset
+    // window (above); the left dock just shows the element Graph. Timeline docks bottom.
+    ImGui::SetNextWindowDockID(dockBottomID, dockCond);
+    ImGui::Begin("Timeline");
+      canvasTimeline.draw(*openedCanvas, canvasGraph.getSelectedUUID());
     ImGui::End();
-
-    ImGui::SetNextWindowDockID(dockLeftID, dockCond);
-    ImGui::Begin("Variables");
-      canvasVariables.draw(*openedCanvas);
-    ImGui::End();
+    // Live preview: feed the timeline's per-element offsets to the viewport (applied next frame).
+    canvasViewport.setAnimOverrides(canvasTimeline.getPreviewOverrides());
 
     ImGui::Begin("Graph");
       canvasGraph.draw(*openedCanvas);
     ImGui::End();
 
-    canvasJustOpened = false;
+    // (canvasJustOpened is reset right after the Canvas window draws, above.)
 
     // Bidirectional selection sync: viewport click wins this frame, otherwise graph drives viewport
     if (canvasViewport.consumeSelectionChange())

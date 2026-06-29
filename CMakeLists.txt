@@ -263,6 +263,10 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/canvasSettings.cpp
         src/editor/pages/parts/canvasVariables.h
         src/editor/pages/parts/canvasVariables.cpp
+        src/editor/pages/parts/canvasEvents.h
+        src/editor/pages/parts/canvasEvents.cpp
+        src/editor/pages/parts/canvasTimeline.h
+        src/editor/pages/parts/canvasTimeline.cpp
         src/editor/pages/parts/canvasGraph.h
         src/editor/pages/parts/canvasGraph.cpp
         src/editor/pages/parts/canvasObjectInspector.h

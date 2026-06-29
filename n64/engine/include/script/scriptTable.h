@@ -28,6 +28,13 @@ namespace P64::Script
     FuncObjDataDelta draw;
     FuncObjDataEvent onEvent;
     FuncObjDataColl onColl;
+
+    // UI component-script callbacks (used by the canvas focus system, Object-script
+    // path ignores them). onFocus/onBlur fire when focus enters/leaves a focusable
+    // UI element; onActivate fires on the A button while focused.
+    FuncObjInit onFocus;
+    FuncObjInit onBlur;
+    FuncObjInit onActivate;
   };
 
   // Note: generated and implement in the project:

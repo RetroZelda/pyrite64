@@ -90,6 +90,31 @@ void Editor::CanvasViewport::drawElement(ImDrawList* dl, ImVec2 origin,
     float ex = propLitFloat(e.x, 0.f);
     float ey = propLitFloat(e.y, 0.f);
 
+    // Live timeline preview: shift/scale by this element's animation override.
+    // Per-element (matches runtime: a parent's offset does not move its children).
+    float   animScale    = 1.f;
+    float   animAlpha    = 1.f;
+    bool    animHasColor = false;
+    uint8_t animCol[4]   = {255, 255, 255, 255};
+    if (auto ov = animOverrides.find(e.uuid); ov != animOverrides.end())
+    {
+        ex += ov->second.dx;
+        ey += ov->second.dy;
+        animScale    = ov->second.scale;
+        animAlpha    = ov->second.alpha;
+        animHasColor = ov->second.hasColor;
+        for (int i = 0; i < 4; ++i) animCol[i] = ov->second.color[i];
+    }
+
+    // Apply the animated Color override (replace) and Alpha (multiply) to a draw color,
+    // so the preview shows fade/tint the same way the cart composites prim color.
+    auto applyTint = [&](ImU32 base) -> ImU32 {
+        ImU32 c = animHasColor ? IM_COL32(animCol[0], animCol[1], animCol[2], animCol[3]) : base;
+        unsigned a = (c >> IM_COL32_A_SHIFT) & 0xFF;
+        a = (unsigned)((float)a * animAlpha);
+        return (c & ~((ImU32)0xFF << IM_COL32_A_SHIFT)) | (a << IM_COL32_A_SHIFT);
+    };
+
     float w = (float)conf.gridSizeX;
     float h = (float)conf.gridSizeY;
 
@@ -141,10 +166,13 @@ void Editor::CanvasViewport::drawElement(ImDrawList* dl, ImVec2 origin,
         default: break;
     }
 
+    w *= animScale;
+    h *= animScale;
+
     auto tl = canvasToScreen({ex, ey}, origin);
     auto br = canvasToScreen({ex + w, ey + h}, origin);
 
-    auto col = elemColor(e.type);
+    auto col = applyTint(elemColor(e.type));
     dl->AddRectFilled(tl, br, col);
 
     bool selected = (e.uuid == selectedUUID);
@@ -160,7 +188,7 @@ void Editor::CanvasViewport::drawElement(ImDrawList* dl, ImVec2 origin,
             preview = txtIt->second.value.get_ref<const std::string&>().c_str();
         // Fixed 8px screen-space text so it doesn't scale with zoom
         float fontSize = 8.0f * zoom;
-        dl->AddText(ImGui::GetFont(), fontSize, tl, IM_COL32(220, 220, 220, 255), preview);
+        dl->AddText(ImGui::GetFont(), fontSize, tl, applyTint(IM_COL32(220, 220, 220, 255)), preview);
     }
 
     for (const auto& child : e.children)

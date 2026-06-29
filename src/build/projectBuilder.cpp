@@ -164,6 +164,13 @@ bool Build::buildProject(const std::string &configPath)
     return false;
   }
 
+  // Canvas codegen runs later (in the assetBuilders loop, so it can read the
+  // script index map), but buildGlobalScripts needs to know up front whether any
+  // canvas exists to reliably inject UI init/bindings (buildCanvasAssets sets this
+  // too late on a clean build). Precompute it here; buildCanvasAssets re-sets the
+  // same value idempotently.
+  sceneCtx.hasCanvases = !project.getAssets().getTypeEntries(Project::FileType::CANVAS).empty();
+
   // Scripts
   buildGlobalScripts(project, sceneCtx);
   buildScripts(project, sceneCtx);

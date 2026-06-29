@@ -49,6 +49,9 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     bool hasDraw    = Utils::CPP::hasFunction(src, "void", "draw");
     bool hasEvent   = Utils::CPP::hasFunction(src, "void", "onEvent");
     bool hasColl    = Utils::CPP::hasFunction(src, "void", "onCollision");
+    bool hasFocus    = Utils::CPP::hasFunction(src, "void", "onFocus");
+    bool hasBlur     = Utils::CPP::hasFunction(src, "void", "onBlur");
+    bool hasActivate = Utils::CPP::hasFunction(src, "void", "onActivate");
 
     auto uuidStr = std::format("{:016X}", script.getUUID());
 
@@ -66,6 +69,9 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasDraw)srcDecl += "void draw(Object& obj, Data *data, float deltaTime);\n";
     if(hasEvent)srcDecl += "void onEvent(Object& obj, Data *data, const ObjectEvent& event);\n";
     if(hasColl)srcDecl += "void onCollision(Object& obj, Data *data, const P64::Coll::CollEvent& event);\n";
+    if(hasFocus)srcDecl += "void onFocus(Object& obj, Data *data);\n";
+    if(hasBlur)srcDecl += "void onBlur(Object& obj, Data *data);\n";
+    if(hasActivate)srcDecl += "void onActivate(Object& obj, Data *data);\n";
     srcDecl += "}\n";
 
     srcEntries += "{\n";
@@ -79,6 +85,9 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasDraw)srcEntries += " .draw = (FuncObjDataDelta)" + uuidStr + "::draw,\n";
     if(hasEvent)srcEntries += " .onEvent = (FuncObjDataEvent)" + uuidStr + "::onEvent,\n";
     if(hasColl)srcEntries += " .onColl = (FuncObjDataColl)" + uuidStr + "::onCollision,\n";
+    if(hasFocus)srcEntries += " .onFocus = (FuncObjInit)" + uuidStr + "::onFocus,\n";
+    if(hasBlur)srcEntries += " .onBlur = (FuncObjInit)" + uuidStr + "::onBlur,\n";
+    if(hasActivate)srcEntries += " .onActivate = (FuncObjInit)" + uuidStr + "::onActivate,\n";
     srcEntries += "},\n";
 
     scriptNames += "\t\t[";

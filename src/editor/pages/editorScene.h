@@ -9,6 +9,8 @@
 #include "parts/canvasObjectInspector.h"
 #include "parts/canvasSettings.h"
 #include "parts/canvasVariables.h"
+#include "parts/canvasEvents.h"
+#include "parts/canvasTimeline.h"
 #include "parts/canvasViewport.h"
 #include "parts/layerInspector.h"
 #include "parts/logWindow.h"
@@ -44,6 +46,8 @@ namespace Editor
       std::shared_ptr<Project::Canvas> openedCanvas{};
       CanvasViewport      canvasViewport{};
       CanvasVariables     canvasVariables{};
+      CanvasEvents        canvasEvents{};
+      CanvasTimeline      canvasTimeline{};
       CanvasGraph         canvasGraph{};
       CanvasSettings      canvasSettings{};
       CanvasObjectInspector canvasObjectInspector{};
