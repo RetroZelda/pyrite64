@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <utility>   // std::pair (explicit for libc++)
 #include <cstdio>
 
 namespace
@@ -204,6 +205,17 @@ void Editor::CanvasTimeline::draw(Project::Canvas& canvas, uint64_t selectedUuid
     if (ImGui::DragFloat("Dur", &clip.duration, 0.05f, 0.05f, 60.0f, "%.2fs")) Editor::CanvasHistory::markChanged("Clip duration");
     ImGui::SameLine();
     if (ImGui::Checkbox("Auto", &clip.autoPlay)) Editor::CanvasHistory::markChanged("Clip autoplay");
+    // Dur-shrink guard: flag keyframes/events stranded past the clip end (they won't play).
+    {
+        float maxT = 0.f;
+        for (const auto& tr : clip.tracks) for (const auto& k : tr.keys) if (k.time > maxT) maxT = k.time;
+        for (const auto& ev : clip.events) if (ev.time > maxT) maxT = ev.time;
+        if (maxT > clip.duration + 0.001f) {
+            ImGui::SameLine(); ImGui::TextColored(ImVec4(1.f, 0.7f, 0.3f, 1.f), "(!)");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Keyframes/events exist past Dur (%.2fs) and won't play.\nIncrease Dur or move them back.", clip.duration);
+        }
+    }
 
     // Time source (Part B): Playback advances elapsed (play/seek); Driven samples a value each
     // frame as time-in-seconds (clamped to [0,Dur]) so gameplay sets the pose directly.
@@ -497,6 +509,25 @@ void Editor::CanvasTimeline::draw(Project::Canvas& canvas, uint64_t selectedUuid
                 }
                 int ez = (int)k.easing; ImGui::SetNextItemWidth(140);
                 if (ImGui::Combo("Easing##ki", &ez, EASE_NAMES, IM_ARRAYSIZE(EASE_NAMES))) { k.easing = (Project::CanvasEaseType)ez; Editor::CanvasHistory::markChanged("Keyframe easing"); }
+                // Ease-curve preview: y = applyEase(ez, x) for x in 0..1, so the shape is visible
+                // without scrubbing. Uses the same uiEval math as the cart.
+                ImGui::SameLine();
+                {
+                    const float W = 54.f, H = ImGui::GetFrameHeight();
+                    ImVec2 o0 = ImGui::GetCursorScreenPos();
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    dl->AddRectFilled(o0, {o0.x + W, o0.y + H}, IM_COL32(28, 28, 34, 255));
+                    dl->AddRect(o0, {o0.x + W, o0.y + H}, IM_COL32(80, 80, 90, 255));
+                    const int N = 20; ImVec2 prev{};
+                    for (int i = 0; i <= N; ++i) {
+                        float t = (float)i / N;
+                        float e = P64::UI::Eval::applyEase(ez, t);
+                        ImVec2 pt = { o0.x + 1.f + t * (W - 2.f), o0.y + H - 1.f - e * (H - 2.f) };
+                        if (i) dl->AddLine(prev, pt, IM_COL32(255, 220, 120, 255), 1.5f);
+                        prev = pt;
+                    }
+                    ImGui::Dummy({W, H});
+                }
             }
         }
     }

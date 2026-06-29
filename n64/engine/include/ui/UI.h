@@ -37,6 +37,12 @@ namespace P64
             void send(E type, uint32_t value = 0) { send((uint16_t)type, value); }
         };
 
+        // Type-safe RECEIVE side (parity with the typed send): compare an incoming ObjectEvent
+        // against a named event enum in a component script's onEvent, e.g.
+        //   if (P64::UI::eventIs(event, HUDData::Event::HealthChanged)) { ... }
+        template<typename E, typename = std::enable_if_t<std::is_enum_v<E>>>
+        inline bool eventIs(const ObjectEvent& ev, E type) { return ev.type == (uint16_t)type; }
+
         // UIElemState / BehaviorPhase come from "ui/uiElemState.h" (included above) so
         // the generated UISceneTypes.h data structs can use UIElemState too.
         template<UISceneType Scene>

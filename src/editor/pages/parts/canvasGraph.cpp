@@ -4,10 +4,13 @@
 */
 #include "canvasGraph.h"
 #include "imgui.h"
+#include "misc/cpp/imgui_stdlib.h"
 #include "../../imgui/helper.h"
 #include "../../canvasHistory.h"
 #include "../../../utils/hash.h"
 #include <algorithm>
+#include <cctype>
+#include <utility>   // std::move (libc++ needs it explicitly)
 
 void Editor::CanvasGraph::regenUUIDs(Project::CanvasElement& e)
 {
@@ -71,6 +74,42 @@ namespace
         }
         return nullptr;
     }
+
+    // Find the vector + index that directly contains `uuid` (its parent's child list), for
+    // in-place sibling duplication.
+    bool findContainer(std::vector<Project::CanvasElement>& elems, uint64_t uuid,
+                       std::vector<Project::CanvasElement>*& outVec, size_t& outIdx)
+    {
+        for (size_t i = 0; i < elems.size(); ++i) {
+            if (elems[i].uuid == uuid) { outVec = &elems; outIdx = i; return true; }
+            if (findContainer(elems[i].children, uuid, outVec, outIdx)) return true;
+        }
+        return false;
+    }
+
+    // True if `uuid` is `e` or any descendant of `e` — used to reject reparenting an element
+    // into its own subtree (which would orphan it).
+    bool inSubtree(const Project::CanvasElement& e, uint64_t uuid)
+    {
+        if (e.uuid == uuid) return true;
+        for (const auto& c : e.children) if (inSubtree(c, uuid)) return true;
+        return false;
+    }
+
+    bool ciContains(const std::string& hay, const std::string& needle)
+    {
+        if (needle.empty()) return true;
+        auto eq = [](char a, char b){ return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); };
+        return std::search(hay.begin(), hay.end(), needle.begin(), needle.end(), eq) != hay.end();
+    }
+
+    // True if the element or any descendant name matches the filter (so ancestors of a match stay visible).
+    bool subtreeMatches(const Project::CanvasElement& e, const std::string& f)
+    {
+        if (ciContains(e.name, f)) return true;
+        for (const auto& c : e.children) if (subtreeMatches(c, f)) return true;
+        return false;
+    }
 }
 
 Project::CanvasElement* Editor::CanvasGraph::getSelected(Project::Canvas& canvas)
@@ -82,6 +121,24 @@ Project::CanvasElement* Editor::CanvasGraph::getSelected(Project::Canvas& canvas
 void Editor::CanvasGraph::drawElement(Project::Canvas& canvas,
                                        Project::CanvasElement& e, int /*depth*/)
 {
+    // Search/filter: hide elements whose subtree doesn't match.
+    if (!filter_.empty() && !subtreeMatches(e, filter_)) return;
+
+    ImGui::PushID((void*)(uintptr_t)e.uuid);
+
+    // Eye-icon visibility toggle. Only literal visibility is editable here; a bound `visible`
+    // is gameplay-driven, so the toggle is disabled and shows the authored default.
+    bool bound = e.visible.isBound;
+    bool vis   = bound || !e.visible.value.is_boolean() || e.visible.value.get<bool>();
+    if (bound) ImGui::BeginDisabled();
+    if (ImGui::SmallButton(vis ? "o" : "-")) {
+        e.visible.value = !vis;
+        Editor::CanvasHistory::markChanged("Toggle visibility");
+    }
+    if (bound) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(vis ? "Visible (click to hide)" : "Hidden (click to show)");
+    ImGui::SameLine();
+
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
         | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (e.children.empty())
@@ -89,19 +146,41 @@ void Editor::CanvasGraph::drawElement(Project::Canvas& canvas,
     if (e.uuid == selectedUUID)
         flags |= ImGuiTreeNodeFlags_Selected;
 
+    // While filtering, force subtrees open so matches deep in the tree are visible.
+    if (!filter_.empty()) ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+
+    if (!vis) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(140, 140, 140, 255));
     bool open = ImGui::TreeNodeEx((void*)(uintptr_t)e.uuid, flags,
                                    "[%s] %s",
                                    ELEMENT_TYPE_NAMES[static_cast<int>(e.type)],
                                    e.name.c_str());
+    if (!vis) ImGui::PopStyleColor();
 
     if (ImGui::IsItemClicked())
         selectedUUID = e.uuid;
 
+    // Drag-to-reparent: drag a node onto another to make it that node's child (applied deferred).
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("CANVAS_ELEM", &e.uuid, sizeof(uint64_t));
+        ImGui::Text("[%s] %s", ELEMENT_TYPE_NAMES[static_cast<int>(e.type)], e.name.c_str());
+        ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("CANVAS_ELEM")) {
+            reparentSrc_ = *static_cast<const uint64_t*>(pl->Data);
+            reparentDst_ = e.uuid;
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     if (ImGui::BeginPopupContextItem())
     {
+        selectedUUID = e.uuid;
         if (ImGui::MenuItem("Copy")) {
             clipboard_ = e;
         }
+        if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+            pendingDup_ = e.uuid;   // deferred: inserting here could realloc the vector mid-walk
         if (ImGui::MenuItem("Delete"))
         {
             e.uuid = 0; // sentinel for deletion (pruned after traversal)
@@ -116,6 +195,7 @@ void Editor::CanvasGraph::drawElement(Project::Canvas& canvas,
             drawElement(canvas, child, 0);
         ImGui::TreePop();
     }
+    ImGui::PopID();
 }
 
 static void pruneDeleted(std::vector<Project::CanvasElement>& elements)
@@ -132,6 +212,14 @@ static void pruneDeleted(std::vector<Project::CanvasElement>& elements)
 void Editor::CanvasGraph::draw(Project::Canvas& canvas)
 {
     ImGui::Text("Elements (%zu)", canvas.elements.size());
+
+    // Search / filter box.
+    ImGui::SetNextItemWidth(-ImGui::CalcTextSize("clear").x - ImGui::GetStyle().FramePadding.x * 4.f);
+    ImGui::InputTextWithHint("##elemFilter", "search...", &filter_);
+    if (!filter_.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("clear")) filter_.clear();
+    }
     ImGui::Separator();
 
     // Hierarchy tree
@@ -141,7 +229,7 @@ void Editor::CanvasGraph::draw(Project::Canvas& canvas)
             drawElement(canvas, e, 0);
         pruneDeleted(canvas.elements);
 
-        // Ctrl+C / Ctrl+V when the tree is focused
+        // Keyboard: Ctrl+C copy, Ctrl+V paste, Ctrl+D duplicate (deferred), when not typing.
         if (!ImGui::GetIO().WantTextInput) {
             if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && selectedUUID != 0) {
                 auto* sel = getSelected(canvas);
@@ -154,7 +242,45 @@ void Editor::CanvasGraph::draw(Project::Canvas& canvas)
                 canvas.elements.push_back(std::move(newElem));
                 Editor::CanvasHistory::markChanged("Paste element");
             }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && selectedUUID != 0)
+                pendingDup_ = selectedUUID;
         }
+
+        // Apply a deferred duplicate now that traversal is done (safe to mutate the tree).
+        if (pendingDup_ != 0) {
+            std::vector<Project::CanvasElement>* vec = nullptr; size_t idx = 0;
+            if (findContainer(canvas.elements, pendingDup_, vec, idx)) {
+                auto dup = (*vec)[idx];
+                regenUUIDs(dup);
+                dup.name += "_copy";
+                uint64_t newSel = dup.uuid;
+                vec->insert(vec->begin() + (long)idx + 1, std::move(dup));
+                selectedUUID = newSel;
+                Editor::CanvasHistory::markChanged("Duplicate element");
+            }
+            pendingDup_ = 0;
+        }
+
+        // Apply a deferred drag-reparent (move src to become a child of dst), after traversal so
+        // mutating the tree can't invalidate the walk. Reject moving an element into its own
+        // subtree (would orphan it) or onto itself.
+        if (reparentSrc_ != 0 && reparentSrc_ != reparentDst_) {
+            auto* src = findByUUID(canvas.elements, reparentSrc_);
+            if (src && !inSubtree(*src, reparentDst_)) {
+                std::vector<Project::CanvasElement>* svec = nullptr; size_t sidx = 0;
+                if (findContainer(canvas.elements, reparentSrc_, svec, sidx)) {
+                    Project::CanvasElement moved = (*svec)[sidx];   // copy subtree before erase
+                    svec->erase(svec->begin() + (long)sidx);
+                    auto* dst = findByUUID(canvas.elements, reparentDst_);  // re-find post-erase
+                    if (dst) {
+                        dst->children.push_back(std::move(moved));
+                        selectedUUID = reparentSrc_;
+                        Editor::CanvasHistory::markChanged("Reparent element");
+                    }
+                }
+            }
+        }
+        reparentSrc_ = reparentDst_ = 0;
     }
     ImGui::EndChild();
 

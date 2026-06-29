@@ -6,6 +6,9 @@
 #include "../../../project/canvas/canvas.h"
 #include "imgui.h"
 #include <unordered_map>
+#include <vector>
+#include <utility>
+#include <cstdint>
 
 namespace Editor
 {
@@ -28,10 +31,13 @@ namespace Editor
         bool isDragging{false};
         bool isPanning{false};
         ImVec2 dragStart{};
-        ImVec2 dragObjStart{};
 
-        uint64_t selectedUUID{0};
+        uint64_t selectedUUID{0};          // primary selection (inspector + graph sync)
+        std::vector<uint64_t> selection_;  // full multi-selection set (always contains the primary)
         bool selectionChanged{false};
+
+        // Per-element start positions captured when a (possibly multi-element) drag begins.
+        std::vector<std::pair<uint64_t, ImVec2>> dragStarts_;
 
         ImVec2 canvasToScreen(ImVec2 canvasPos, ImVec2 origin) const;
         ImVec2 screenToCanvas(ImVec2 screenPos, ImVec2 origin) const;
@@ -41,6 +47,11 @@ namespace Editor
                          const Project::CanvasElement& e, bool parentVisible,
                          const Project::CanvasConf& conf);
         void handleInput(ImVec2 origin, Project::Canvas& canvas);
+        void drawAlignBar(Project::Canvas& canvas);
+
+        bool isSelected(uint64_t uuid) const;
+        // Top-level element (x,y,w,h) in canvas space — shared by hit-test, draw, alignment.
+        ImVec4 elementRect(const Project::Canvas& canvas, const Project::CanvasElement& e) const;
 
         Project::CanvasElement* findElement(std::vector<Project::CanvasElement>& elems,
                                              uint64_t uuid);
@@ -53,7 +64,14 @@ namespace Editor
     public:
         void draw(Project::Canvas& canvas);
 
-        void setSelected(uint64_t uuid) { selectedUUID = uuid; }
+        // Called every frame by the editor to sync from the graph. No-op when unchanged so a
+        // viewport multi-selection isn't clobbered by the per-frame pull.
+        void setSelected(uint64_t uuid) {
+            if (uuid == selectedUUID) return;
+            selectedUUID = uuid;
+            selection_.clear();
+            if (uuid) selection_.push_back(uuid);
+        }
         uint64_t getSelected() const { return selectedUUID; }
         bool consumeSelectionChange() { bool c = selectionChanged; selectionChanged = false; return c; }
 

@@ -12,6 +12,9 @@
 #include <format>
 #include <sstream>
 #include <cctype>
+#include <cmath>        // std::round (libc++ needs this explicitly; GCC pulls it in transitively)
+#include <algorithm>    // std::find
+#include <functional>   // std::function
 
 namespace fs = std::filesystem;
 using namespace Project;
@@ -849,12 +852,18 @@ namespace
         }
     }
 
+    // Append uuid to out if not already present (keeps the *AnimatedUuids lists dedup'd).
+    void pushUnique(std::vector<uint64_t>& out, uint64_t uuid)
+    {
+        if (std::find(out.begin(), out.end(), uuid) == out.end()) out.push_back(uuid);
+    }
+
     void collectFrameAnimatedUuids(const Canvas& c, std::vector<uint64_t>& out)
     {
         for (const auto& a : c.animations)
             for (const auto& t : a.tracks)
                 if (t.channel == CanvasTrackChannel::FrameIndex && t.targetUuid != 0)
-                    out.push_back(t.targetUuid);
+                    pushUnique(out, t.targetUuid);
     }
 
     void collectTintAnimatedUuids(const Canvas& c, std::vector<uint64_t>& alphaOut,
@@ -863,8 +872,8 @@ namespace
         for (const auto& a : c.animations)
             for (const auto& t : a.tracks) {
                 if (t.targetUuid == 0) continue;
-                if (t.channel == CanvasTrackChannel::Alpha) alphaOut.push_back(t.targetUuid);
-                if (t.channel == CanvasTrackChannel::Color) colorOut.push_back(t.targetUuid);
+                if (t.channel == CanvasTrackChannel::Alpha) pushUnique(alphaOut, t.targetUuid);
+                if (t.channel == CanvasTrackChannel::Color) pushUnique(colorOut, t.targetUuid);
             }
     }
 
@@ -893,9 +902,9 @@ namespace
             for (const auto& a : e.animations)
                 for (const auto& t : a.tracks) {
                     if (t.targetUuid == 0) continue;
-                    if (t.channel == CanvasTrackChannel::Alpha)      alphaOut.push_back(t.targetUuid);
-                    if (t.channel == CanvasTrackChannel::Color)      colorOut.push_back(t.targetUuid);
-                    if (t.channel == CanvasTrackChannel::FrameIndex) frameOut.push_back(t.targetUuid);
+                    if (t.channel == CanvasTrackChannel::Alpha)      pushUnique(alphaOut, t.targetUuid);
+                    if (t.channel == CanvasTrackChannel::Color)      pushUnique(colorOut, t.targetUuid);
+                    if (t.channel == CanvasTrackChannel::FrameIndex) pushUnique(frameOut, t.targetUuid);
                 }
         for (const auto& c : e.children)
             collectElemClipChannelUuids(c, alphaOut, colorOut, frameOut);
@@ -1619,6 +1628,122 @@ namespace
 
         Utils::FS::saveTextFile(outPath, src);
     }
+
+    // =====================================================================
+    // Build-time validation (warn, don't fail) — surfaces authoring footguns that would
+    // otherwise silently produce broken/inert UI.
+    // =====================================================================
+    void collectUuidsRec(const CanvasElement& e, std::vector<uint64_t>& out)
+    {
+        out.push_back(e.uuid);
+        for (const auto& c : e.children) collectUuidsRec(c, out);
+    }
+
+    void warnCanvas(const Canvas& c, const std::string& m)
+    {
+        Utils::Logger::log("[canvas:" + c.name + "] " + m, Utils::Logger::LEVEL_WARN);
+    }
+
+    // Validate one clip set. ownerRep != null => element clips (Variable tracks + driven time
+    // resolve against the repeater's item fields rather than canvas variables).
+    void validateClips(const Canvas& c, const std::vector<CanvasAnimation>& clips,
+                       const CanvasElement* ownerRep,
+                       const std::vector<uint64_t>& uuids)
+    {
+        auto hasUuid  = [&](uint64_t u){ return std::find(uuids.begin(), uuids.end(), u) != uuids.end(); };
+        auto hasVar   = [&](const std::string& n){ for (const auto& v : c.variables) if (v.name == n) return true; return false; };
+        std::vector<std::string> fields;
+        if (ownerRep) for (const auto& f : ownerRep->repeater.itemFields) fields.push_back(f.name);
+        auto hasField = [&](const std::string& n){ return std::find(fields.begin(), fields.end(), n) != fields.end(); };
+        std::string where = ownerRep ? ("element '" + ownerRep->name + "' ") : std::string();
+
+        if (clips.size() > 16)
+            warnCanvas(c, where + "has " + std::to_string(clips.size()) + " clips; only the first 16 can autoPlay");
+
+        for (size_t ai = 0; ai < clips.size(); ++ai)
+        {
+            const auto& a = clips[ai];
+            if (a.timeSource == 1 && !a.timeVar.empty()
+                && !(hasVar(a.timeVar) || (ownerRep && hasField(a.timeVar))))
+                warnCanvas(c, where + "clip '" + a.name + "' is driven by missing "
+                         + (ownerRep ? "variable/item-field '" : "variable '") + a.timeVar + "'");
+
+            for (const auto& t : a.tracks)
+            {
+                if (t.channel == CanvasTrackChannel::Variable) {
+                    bool ok = ownerRep ? hasField(t.varName) : hasVar(t.varName);
+                    if (!t.varName.empty() && !ok)
+                        warnCanvas(c, where + "clip '" + a.name + "' Variable track targets missing "
+                                 + (ownerRep ? "item field '" : "variable '") + t.varName + "'");
+                } else if (t.targetUuid != 0 && !hasUuid(t.targetUuid)) {
+                    warnCanvas(c, where + "clip '" + a.name + "' track targets a deleted element ("
+                             + std::to_string(t.targetUuid) + ")");
+                }
+            }
+            for (const auto& ev : a.events)
+            {
+                if (ev.action == CanvasTimelineEvent::Action::FireEvent) {
+                    if (!ev.eventName.empty() && eventIndex(c, ev.eventName) < 0)
+                        warnCanvas(c, where + "clip '" + a.name + "' FireEvent references missing event '"
+                                 + ev.eventName + "'");
+                } else {
+                    int tgt = ev.targetAnim < 0 ? (int)ai : ev.targetAnim;
+                    if (tgt < 0 || tgt >= (int)clips.size())
+                        warnCanvas(c, where + "clip '" + a.name + "' Seek targets out-of-range clip index "
+                                 + std::to_string(ev.targetAnim) + " (ignored)");
+                }
+            }
+        }
+    }
+
+    // Validate property bindings (bound var / item-field / op) across an element subtree.
+    void validateProps(const Canvas& c, const CanvasElement& e, const CanvasElement* enclosingRep)
+    {
+        const CanvasElement* rep = (e.repeater.enabled) ? &e : enclosingRep;
+        auto hasVar = [&](const std::string& n){ for (const auto& v : c.variables) if (v.name == n) return true; return false; };
+        std::vector<std::string> fields;
+        if (rep) for (const auto& f : rep->repeater.itemFields) fields.push_back(f.name);
+        auto hasField = [&](const std::string& n){ return std::find(fields.begin(), fields.end(), n) != fields.end(); };
+
+        auto check = [&](const PropValue& p, const std::string& prop) {
+            if (p.isItemField) {
+                if (!rep) warnCanvas(c, "element '" + e.name + "' prop '" + prop + "' uses an item-field binding outside a repeater");
+                else if (!hasField(p.itemField)) warnCanvas(c, "element '" + e.name + "' prop '" + prop + "' binds missing item field '" + p.itemField + "'");
+            } else if (p.isBound && p.isOp) {
+                if (!p.opLhs.empty() && !hasVar(p.opLhs)) warnCanvas(c, "element '" + e.name + "' prop '" + prop + "' op references missing variable '" + p.opLhs + "'");
+                if (p.opRhsIsVar && !p.opRhs.empty() && !hasVar(p.opRhs)) warnCanvas(c, "element '" + e.name + "' prop '" + prop + "' op references missing variable '" + p.opRhs + "'");
+            } else if (p.isBound && !p.boundVar.empty() && !hasVar(p.boundVar)) {
+                warnCanvas(c, "element '" + e.name + "' prop '" + prop + "' binds missing variable '" + p.boundVar + "'");
+            }
+        };
+        check(e.x, "x"); check(e.y, "y"); check(e.rotation, "rotation"); check(e.visible, "visible");
+        for (const auto& [k, v] : e.props) check(v, k);
+        for (const auto& ch : e.children) validateProps(c, ch, rep);
+    }
+
+    void validateCanvas(const Canvas& c)
+    {
+        std::vector<uint64_t> uuids;
+        for (const auto& e : c.elements) collectUuidsRec(e, uuids);
+
+        validateClips(c, c.animations, nullptr, uuids);
+
+        std::vector<const CanvasElement*> withClips;
+        std::function<void(const CanvasElement&)> walk = [&](const CanvasElement& e) {
+            if (!e.animations.empty()) withClips.push_back(&e);
+            for (const auto& ch : e.children) walk(ch);
+        };
+        for (const auto& e : c.elements) walk(e);
+        for (const auto* e : withClips)
+        {
+            if (!e->repeater.enabled)
+                warnCanvas(c, "element '" + e->name + "' has animations but isn't a repeater; element clips are ignored (move them to a canvas clip)");
+            else
+                validateClips(c, e->animations, e, uuids);
+        }
+
+        for (const auto& e : c.elements) validateProps(c, e, nullptr);
+    }
 }
 
 // =====================================================================
@@ -1654,6 +1779,7 @@ bool Build::buildCanvasAssets(::Project::Project& project, SceneCtx& sceneCtx)
     auto bindingsOut = (p64SrcPath / "uiBindings.cpp").string();
 
     Utils::Logger::log("Building canvas assets...");
+    for (const auto* c : canvases) validateCanvas(*c);
     generateUISceneTypes(canvases, sceneCtx.codeIdxMapUUID, typesOut);
     generateUIDriver(canvases, "data/scripts/uiDriver.cpp", driverOut);
     generateUIBindings(canvases, sceneCtx.codeIdxMapUUID, project.getAssets(), bindingsOut);
