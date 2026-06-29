@@ -41,9 +41,9 @@ namespace
         return false;
     }
     // Sprite-sheet frame grid authored via frameW/frameH(/frameCols) props.
-    bool hasFrameGrid(const Project::CanvasElement& e) { return e.props.count("frameW") && e.props.count("frameH"); }
+    bool hasFrameGrid(const CanvasElement& e) { return e.props.count("frameW") && e.props.count("frameH"); }
     // Wrap S/T authored via wrap_s/wrap_t props (0=Clamp,1=Repeat,2=Mirror).
-    bool hasWrap(const Project::CanvasElement& e) { return e.props.count("wrap_s") || e.props.count("wrap_t"); }
+    bool hasWrap(const CanvasElement& e) { return e.props.count("wrap_s") || e.props.count("wrap_t"); }
 
     // Phase 5d: elements targeted by an Alpha / Color timeline track (current canvas).
     // The draw code composites these into prim color (+ a prim-aware combiner/blender).
@@ -55,11 +55,11 @@ namespace
     bool isTintAnimated(uint64_t uuid)  { return isAlphaAnimated(uuid) || isColorAnimated(uuid); }
 
     // Phase 5e: unique animated target uuids of ONE element's element-scoped clips.
-    void collectElemClipAnimUuids(const Project::CanvasElement& e, std::vector<uint64_t>& out)
+    void collectElemClipAnimUuids(const CanvasElement& e, std::vector<uint64_t>& out)
     {
         for (const auto& a : e.animations)
             for (const auto& t : a.tracks)
-                if (t.channel != Project::CanvasTrackChannel::Variable && t.targetUuid != 0)
+                if (t.channel != CanvasTrackChannel::Variable && t.targetUuid != 0)
                 {
                     bool seen = false;
                     for (auto u : out) if (u == t.targetUuid) { seen = true; break; }
@@ -81,7 +81,7 @@ namespace
     }
 
     // Base name for a repeater element's generated item struct + array.
-    std::string repeaterBaseName(const Project::CanvasElement& e)
+    std::string repeaterBaseName(const CanvasElement& e)
     {
         return sanitizeIdent(e.name, e.uuid & 0xFFFF);
     }
@@ -103,7 +103,7 @@ namespace
         return out;
     }
 
-    std::string animEnumerators(const std::vector<Project::CanvasAnimation>& clips)
+    std::string animEnumerators(const std::vector<CanvasAnimation>& clips)
     {
         std::vector<std::string> names;
         for (const auto& a : clips) names.push_back(a.name);
@@ -113,7 +113,7 @@ namespace
     // Live count expression for a repeater. Defaults to the generated `<base>_count` member
     // (set by gameplay in the model callback); a non-empty countVar overrides it with a
     // canvas variable (legacy). Either way `data.<base>_items[i]` is always emitted.
-    std::string repeaterCountExpr(const Project::CanvasElement& e)
+    std::string repeaterCountExpr(const CanvasElement& e)
     {
         return e.repeater.countVar.empty()
             ? ("data." + repeaterBaseName(e) + "_count")
@@ -130,7 +130,7 @@ namespace
     // Color channel is active) and multiply by the animated alpha. baseColor is the element's
     // authored color expr ("" -> opaque white). Only invoked when isTintAnimated(e.uuid).
     void emitAnimPrimColor(std::string& out, const std::string& indent,
-                           const Project::CanvasElement& e, const std::string& baseColor)
+                           const CanvasElement& e, const std::string& baseColor)
     {
         // Use the resolved anim ref (flat "data.__anim_X" or item-local "...items[i].__anim_X").
         std::string a    = g_animRef.empty() ? ("data." + animStateVar(e.uuid)) : g_animRef;
@@ -145,7 +145,7 @@ namespace
     }
 
     // If `p` is a repeater item-field / index binding, set `out` to its C++ expression.
-    bool itemRefExpr(const Project::PropValue& p, std::string& out)
+    bool itemRefExpr(const PropValue& p, std::string& out)
     {
         if (p.isIndex)     { out = g_itemRef.empty() ? "0" : "(int)i"; return true; }
         if (p.isItemField) { out = g_itemRef.empty() ? "0" : (g_itemRef + "." + p.itemField); return true; }
