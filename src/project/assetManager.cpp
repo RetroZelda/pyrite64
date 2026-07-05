@@ -454,7 +454,9 @@ void Project::AssetManager::reload() {
   // sort by name
   for (auto &typed : entries) {
     std::sort(typed.begin(), typed.end(), [](const AssetManagerEntry &a, const AssetManagerEntry &b) {
-      return a.name < b.name;
+      // tie-break on path: asset indices ride on this order, it must not depend on
+      // filesystem scan order when two files share a name in different folders
+      return a.name != b.name ? a.name < b.name : a.path < b.path;
     });
   }
 
@@ -662,7 +664,9 @@ bool Project::AssetManager::pollWatch()
     }
     auto &typed = entries[typeIdx];
     std::sort(typed.begin(), typed.end(), [](const AssetManagerEntry &a, const AssetManagerEntry &b) {
-      return a.name < b.name;
+      // tie-break on path: asset indices ride on this order, it must not depend on
+      // filesystem scan order when two files share a name in different folders
+      return a.name != b.name ? a.name < b.name : a.path < b.path;
     });
   }
 

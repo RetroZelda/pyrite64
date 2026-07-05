@@ -122,7 +122,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
   src += scriptNames;
 
 
-  Utils::FS::saveTextFile(pathTable, src);
+  Utils::FS::saveTextFileIfChanged(pathTable, src);
 }
 
 void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
@@ -211,5 +211,5 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
   src = Utils::replaceAll(src, "__EXTRA_DECL__", srcExtraDecl);
   src = Utils::replaceAll(src, "__CODE_DECL__", srcDecl);
   src = Utils::replaceAll(src, "__CODE_HOOKS__", srcHook);
-  Utils::FS::saveTextFile(pathTable, src);
+  Utils::FS::saveTextFileIfChanged(pathTable, src);
 }

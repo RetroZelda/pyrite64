@@ -126,27 +126,30 @@ bool Build::buildProject(const std::string &configPath)
     }
   }
 
-  // check if files got added/removed, in which case trigger an asset rebuild.
-  // This is needed as some assets reference others via indices.
+  // Check if the ROM asset list changed (add/remove/rename/reorder). Asset indices are
+  // baked into artifacts at build time — compiled code via assetTable.h ("..."_asset is
+  // consteval!), .t3dm/.pf files — so any index shift must force those to rebuild.
+  // Compare the UNSORTED list: an index is a position in assetList, so order changes
+  // matter just as much as content changes. (sceneCtx.files can't be used here, it is
+  // only populated later by the per-type asset builders.)
   {
-    auto fileNames = sceneCtx.files;
-    std::sort(fileNames.begin(), fileNames.end());
-    auto fileStr = Utils::join(fileNames, " ");
+    std::string fileStr{};
+    for (auto &entry : sceneCtx.assetList) {
+      fileStr += entry.path;
+      fileStr += '\n';
+    }
 
     auto oldFileStr = Utils::FS::loadTextFile(fsDataPath / "fileList.txt");
     if(fileStr != oldFileStr)
     {
+      // Delete only the mtime-gated outputs that embed asset indices so they rebuild.
+      // Compiled code needs no clean: assetTable.h changes with the list, and the
+      // Makefile's .d dependency tracking recompiles exactly the files including it.
       Utils::Logger::log("Asset list changed, clean asset dependencies");
       Utils::FS::delTypeRecursive(fsPath, ".t3dm");
       Utils::FS::delTypeRecursive(fsPath, ".pf");
       fs::remove_all(fsDataPath);
       fs::create_directories(fsDataPath);
-
-      cleanProject(project, {
-        .code = true,
-        .assets = false,
-        .engine = false,
-      });
 
       Utils::FS::saveTextFile(fsDataPath / "fileList.txt", fileStr);
     }
@@ -198,9 +201,9 @@ bool Build::buildProject(const std::string &configPath)
     {"{{SCENE_MAP}}", sceneMapStr},
     {"{{SCENE_COUNT}}", std::to_string(scenes.size())}
   });
-  Utils::FS::saveTextFile(project.getPath() + "/src/p64/sceneTable.h", sceneTableHeader);
+  Utils::FS::saveTextFileIfChanged(project.getPath() + "/src/p64/sceneTable.h", sceneTableHeader);
 
-  Utils::FS::saveTextFile(project.getPath() + "/src/p64/sceneTable.cpp",
+  Utils::FS::saveTextFileIfChanged(project.getPath() + "/src/p64/sceneTable.cpp",
     "#include \"sceneTable.h\"\n"
     "\n"
     "namespace P64::SceneManager {\n"
@@ -221,7 +224,7 @@ bool Build::buildProject(const std::string &configPath)
     Utils::FS::loadTextFile("data/scripts/assetTable.h"),
     "{{ASSET_MAP}}", sceneCtx.assetFileMap
   );
-  Utils::FS::saveTextFile(project.getPath() + "/src/p64/assetTable.h", assetTableCode);
+  Utils::FS::saveTextFileIfChanged(project.getPath() + "/src/p64/assetTable.h", assetTableCode);
 
   // Asset table
   Utils::BinaryFile fileList{};

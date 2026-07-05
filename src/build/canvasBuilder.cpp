@@ -1107,7 +1107,7 @@ namespace
                 src += "\nnamespace P64::UI::Generated\n{\n" + decls + "}\n";
         }
 
-        Utils::FS::saveTextFile(outPath, src);
+        Utils::FS::saveTextFileIfChanged(outPath, src);
     }
 
     void generateUIDriver(const std::vector<const Canvas*>& canvases,
@@ -1159,7 +1159,7 @@ namespace
         src = Utils::replaceAll(src, "__UI_INIT_ENTRIES__", initEntries);
         src = Utils::replaceAll(src, "__CANVAS_TEMPLATE_INSTANTIATIONS__", instantiations);
 
-        Utils::FS::saveTextFile(outPath, src);
+        Utils::FS::saveTextFileIfChanged(outPath, src);
     }
 
     // Emit the per-canvas component-script/focus "behavior" function (Phase 3).
@@ -1626,7 +1626,7 @@ namespace
         src += "    }\n";
         src += "}\n";
 
-        Utils::FS::saveTextFile(outPath, src);
+        Utils::FS::saveTextFileIfChanged(outPath, src);
     }
 
     // =====================================================================

@@ -31,6 +31,10 @@ namespace
 
     if (!fs::exists(src)) return 0;
     if (fs::is_directory(src)) {
+      // Never sync build artifacts: copying the master engine's build/ would inject
+      // its (potentially stale) .o files into the project with fresh mtimes, making
+      // make treat them as up to date and silently link outdated engine code.
+      if (src.filename() == "build") return 0;
       fs::create_directories(dst);
       int count = 0;
       for (const auto& entry : fs::directory_iterator(src)) {
@@ -217,6 +221,10 @@ Project::Project::Project(const std::string &p64projPath)
       .engine = true,
       .engineSrc = true,
     });
+    // Persist the new version immediately (saveConfig stamps it): CLI builds never
+    // save the project config, so without this every build between an editor update
+    // and the next manual GUI save would re-trigger this full clean.
+    saveConfig();
   } else if (verCmp > 0) {
     openedFromNewerVersion = true;
     printf("Warning: project saved with newer editor version (%s > %s)\n",
@@ -228,14 +236,12 @@ Project::Project::Project(const std::string &p64projPath)
   ::Project::Graph::Node::reloadSpecs(path + "/nodes");
 
   //auto t = SDL_GetTicksNS();
+  // Sync changed engine sources into the project. No forced clean: the engine and
+  // project Makefiles include the compiler-generated .d dependency files (-MMD/-MP),
+  // so a changed header rebuilds exactly the objects that include it.
   if(copyChangedEngineFiles("n64/engine", f / "engine") > 0)
   {
-    printf("New Engine files copied, force clean build build\n");
-    Build::cleanProject(*this, {
-      .code = true,
-      .assets = false,
-      .engine = true,
-    });
+    printf("Updated engine files copied\n");
   }
   //t = SDL_GetTicksNS() - t;
   //printf("Engine files sync took %.2f ms\n", t / 1e6);

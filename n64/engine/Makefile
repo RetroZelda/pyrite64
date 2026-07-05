@@ -5,6 +5,11 @@ PROJECT_NAME=engine
 include $(N64_INST)/include/n64.mk
 include $(N64_INST)/include/t3d.mk
 
+# n64.mk adds -MMD; -MP emits phony targets per header so deleted/renamed
+# headers don't break incremental builds via the included .d files below.
+CFLAGS += -MP
+CXXFLAGS += -MP
+
 N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -Os -Iinclude \
 	-Wall -Wextra -Werror \
 	-Wformat-signedness -fno-common \
@@ -47,6 +52,10 @@ $(BUILD_DIR)/renderer/bigtex/applyTexture.o: $(SOURCE_DIR)/renderer/bigtex/apply
 clean:
 	rm -rf $(BUILD_DIR)
 
--include $(wildcard $(BUILD_DIR)/src/*.d)
+# Collect -MMD dep files recursively: .d files sit next to each .o in nested dirs
+# (build/src/renderer/particles/, build/renderer/bigtex/, ...), a flat wildcard
+# misses them and header edits then don't trigger recompiles.
+rwildcard = $(foreach d,$(wildcard $(1)*),$(call rwildcard,$(d)/,$(2)) $(filter $(subst *,%,$(2)),$(d)))
+-include $(call rwildcard,$(BUILD_DIR)/,*.d)
 
 .PHONY: all clean
