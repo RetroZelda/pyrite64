@@ -22,6 +22,7 @@ namespace Project::Component::Particle
   {
     PROP_U64(emitterUUID);
     PROP_BOOL(autoPlay);
+    PROP_BOOL(forceDestroy); // drop the emitter immediately on delete instead of draining it
   };
 
   std::shared_ptr<void> init(Object &obj) {
@@ -35,6 +36,7 @@ namespace Project::Component::Particle
     Utils::JSON::Builder builder{};
     builder.set(data.emitterUUID);
     builder.set(data.autoPlay);
+    builder.set(data.forceDestroy);
     return builder.doc;
   }
 
@@ -42,6 +44,7 @@ namespace Project::Component::Particle
     auto data = std::make_shared<Data>();
     Utils::JSON::readProp(doc, data->emitterUUID);
     Utils::JSON::readProp(doc, data->autoPlay, true);
+    Utils::JSON::readProp(doc, data->forceDestroy, false); // default: drain on delete
     return data;
   }
 
@@ -58,7 +61,8 @@ namespace Project::Component::Particle
     }
 
     uint8_t flags = 0;
-    if(data.autoPlay.value) flags |= 1 << 0;
+    if(data.autoPlay.value)     flags |= 1 << 0; // Comp::Particle::FLAG_AUTO_PLAY
+    if(data.forceDestroy.value) flags |= 1 << 1; // Comp::Particle::FLAG_FORCE_DESTROY
 
     ctx.fileObj.write<uint16_t>(id);
     ctx.fileObj.write<uint8_t>(flags);
@@ -82,6 +86,9 @@ namespace Project::Component::Particle
         ImGui::TextDisabled("<locked>");
       }
       ImTable::addObjProp("Auto-Play", data.autoPlay);
+      ImTable::addObjProp("Force-Destroy", data.forceDestroy);
+      ImGui::SetItemTooltip("When deleted, drop the emitter and its particles immediately.\n"
+                            "Off (default): stop spawning but let live particles finish first.");
 
       ImTable::end();
     }

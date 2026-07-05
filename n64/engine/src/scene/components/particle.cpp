@@ -21,7 +21,9 @@ namespace P64::Comp
   {
     auto initData = (InitData*)initData_;
     if (initData == nullptr) {
-      data->handle.destroy(); // release our owned reference (manager reclaims it)
+      // Release our owned reference. FLAG_FORCE_DESTROY drops the emitter (and its live
+      // particles) at once; otherwise the manager keeps it alive to drain them first.
+      data->handle.destroy(data->flags & FLAG_FORCE_DESTROY);
       data->~Particle();
       return;
     }
