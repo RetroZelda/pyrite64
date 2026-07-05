@@ -17,6 +17,12 @@ namespace P64::Debug::Overlay
   void toggle();
 
   /**
+   * @return true while the debug overlay/menu is open (game code can use this to avoid
+   *         consuming inputs the menu is using, e.g. the D-pad)
+   */
+  bool isOpen();
+
+  /**
    * Adds a custom entry into the overlay.
    * Note that the entire menu is reset after each scene-load, including custom entries.
    *

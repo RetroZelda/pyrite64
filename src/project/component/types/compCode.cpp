@@ -180,7 +180,6 @@ namespace Project::Component::Code
               // @TODO: do this in scene itself
               auto &map = ctx.project->getScenes().getLoadedScene()->objectsMap;
               std::vector<ImTable::ComboEntry> objList;
-              objList.push_back({0, "<None>"});
 
               for (auto &[id, object] : map) {
                 objList.push_back({
@@ -189,6 +188,7 @@ namespace Project::Component::Code
                 });
               }
 
+              // combo adds a leading "[None]" row to clear the reference
               ImTable::addObjectVecComboBox("", objList, uuid, validationFunc);
             } else if(field.type == Utils::DataType::PREFAB) {
               const auto &prefabs = ctx.project->getAssets().getTypeEntries(FileType::PREFAB);

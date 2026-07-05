@@ -478,7 +478,8 @@ namespace ImTable
     const std::vector<T> &items,
     auto &id,
     OnChange onChange,
-    bool searchable = false
+    bool searchable = false,
+    bool allowNone = false
   )
   {
     if(!name.empty())add(name);
@@ -489,20 +490,38 @@ namespace ImTable
       if (std::cmp_equal(id, item.getId()))break;
       ++idx;
     }
-    const char* preview = "<None>";
-    if (idx >= 0 && idx < (int)items.size()) {
+    bool hasSelection = idx < (int)items.size();
+
+    // Optional leading "[None]" row so asset/object selectors can be cleared.
+    // Real items are shifted down by one when it is present.
+    const int noneOffset = allowNone ? 1 : 0;
+
+    const char* preview = allowNone ? "[None]" : "<None>";
+    if (hasSelection) {
       preview = items[idx].getName().c_str();
     }
 
+    // Map the item index to the selectable index (which includes the [None] row).
+    // With no selection and no [None] row, keep the original out-of-range index so
+    // nothing gets highlighted (matches the previous behaviour for enum combos).
+    int current = hasSelection ? idx + noneOffset : (allowNone ? 0 : idx);
+
     drawComboSelection(
       ("##" + name).c_str(),
-      (int)items.size(),
-      idx,
+      (int)items.size() + noneOffset,
+      current,
       preview,
       "Edit " + name,
-      [&items](int i) { return items[i].getName().c_str(); },
-      [&items, &id, &onChange](int i) {
-        id = items[i].getId();
+      [&items, noneOffset](int i) -> const char* {
+        if (noneOffset && i == 0) return "[None]";
+        return items[i - noneOffset].getName().c_str();
+      },
+      [&items, &id, &onChange, noneOffset](int i) {
+        if (noneOffset && i == 0) {
+          id = 0;
+        } else {
+          id = items[i - noneOffset].getId();
+        }
         onChange(id);
       },
       searchable
@@ -530,8 +549,8 @@ namespace ImTable
   )
   {
     auto oldId = id;
-    addVecComboBox(name, items, id, onChange, searchable);
-    
+    addVecComboBox(name, items, id, onChange, searchable, /*allowNone=*/true);
+
     if (ImGui::HandleComboBoxDragDrop(id, validator)) {
       onChange(id);
     }

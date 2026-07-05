@@ -193,9 +193,9 @@ namespace Project::Component::NodeGraph
       }
 
       // Build a scene-object pick list once (shared by object refs + objref vars).
+      // The combo adds a leading "[None]" row to clear the reference.
       auto buildObjList = [&]() {
         std::vector<ImTable::ComboEntry> objList;
-        objList.push_back({0, "<None>"});
         auto scene = ctx.project->getScenes().getLoadedScene();
         if(scene) {
           for(auto &[uuid, object] : scene->objectsMap) objList.push_back({object->uuid, object->name});

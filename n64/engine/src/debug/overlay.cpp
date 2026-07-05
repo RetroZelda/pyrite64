@@ -74,6 +74,11 @@ namespace {
   bool isVisible = false;
 }
 
+bool P64::Debug::Overlay::isOpen()
+{
+  return isVisible;
+}
+
 void P64::Debug::Overlay::toggle()
 {
   isVisible = !isVisible;
