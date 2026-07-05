@@ -55,6 +55,14 @@ namespace
           {RDPQ_BLENDER_ADDITIVE, "Additive"},
         };
         ImTable::addVecComboBox("Blending", blenders, layer.blender.value);
+        // RDP additive has no clamp: sums past 255 wrap to dark values on hardware
+        if(layer.blender.value == RDPQ_BLENDER_ADDITIVE) {
+          ImTable::add("");
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.75f, 0.25f, 1.0f});
+          ImGui::TextWrapped(ICON_MDI_ALERT " N64 adds WITHOUT clamping: color + background past 255 "
+            "wraps around to a dark value on hardware (the viewport does not show this for meshes).");
+          ImGui::PopStyleColor();
+        }
 
         std::vector<ImTable::ComboEntry> lightModes{
             {0, "Multiply (Default)"},

@@ -41,6 +41,12 @@ namespace P64::ParticleSim
   enum FireMode { FIRE_CONTINUOUS = 0, FIRE_ONE_SHOT = 1 };
   enum Shape    { SHAPE_POINT = 0, SHAPE_SPHERE = 1, SHAPE_BOX = 2, SHAPE_CONE = 3 };
   enum AnimMode { ANIM_OFF = 0, ANIM_LOOP = 1, ANIM_OVER_LIFETIME = 2, ANIM_RANDOM_STATIC = 3 };
+  // What already-spawned particles are anchored to (what they move with):
+  //  EMITTER: the emitter object (the whole system moves rigidly with it)
+  //  WORLD:   nothing — baked into world at spawn
+  //  PARENT:  the emitter object's PARENT — the emitter can move/orbit around the parent to
+  //           spread particles, spawned particles stay put relative to the parent and follow it
+  enum SimSpace { SPACE_EMITTER = 0, SPACE_WORLD = 1, SPACE_PARENT = 2 };
 
   // Deterministic, seedable xorshift32 PRNG (bit-stable across platforms).
   struct Rng
@@ -78,6 +84,7 @@ namespace P64::ParticleSim
 
     int emitShape{SHAPE_POINT};
     Vec3 shapeSize{};             // radius / half-extents
+    Vec3 shapeOffset{};           // shape center relative to the emitter (ignored for POINT)
 
     Vec3 velocity{0, 1, 0};       // base direction
     float speedMin{20.0f};
@@ -86,7 +93,12 @@ namespace P64::ParticleSim
     Vec3 gravity{0, -30, 0};
     float drag{0.0f};
 
-    bool worldSpace{false};       // false: particles relative to emitter; true: baked into world at spawn
+    int simSpace{SPACE_EMITTER};  // SPACE_* — anchor of spawned particles (see SimSpace)
+    // emitter yaw (precomputed sin/cos, default identity): rotates the emission shape and the
+    // base velocity about Y so directional emitters (e.g. a wide wave) can face their movement.
+    // Applied at SPAWN only; already-live particles keep their offsets.
+    float yawSin{0.0f};
+    float yawCos{1.0f};
     float rotationMin{0.0f};      // initial rotation range (deg)
     float rotationMax{0.0f};
     float spinMin{0.0f};          // per-particle angular velocity range (deg/sec)
@@ -162,6 +174,8 @@ namespace P64::ParticleSim
         break;
       default: /* POINT */ p.pos = {0, 0, 0}; break;
     }
+    // shape center offset (POINT stays on the emitter — move the object instead)
+    if(cfg.emitShape != SHAPE_POINT) p.pos = p.pos + cfg.shapeOffset;
 
     // direction: base dir perturbed within the cone (trig-free, bit-stable)
     Vec3 base = normalize(cfg.velocity);
@@ -171,6 +185,12 @@ namespace P64::ParticleSim
 
     float speed = rng.range(cfg.speedMin, cfg.speedMax);
     p.vel = dir * speed;
+
+    // emitter yaw: rotate the shape offset and velocity about Y (identity when unset)
+    p.pos = {p.pos.x * cfg.yawCos + p.pos.z * cfg.yawSin, p.pos.y,
+             -p.pos.x * cfg.yawSin + p.pos.z * cfg.yawCos};
+    p.vel = {p.vel.x * cfg.yawCos + p.vel.z * cfg.yawSin, p.vel.y,
+             -p.vel.x * cfg.yawSin + p.vel.z * cfg.yawCos};
 
     p.pos = p.pos + origin;
     p.angle0 = rng.range(cfg.rotationMin, cfg.rotationMax);

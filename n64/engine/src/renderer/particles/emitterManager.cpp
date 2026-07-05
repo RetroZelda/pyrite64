@@ -231,6 +231,16 @@ void P64::PTX::Handle::move(const fm_vec3_t &delta)
   if(Slot* s = validSlot(slot, uuid)) s->inst.move(delta);
 }
 
+void P64::PTX::Handle::setParentPos(const fm_vec3_t &p)
+{
+  if(Slot* s = validSlot(slot, uuid)) s->inst.setParentPos(p);
+}
+
+void P64::PTX::Handle::setYaw(float yawRad)
+{
+  if(Slot* s = validSlot(slot, uuid)) s->inst.setYaw(yawRad);
+}
+
 // ---- AssetRef<emitter_t> convenience ----
 
 P64::PTX::Handle P64::AssetRef<emitter_t>::create() { return EmitterManager::create(get()); }

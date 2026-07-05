@@ -12,6 +12,7 @@ namespace Renderer
 {
   class Scene;
   class Texture;
+  class Pipeline;
   struct UniformGlobal;
 
   // One emitter's slice of a billboard batch plus the hardware-faithful render state the
@@ -28,11 +29,18 @@ namespace Renderer
     float alphaThreshold;
   };
 
+  // Additive groups need the RDP's non-clamping (wraparound) add, which GPU blending can't do
+  // in-pass: they are SKIPPED in the main pass and re-drawn by ParticleWrapPass afterwards.
+  enum class ParticleGroupFilter : uint8_t { All, SkipAdditive, OnlyAdditive };
+
   // Draws grouped billboard batches with the matching particle pipeline/sampler per group.
   // Shared by the scene viewport and the emitter-preview tab so both composite identically.
+  // `pipelineOverride` forces one pipeline for every drawn group (used by the accum pass).
   void drawParticleGroups(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Scene& scene,
     const class ParticleBatch& batch, const UniformGlobal& uniGlobal,
-    const std::vector<ParticleDrawGroup>& groups);
+    const std::vector<ParticleDrawGroup>& groups,
+    ParticleGroupFilter filter = ParticleGroupFilter::All,
+    const Pipeline* pipelineOverride = nullptr);
 
   /**
    * A reusable GPU vertex buffer for per-frame particle-billboard batches. It allocates once and

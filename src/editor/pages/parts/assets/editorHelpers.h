@@ -322,6 +322,18 @@ namespace Editor::Helpers
         };
         ImTable::addVecComboBox("", blenders, mat.blender.value);
       });
+      // The RDP blender's adder has no clamp: additive sums past 255 wrap around (mod 256)
+      // instead of saturating, flipping bright pixels dark on hardware.
+      if(mat.blenderSet.value && mat.blender.value == RDPQ_BLENDER_ADDITIVE) {
+        ImTable::add("");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.75f, 0.25f, 1.0f});
+        ImGui::TextWrapped(emitterMode
+          ? ICON_MDI_ALERT " N64 adds WITHOUT clamping: color + background past 255 wraps around "
+            "to a dark value. Previews reproduce this — keep colors dim and backgrounds dark."
+          : ICON_MDI_ALERT " N64 adds WITHOUT clamping: color + background past 255 wraps around "
+            "to a dark value on hardware (mesh previews do NOT show this). Keep colors dim.");
+        ImGui::PopStyleColor();
+      }
 
       toggleProp("Fog", mat.fogSet.value, [&]
       {

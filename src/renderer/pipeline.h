@@ -32,8 +32,12 @@ namespace Renderer
         bool additive{};       // with translucent: additive blend (src*alpha + dst) instead of alpha
         bool noAlphaWrite{};   // mask the alpha channel (keeps an FB's alpha at 1 for compositing)
         bool depthWrite{true}; // write to the depth buffer (set false for alpha-blended particles)
+        bool hasDepthTarget{true}; // false: render pass binds NO depth target (e.g. fullscreen composite)
+        // color target 0 format (target 1, the objID buffer, is always R32_UINT).
+        // Non-UNORM float formats don't clamp when blending (used by the additive-wrap accum pass).
+        SDL_GPUTextureFormat colorFormat{SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM};
         uint32_t vertPitch{};
-        std::vector<InfoVertDef> vertLayout{};
+        std::vector<InfoVertDef> vertLayout{}; // empty: no vertex buffer (fullscreen gl_VertexIndex tri)
       };
 
       explicit Pipeline(const Info &info);

@@ -14,6 +14,7 @@
 #include "../../../renderer/object.h"
 #include "../../../renderer/skeleton.h"
 #include "../../../renderer/particleBatch.h"
+#include "../../../renderer/particleWrap.h"
 #include "../../../project/scene/object.h"
 #include "../../../project/component/shared/materialInstance.h"
 #include "engine/include/renderer/particles/particleSim.h"
@@ -74,6 +75,7 @@ namespace Editor
       std::shared_ptr<Renderer::ParticleBatch> particleBatch{};
       std::vector<Renderer::ParticleVertex> particleVerts{};
       std::vector<Renderer::ParticleDrawGroup> particleGroups{};
+      Renderer::ParticleWrapPass ptxWrapPass{}; // RDP-accurate (wraparound) additive compositing
 
       std::vector<P64::ParticleSim::Particle> particles{};
       P64::ParticleSim::Rng rng{};

@@ -31,13 +31,14 @@ namespace Utils::Emitter
     c.lifetimeVariance = em.lifetimeVariance.value;
     c.emitShape = em.emitShape.value;
     c.shapeSize = {em.shapeSize.value.x, em.shapeSize.value.y, em.shapeSize.value.z};
+    c.shapeOffset = {em.shapeOffset.value.x, em.shapeOffset.value.y, em.shapeOffset.value.z};
     c.velocity = {em.velocity.value.x, em.velocity.value.y, em.velocity.value.z};
     c.speedMin = em.speedMin.value;
     c.speedMax = em.speedMax.value;
     c.spread = em.spread.value;
     c.gravity = {em.gravity.value.x, em.gravity.value.y, em.gravity.value.z};
     c.drag = em.drag.value;
-    c.worldSpace = em.worldSpace.value;
+    c.simSpace = std::clamp(em.simSpace.value, 0, 2);
     c.rotationMin = em.rotationMin.value;
     c.rotationMax = em.rotationMax.value;
     c.spinMin = em.spinMin.value;
@@ -93,17 +94,20 @@ namespace Utils::Emitter
   // (sorts `particles` back-to-front in place). Matches the engine path exactly: quantized
   // int8 sizes, logical-frame UVs (incl. the mirror trick), UV scroll in frame sections, and
   // NO per-particle rotation (tpx billboards can't rotate, so previews don't either).
+  // `anchorPos` is the sim-space anchor the particles are stored relative to (emitter position
+  // for SPACE_EMITTER, parent position for SPACE_PARENT; unused for SPACE_WORLD).
   inline void buildBillboards(std::vector<Renderer::ParticleVertex> &out,
     std::vector<P64::ParticleSim::Particle> &particles,
-    const P64::ParticleSim::Config &cfg, float simTime, const glm::vec3 &emitterPos,
+    const P64::ParticleSim::Config &cfg, float simTime, const glm::vec3 &anchorPos,
     const glm::vec3 &camRight, const glm::vec3 &camUp, const glm::vec3 &camFwd)
   {
     namespace PS = P64::ParticleSim;
+    const bool anchored = cfg.simSpace != PS::SPACE_WORLD;
 
     // back-to-front along the view axis for correct alpha compositing (depth-write is off)
     std::sort(particles.begin(), particles.end(), [&](const PS::Particle &a, const PS::Particle &b){
-      glm::vec3 ca{a.pos.x, a.pos.y, a.pos.z}; if(!cfg.worldSpace) ca += emitterPos;
-      glm::vec3 cb{b.pos.x, b.pos.y, b.pos.z}; if(!cfg.worldSpace) cb += emitterPos;
+      glm::vec3 ca{a.pos.x, a.pos.y, a.pos.z}; if(anchored) ca += anchorPos;
+      glm::vec3 cb{b.pos.x, b.pos.y, b.pos.z}; if(anchored) cb += anchorPos;
       return glm::dot(ca, camFwd) > glm::dot(cb, camFwd);
     });
 
@@ -111,7 +115,7 @@ namespace Utils::Emitter
     for(auto &p : particles) {
       float t = PS::lifeT(p);
       glm::vec3 center{p.pos.x, p.pos.y, p.pos.z};
-      if(!cfg.worldSpace) center += emitterPos; // relative particles follow the emitter
+      if(anchored) center += anchorPos; // anchored particles follow the emitter/parent
 
       // quantized hardware size (int8 normalized to the emitter's max size, see particleSim.h)
       // scaled back to world units — quantizes exactly like on-device

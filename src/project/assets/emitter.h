@@ -47,6 +47,11 @@ namespace Project::Assets
     static constexpr int ANIM_OVER_LIFETIME = 2;
     static constexpr int ANIM_RANDOM_STATIC = 3; // (frames only)
 
+    // -- sim space (what spawned particles are anchored to; mirrors ParticleSim::SimSpace) --
+    static constexpr int SPACE_EMITTER = 0; // whole system moves rigidly with the emitter
+    static constexpr int SPACE_WORLD   = 1; // baked into world at spawn
+    static constexpr int SPACE_PARENT  = 2; // emitter spreads spawns, particles follow its PARENT
+
     std::string name{};
     std::string path{};
     uint64_t uuid{0};
@@ -64,6 +69,7 @@ namespace Project::Assets
     // -- emission shape --
     PROP_S32(emitShape);          // SHAPE_*
     PROP_VEC3(shapeSize);         // radius / half-extents / cone params
+    PROP_VEC3(shapeOffset);       // shape center relative to the emitter (ignored for POINT)
 
     // -- initial motion / forces --
     PROP_VEC3(velocity);          // base direction (normalized-ish)
@@ -74,7 +80,7 @@ namespace Project::Assets
     PROP_FLOAT(drag);             // per-second velocity damping
 
     // -- simulation space --
-    PROP_BOOL(worldSpace);        // false: particles relative to emitter; true: placed in world at spawn
+    PROP_S32(simSpace);           // SPACE_* (legacy assets stored a "worldSpace" bool)
 
     // -- per-particle rotation --
     PROP_FLOAT(rotationMin);      // initial rotation range (deg)

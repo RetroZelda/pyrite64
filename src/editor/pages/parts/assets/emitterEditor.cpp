@@ -55,9 +55,17 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
     em.maxParticles.value = glm::clamp(em.maxParticles.value, 2u, 2048u);
 
     ImTable::add("Sim Space");
-    int space = em.worldSpace.value ? 1 : 0;
-    if(ImGui::Combo("##space", &space, "Relative to Emitter\0World Space\0")) {
-      em.worldSpace.value = (space == 1);
+    ImGui::Combo("##space", &em.simSpace.value, "Relative to Emitter\0World Space\0Relative to Parent\0");
+    ImGui::SetItemTooltip("What spawned particles are anchored to (what they move with):\n"
+      "Relative to Emitter: the whole system moves rigidly with the emitter.\n"
+      "World Space: baked into the world at spawn.\n"
+      "Relative to Parent: spawn from the (moving) emitter, then follow the emitter's\n"
+      "PARENT object — e.g. an emitter orbiting a character spreads particles around it\n"
+      "and the cloud tracks the character. No parent = behaves like World Space.");
+    if(em.simSpace.value == Em::SPACE_PARENT) {
+      warnRow("The isolated preview below has no parent object: the anchor stays at the "
+              "origin, so this looks like World Space here. Place it in a scene to see "
+              "particles follow the parent.");
     }
   });
 
@@ -73,6 +81,10 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
     ImTable::add("Shape");
     ImGui::Combo("##shape", &em.emitShape.value, "Point\0Sphere\0Box\0Cone\0");
     ImTable::addProp("Size", em.shapeSize);
+    if(em.emitShape.value != Em::SHAPE_POINT) { // a Point offset == moving the emitter itself
+      ImTable::addProp("Offset", em.shapeOffset);
+      ImGui::SetItemTooltip("Shape center relative to the emitter position.");
+    }
   });
 
   subSection("Motion", [&]

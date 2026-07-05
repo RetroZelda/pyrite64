@@ -23,6 +23,8 @@ namespace P64::Comp
     AssetRef<emitter_t> emitter{};
     PTX::Handle handle{};
     uint8_t flags{0};
+    // cached from the def at init: SPACE_PARENT emitters feed their parent's position each frame
+    bool parentSpace{false};
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData) { return sizeof(Particle); }
     static void initDelete(Object& obj, Particle* data, uint16_t* initData);

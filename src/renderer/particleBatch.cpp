@@ -12,7 +12,8 @@
 
 void Renderer::drawParticleGroups(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Scene& scene,
   const ParticleBatch& batch, const UniformGlobal& uniGlobal,
-  const std::vector<ParticleDrawGroup>& groups)
+  const std::vector<ParticleDrawGroup>& groups,
+  ParticleGroupFilter filter, const Pipeline* pipelineOverride)
 {
   if(groups.empty() || !batch.isReady() || batch.getVertexCount() == 0) return;
 
@@ -20,7 +21,11 @@ void Renderer::drawParticleGroups(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPa
 
   const Pipeline* boundPipeline = nullptr;
   for(const auto &g : groups) {
-    auto &pipeline = scene.getParticlePipeline(g.blend);
+    const bool isAdditive = g.blend == ParticleBlend::Additive;
+    if(filter == ParticleGroupFilter::SkipAdditive && isAdditive) continue;
+    if(filter == ParticleGroupFilter::OnlyAdditive && !isAdditive) continue;
+
+    auto &pipeline = pipelineOverride ? *pipelineOverride : scene.getParticlePipeline(g.blend);
     if(&pipeline != boundPipeline) {
       pipeline.bind(pass);
       SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));

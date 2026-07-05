@@ -493,11 +493,18 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
 
   // live particle billboards for placed ParticleEmitter components (submissions were collected
   // during the object loop above). Depth-tested against the scene; alpha-blended; textured.
+  // Additive groups are NOT drawn here: they need the RDP's non-clamping (wraparound) add,
+  // which the wrap pass below applies after this render pass ends.
   if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Particles");
   drawParticles(cmdBuff, renderPass3D, renderScene);
   if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
 
   SDL_EndGPURenderPass(renderPass3D);
+
+  // additive emitters: sum + mod-256 composite (exact hardware math); no-op without any
+  if(ctx.debugMode)SDL_PushGPUDebugGroup(cmdBuff, "3D Particles Additive-Wrap");
+  ptxWrapPass.run(cmdBuff, renderScene, fb, *particleBatch, uniGlobal, particleGroups);
+  if(ctx.debugMode)SDL_PopGPUDebugGroup(cmdBuff);
 }
 
 void Editor::Viewport3D::onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass *copyPass) {
@@ -570,7 +577,12 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       uint32_t used = (uint32_t)state.particles.size();
       uint32_t freeSlots = cfg.maxParticles > used ? cfg.maxParticles - used : 0;
       uint32_t n = PS::spawnCount(cfg, dt, state.spawnAccum, freeSlots, state.oneShotPending);
-      PS::Vec3 origin = cfg.worldSpace ? PS::Vec3{sub.worldPos.x, sub.worldPos.y, sub.worldPos.z} : PS::Vec3{};
+      // sim-space anchor particles are stored relative to (and follow): EMITTER -> the emitter,
+      // WORLD -> the world origin, PARENT -> the object's parent (matches the engine runtime)
+      glm::vec3 anchor{0.0f};
+      if(cfg.simSpace == PS::SPACE_EMITTER)     anchor = sub.worldPos;
+      else if(cfg.simSpace == PS::SPACE_PARENT) anchor = sub.parentPos;
+      PS::Vec3 origin{sub.worldPos.x - anchor.x, sub.worldPos.y - anchor.y, sub.worldPos.z - anchor.z};
       for(uint32_t i = 0; i < n; ++i) state.particles.push_back(PS::spawn(cfg, state.rng, origin));
       for(size_t i = 0; i < state.particles.size(); ) {
         if(!PS::step(state.particles[i], cfg, dt)) { state.particles[i] = state.particles.back(); state.particles.pop_back(); }
@@ -591,7 +603,7 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       // hardware-faithful billboards: sorted, int8-quantized sizes, frame/mirror UVs, no rotation
       const uint32_t groupFirst = (uint32_t)particleVerts.size();
       Utils::Emitter::buildBillboards(particleVerts, state.particles,
-        cfg, state.simTime, sub.worldPos, camRight, camUp, camFwd);
+        cfg, state.simTime, anchor, camRight, camUp, camFwd);
 
       uint32_t cnt = (uint32_t)particleVerts.size() - groupFirst;
       if(cnt > 0) {
@@ -614,7 +626,8 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
 
 void Editor::Viewport3D::drawParticles(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Renderer::Scene& renderScene)
 {
-  Renderer::drawParticleGroups(cmdBuff, pass, renderScene, *particleBatch, uniGlobal, particleGroups);
+  Renderer::drawParticleGroups(cmdBuff, pass, renderScene, *particleBatch, uniGlobal, particleGroups,
+    Renderer::ParticleGroupFilter::SkipAdditive); // additive -> ptxWrapPass (after the main pass)
 }
 
 void Editor::Viewport3D::onPostRender(Renderer::Scene &renderScene) {

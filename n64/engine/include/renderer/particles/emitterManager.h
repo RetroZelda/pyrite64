@@ -40,6 +40,10 @@ namespace P64::PTX
       void destroy(bool immediate = false);
       void setPos(const fm_vec3_t &p);
       void move(const fm_vec3_t &delta);
+      // SPACE_PARENT emitters: world position of the anchor (the owner's parent object)
+      void setParentPos(const fm_vec3_t &p);
+      // rotates the emission shape + base velocity about Y for future spawns
+      void setYaw(float yawRad);
   };
 }
 

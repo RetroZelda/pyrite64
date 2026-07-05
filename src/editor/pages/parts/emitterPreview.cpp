@@ -186,8 +186,13 @@ void Editor::EmitterPreview::renderParticlePass(SDL_GPUCommandBuffer* cmdBuff, R
   SDL_GPUDepthStencilTargetInfo depthInfo = ptxFb.getDepthTargetInfo();
 
   SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmdBuff, targets, 2, &depthInfo);
-  Renderer::drawParticleGroups(cmdBuff, pass, scene, *particleBatch, uniGlobal, particleGroups);
+  Renderer::drawParticleGroups(cmdBuff, pass, scene, *particleBatch, uniGlobal, particleGroups,
+    Renderer::ParticleGroupFilter::SkipAdditive);
   SDL_EndGPURenderPass(pass);
+
+  // additive emitters composite with the RDP's non-clamping add: channel sums past 255 wrap
+  // around exactly like real hardware (a no-op when the material isn't additive)
+  ptxWrapPass.run(cmdBuff, scene, ptxFb, *particleBatch, uniGlobal, particleGroups);
 
   ptxHasRender = true;
 }
@@ -344,13 +349,18 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
   auto seq = em.textureSequence();
   cfg.swapCount = seq.empty() ? 1u : (uint32_t)seq.size();
 
+  // Preview sim-space anchor: EMITTER -> the (gizmo-movable) emitter. WORLD and PARENT -> the
+  // world origin: the preview has no parent object, so PARENT behaves like World Space here
+  // (the emitter editor shows a note; the in-scene viewport previews the real thing).
+  glm::vec3 anchor = cfg.simSpace == PS::SPACE_EMITTER ? emitterPos : glm::vec3{0.0f};
+
   float dt = playing ? std::min(io.DeltaTime, 0.05f) : 0.0f;
   if(playing) {
     simTime += dt;
     uint32_t used = (uint32_t)particles.size();
     uint32_t freeSlots = cfg.maxParticles > used ? cfg.maxParticles - used : 0;
     uint32_t n = PS::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending);
-    PS::Vec3 origin = cfg.worldSpace ? PS::Vec3{emitterPos.x, emitterPos.y, emitterPos.z} : PS::Vec3{};
+    PS::Vec3 origin{emitterPos.x - anchor.x, emitterPos.y - anchor.y, emitterPos.z - anchor.z};
     for(uint32_t i = 0; i < n; ++i) particles.push_back(PS::spawn(cfg, rng, origin));
 
     for(size_t i = 0; i < particles.size(); ) {
@@ -384,7 +394,7 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     glm::vec3 camUp    = camera.rot * glm::vec3(0, 1, 0);
     glm::vec3 camFwd   = camera.rot * glm::vec3(0, 0, -1);
     Utils::Emitter::buildBillboards(particleVerts, particles,
-      cfg, simTime, emitterPos, camRight, camUp, camFwd);
+      cfg, simTime, anchor, camRight, camUp, camFwd);
 
     if(!particleVerts.empty()) {
       auto info = Utils::Emitter::toRenderInfo(em, cfg);
@@ -414,10 +424,11 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
       drawWorldLine(dl, uniGlobal, vp, rectMin, {-ext, 0, z}, {ext, 0, z}, z == 0.0f ? axisCol : gridCol);
   }
 
-  // emission shape at the emitter position
+  // emission shape at the emitter position (non-point shapes can be offset from it)
   if(showShape) {
     const ImU32 shapeCol = IM_COL32(120, 200, 255, 200);
     glm::vec3 c = emitterPos;
+    if(em.emitShape.value != Project::Assets::Emitter::SHAPE_POINT) c += em.shapeOffset.value;
     glm::vec3 s = {em.shapeSize.value.x, em.shapeSize.value.y, em.shapeSize.value.z};
     switch(em.emitShape.value) {
       case Project::Assets::Emitter::SHAPE_SPHERE: {
@@ -523,10 +534,11 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     const ImU32 white = IM_COL32(255, 255, 255, 255);
     auto put = [&](const char* s){ dl->AddText({x, y}, white, s); y += 14.0f; };
 
+    const char* spaceName = cfg.simSpace == PS::SPACE_WORLD ? "World"
+      : cfg.simSpace == PS::SPACE_PARENT ? "Parent (static here)" : "Relative";
     snprintf(line, sizeof(line), "%s  |  %u / %u particles  |  %s",
       cfg.fireMode == PS::FIRE_ONE_SHOT ? "One-Shot" : "Continuous",
-      (uint32_t)particles.size(), cfg.maxParticles,
-      cfg.worldSpace ? "World" : "Relative");
+      (uint32_t)particles.size(), cfg.maxParticles, spaceName);
     put(line);
     snprintf(line, sizeof(line), "spawn %.0f/s   life %.2fs   reserved ~%u B",
       cfg.spawnRate, cfg.lifetime, cfg.maxParticles * 12u);

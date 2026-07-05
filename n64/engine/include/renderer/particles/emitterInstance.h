@@ -44,6 +44,7 @@ namespace P64::PTX
       uint32_t lastSwapIdx{0xFFFF};
 
       fm_vec3_t pos{};                    // emitter world position
+      fm_vec3_t parentPos{};              // SPACE_PARENT anchor (fed by the owning component)
 
       void buildSetupBlock();
 
@@ -66,6 +67,12 @@ namespace P64::PTX
 
       void setPos(const fm_vec3_t &p) { pos = p; }
       void move(const fm_vec3_t &delta) { pos.x += delta.x; pos.y += delta.y; pos.z += delta.z; }
+      // SPACE_PARENT emitters: position of the anchor object (typically the owner's parent).
+      // Ignored in the other sim spaces.
+      void setParentPos(const fm_vec3_t &p) { parentPos = p; }
+      // Rotates the emission shape + base velocity about Y for FUTURE spawns, so directional
+      // emitters (e.g. a wide wave) can face their movement. Live particles are unaffected.
+      void setYaw(float yawRad) { cfg.yawSin = sinf(yawRad); cfg.yawCos = cosf(yawRad); }
 
       [[nodiscard]] bool finished() const; // no live particles left and no more will spawn
       [[nodiscard]] uint32_t aliveCount() const { return system ? system->count : 0; }

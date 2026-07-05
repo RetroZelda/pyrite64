@@ -30,13 +30,14 @@ namespace
     c.lifetimeVariance = d->lifetimeVariance;
     c.emitShape = d->emitShape;
     c.shapeSize = {d->shapeSize[0], d->shapeSize[1], d->shapeSize[2]};
+    c.shapeOffset = {d->shapeOffset[0], d->shapeOffset[1], d->shapeOffset[2]};
     c.velocity = {d->velocity[0], d->velocity[1], d->velocity[2]};
     c.speedMin = d->speedMin;
     c.speedMax = d->speedMax;
     c.spread = d->spread;
     c.gravity = {d->gravity[0], d->gravity[1], d->gravity[2]};
     c.drag = d->drag;
-    c.worldSpace = d->worldSpace != 0;
+    c.simSpace = d->simSpace;
     c.rotationMin = d->rotationMin;
     c.rotationMax = d->rotationMax;
     c.spinMin = d->spinMin;
@@ -204,10 +205,18 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
   if(!system || !parts) return;
   emitterTime += dt;
 
+  // Sim-space anchor ("follow"): particles are STORED relative to it and move with it.
+  // EMITTER: the emitter itself. WORLD: the world origin (nothing moves them). PARENT: the
+  // position fed via setParentPos() — the emitter can move around the parent to spread its
+  // spawns (origin below), while spawned particles stay put relative to the parent.
+  fm_vec3_t follow{};
+  if(cfg.simSpace == ParticleSim::SPACE_EMITTER)     follow = pos;
+  else if(cfg.simSpace == ParticleSim::SPACE_PARENT) follow = parentPos;
+
   // spawn (skipped once emission is stopped: the live particles keep draining, none are added)
   uint32_t freeSlots = cfg.maxParticles > system->count ? cfg.maxParticles - system->count : 0;
   uint32_t n = emitting ? ParticleSim::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending) : 0;
-  ParticleSim::Vec3 origin = cfg.worldSpace ? ParticleSim::Vec3{pos.x, pos.y, pos.z} : ParticleSim::Vec3{};
+  ParticleSim::Vec3 origin{pos.x - follow.x, pos.y - follow.y, pos.z - follow.z}; // emitter in anchor space
   for(uint32_t i = 0; i < n; ++i) {
     parts[system->count] = ParticleSim::spawn(cfg, rng, origin);
     ++system->count;
@@ -224,13 +233,11 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
 
   // Back-to-front sort so overlapping transparent particles layer correctly (matches the
   // editor preview, which sorts by depth). We sort a lightweight uint16 index array, not the
-  // 44-byte Particle structs. Particles are stored in LOCAL space, so transform the camera
-  // into that space once (a constant offset) instead of every particle into world space.
+  // 44-byte Particle structs. Particles are stored in ANCHOR-local space, so transform the
+  // camera into that space once (a constant offset) instead of every particle into world space.
   const bool doSort = haveCam && system->count > 1;
   if(doSort) {
-    ParticleSim::Vec3 camLocal = cfg.worldSpace
-      ? ParticleSim::Vec3{camPos.x, camPos.y, camPos.z}
-      : ParticleSim::Vec3{camPos.x - pos.x, camPos.y - pos.y, camPos.z - pos.z};
+    ParticleSim::Vec3 camLocal{camPos.x - follow.x, camPos.y - follow.y, camPos.z - follow.z};
     for(uint32_t i = 0; i < system->count; ++i) drawOrder[i] = (uint16_t)i;
     std::sort(drawOrder, drawOrder + system->count, [&](uint16_t a, uint16_t b) {
       ParticleSim::Vec3 da = parts[a].pos - camLocal;
@@ -268,13 +275,14 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
   // Draining (one-shot burst done, or emission stopped) is detected via finished() and the
   // reclaim/stop is handled by the manager's update loop.
 
-  // refresh the transform matrix: relative emitters follow `pos`, world-space emitters are baked.
+  // refresh the transform matrix: particles live in anchor space, so translate by the anchor
+  // (emitter pos / parent pos; world-space anchors at the origin -> identity).
   if(mat) {
-    if(cfg.worldSpace) {
+    if(cfg.simSpace == ParticleSim::SPACE_WORLD) {
       t3d_mat4fp_identity(mat);
     } else {
       t3d_mat4fp_from_srt_euler(mat,
-        (float[]){1.0f, 1.0f, 1.0f}, (float[]){0, 0, 0}, (float[]){pos.x, pos.y, pos.z});
+        (float[]){1.0f, 1.0f, 1.0f}, (float[]){0, 0, 0}, (float[]){follow.x, follow.y, follow.z});
     }
   }
 }

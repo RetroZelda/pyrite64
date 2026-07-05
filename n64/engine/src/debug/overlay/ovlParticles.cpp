@@ -66,6 +66,15 @@ void P64::Debug::Overlay::drawParticleShapes()
     fm_vec3_t pos = info.pos;
     color_t col = Debug::paletteColor(i);
 
+    // shape center: non-point shapes can be offset from the emitter (matches ParticleSim::spawn);
+    // the direction line below stays anchored at the emitter position, like the editor gizmos.
+    fm_vec3_t sPos = pos;
+    if(d->emitShape != P64::PTX::ESHAPE_POINT) {
+      sPos.x += d->shapeOffset[0];
+      sPos.y += d->shapeOffset[1];
+      sPos.z += d->shapeOffset[2];
+    }
+
     switch(d->emitShape) {
       case P64::PTX::ESHAPE_POINT: {
         Debug::drawSphere(pos, 4.0f, col);
@@ -75,15 +84,15 @@ void P64::Debug::Overlay::drawParticleShapes()
         fm_vec3_t pz = pos; pz.z += ax;  Debug::drawLine(pos, pz, color_t{0x22, 0x22, 0xFF, 0xFF});
       } break;
       case P64::PTX::ESHAPE_SPHERE:
-        Debug::drawSphere(pos, d->shapeSize[0], col);
+        Debug::drawSphere(sPos, d->shapeSize[0], col);
         break;
       case P64::PTX::ESHAPE_BOX: {
         fm_vec3_t he{}; he.x = d->shapeSize[0]; he.y = d->shapeSize[1]; he.z = d->shapeSize[2];
-        Debug::drawAABB(pos, he, col);
+        Debug::drawAABB(sPos, he, col);
       } break;
       case P64::PTX::ESHAPE_CONE: {
         fm_quat_t ident; fm_quat_identity(&ident);
-        Debug::drawCone(pos, d->shapeSize[0], d->shapeSize[1] * 0.5f, ident, col);
+        Debug::drawCone(sPos, d->shapeSize[0], d->shapeSize[1] * 0.5f, ident, col);
       } break;
       default: break;
     }

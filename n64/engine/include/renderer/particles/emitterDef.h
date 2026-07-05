@@ -21,6 +21,8 @@ namespace P64::PTX
   enum EmitterFireMode : uint8_t { EMIT_CONTINUOUS = 0, EMIT_ONE_SHOT = 1 };
   enum EmitterShape    : uint8_t { ESHAPE_POINT = 0, ESHAPE_SPHERE = 1, ESHAPE_BOX = 2, ESHAPE_CONE = 3 };
   enum EmitterAnimMode : uint8_t { EANIM_OFF = 0, EANIM_LOOP = 1, EANIM_OVER_LIFETIME = 2, EANIM_RANDOM = 3 };
+  // mirrors ParticleSim::SimSpace — what spawned particles are anchored to
+  enum EmitterSimSpace : uint8_t { ESPACE_EMITTER = 0, ESPACE_WORLD = 1, ESPACE_PARENT = 2 };
 
   /**
    * ROM-loaded particle-emitter definition. This struct DIRECTLY OVERLAYS the .emit64
@@ -32,17 +34,18 @@ namespace P64::PTX
   struct __attribute__((packed)) EmitterDef
   {
     uint16_t magic;        // 0xE117
-    uint16_t version;      // 1
+    uint16_t version;      // 2 (v2 added shapeOffset + widened worldSpace into simSpace)
     uint16_t maxParticles;
     uint8_t  fireMode;     // EmitterFireMode
     uint8_t  emitShape;    // EmitterShape
     float    spawnRate;    // particles/sec (continuous)
     uint16_t burstCount;   // particles per burst (one-shot)
-    uint8_t  worldSpace;   // 0=relative to emitter, 1=baked into world at spawn
+    uint8_t  simSpace;     // EmitterSimSpace (0=follow emitter, 1=world, 2=follow parent)
     uint8_t  texCount;     // number of entries in texAssetIdx[]
 
     float lifetime, lifetimeVariance;
     float shapeSize[3];
+    float shapeOffset[3];  // shape center relative to the emitter (ignored for POINT)
     float velocity[3];
     float speedMin, speedMax, spread;
     float gravity[3];

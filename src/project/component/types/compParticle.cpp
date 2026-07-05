@@ -113,15 +113,18 @@ namespace Project::Component::Particle
 
     const glm::vec4 shapeCol{0.40f, 0.80f, 1.00f, 1.0f}; // cyan volume
     glm::vec3 s = em.shapeSize.value;
+    // non-point shapes can be offset from the emitter (matches ParticleSim::spawn)
+    glm::vec3 c = pos;
+    if(em.emitShape.value != Assets::Emitter::SHAPE_POINT) c += em.shapeOffset.value;
     switch(em.emitShape.value) {
       case Assets::Emitter::SHAPE_SPHERE:
-        Utils::Mesh::addLineSphere(lines, pos, glm::vec3{s.x, s.x, s.x}, shapeCol);
+        Utils::Mesh::addLineSphere(lines, c, glm::vec3{s.x, s.x, s.x}, shapeCol);
         break;
       case Assets::Emitter::SHAPE_BOX:
-        Utils::Mesh::addLineBox(lines, pos, s, shapeCol);
+        Utils::Mesh::addLineBox(lines, c, s, shapeCol);
         break;
       case Assets::Emitter::SHAPE_CONE:
-        Utils::Mesh::addLineCone(lines, pos, s, shapeCol);
+        Utils::Mesh::addLineCone(lines, c, s, shapeCol);
         break;
       default: { // SHAPE_POINT — a small XYZ cross marker
         const float r = 8.0f;
@@ -145,7 +148,11 @@ namespace Project::Component::Particle
   {
     Data &data = *static_cast<Data*>(entry.data.get());
     if (data.emitterUUID.value != 0) {
-      vp.submitEmitter(obj.uuid, data.emitterUUID.value, obj.pos.resolve(obj.propOverrides));
+      // parent position = the SPACE_PARENT sim-space anchor (scene root sits at the origin,
+      // matching the runtime where parent-less objects anchor to the world origin)
+      glm::vec3 parentPos = obj.parent
+        ? obj.parent->pos.resolve(obj.parent->propOverrides) : glm::vec3{0.0f};
+      vp.submitEmitter(obj.uuid, data.emitterUUID.value, obj.pos.resolve(obj.propOverrides), parentPos);
     }
   }
 }

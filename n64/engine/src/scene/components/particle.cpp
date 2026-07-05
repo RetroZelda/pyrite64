@@ -3,9 +3,28 @@
 * @license MIT
 */
 #include "scene/components/particle.h"
+#include "scene/scene.h" // Object::getParent() instantiation (SPACE_PARENT anchor)
 
 namespace
 {
+  // SPACE_PARENT anchor: the owner's parent object position; no parent -> world origin
+  // (group 0 means parent-less, mirroring Scene's own parent handling).
+  fm_vec3_t parentAnchor(P64::Object &obj)
+  {
+    P64::Object* par = obj.group ? obj.getParent() : nullptr;
+    return par ? par->pos : fm_vec3_t{};
+  }
+
+  // yaw of the owner's facing (+Z forward), so directional emission shapes rotate with it
+  float objectYaw(const P64::Object &obj)
+  {
+    const fm_quat_t &q = obj.rot;
+    // rotate {0,0,1} by q, then take atan2 of the horizontal result
+    const float fwdX = 2.0f * (q.x * q.z + q.w * q.y);
+    const float fwdZ = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+    return atan2f(fwdX, fwdZ);
+  }
+
   // binary layout written by the editor's Component::Particle::build()
   struct InitData
   {
@@ -37,6 +56,9 @@ namespace P64::Comp
     data->emitter.ptr = (emitter_t*)(uintptr_t)initData->emitterIdx;
     data->handle = data->emitter.create(); // owned by this component
     data->handle.setPos(obj.pos);
+    data->handle.setYaw(objectYaw(obj)); // emission shape faces the object's heading
+    data->parentSpace = data->emitter.get()->simSpace == PTX::ESPACE_PARENT;
+    if (data->parentSpace) data->handle.setParentPos(parentAnchor(obj));
     if (data->flags & FLAG_AUTO_PLAY) {
       data->handle.replay(); // start emitting
     }
@@ -45,6 +67,9 @@ namespace P64::Comp
   void Particle::update(Object &obj, Particle* data, [[maybe_unused]] float deltaTime)
   {
     data->handle.setPos(obj.pos); // follow the object (no-op on a stale/empty handle)
+    data->handle.setYaw(objectYaw(obj)); // keep the emission shape facing the heading
+    // SPACE_PARENT: particles anchor to the parent object, so feed its position too
+    if (data->parentSpace) data->handle.setParentPos(parentAnchor(obj));
   }
 
   void Particle::onEvent(Object &obj, Particle* data, const ObjectEvent& event)

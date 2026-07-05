@@ -222,6 +222,8 @@ add_executable(pyrite64 src/main.cpp
         src/renderer/pipeline.h
         src/renderer/pipeline.cpp
         src/renderer/particleBatch.cpp
+        src/renderer/particleWrap.h
+        src/renderer/particleWrap.cpp
         src/utils/aabb.h
         src/utils/container.h
         src/renderer/n64Mesh.h

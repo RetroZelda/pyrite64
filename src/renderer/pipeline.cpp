@@ -13,10 +13,12 @@ Renderer::Pipeline::Pipeline(const Info &info) {
 
   // Depth
   pipelineInfo.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
-  pipelineInfo.depth_stencil_state.enable_depth_test = true;
-  pipelineInfo.depth_stencil_state.enable_depth_write = info.depthWrite;
-  pipelineInfo.target_info.has_depth_stencil_target = true;
-  pipelineInfo.target_info.depth_stencil_format = Renderer::getDepthStencilFormat();
+  pipelineInfo.depth_stencil_state.enable_depth_test = info.hasDepthTarget;
+  pipelineInfo.depth_stencil_state.enable_depth_write = info.hasDepthTarget && info.depthWrite;
+  pipelineInfo.target_info.has_depth_stencil_target = info.hasDepthTarget;
+  if(info.hasDepthTarget) {
+    pipelineInfo.target_info.depth_stencil_format = Renderer::getDepthStencilFormat();
+  }
 
   SDL_GPUVertexBufferDescription vertBuffDesc[1];
 
@@ -25,7 +27,7 @@ Renderer::Pipeline::Pipeline(const Info &info) {
   vertBuffDesc[0].instance_step_rate = 0;
   vertBuffDesc[0].pitch = info.vertPitch;
 
-  pipelineInfo.vertex_input_state.num_vertex_buffers = 1;
+  pipelineInfo.vertex_input_state.num_vertex_buffers = info.vertLayout.empty() ? 0 : 1;
   pipelineInfo.vertex_input_state.vertex_buffer_descriptions = vertBuffDesc;
 
   int idx = 0;
@@ -63,7 +65,7 @@ Renderer::Pipeline::Pipeline(const Info &info) {
 
   SDL_GPUColorTargetDescription colorTargetDescriptions[2]{
     {
-      .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+      .format = info.colorFormat,
       .blend_state = info.translucent ? blend_state : opaque_state
     },
     {.format = SDL_GPU_TEXTUREFORMAT_R32_UINT},

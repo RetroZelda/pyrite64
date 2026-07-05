@@ -41,13 +41,17 @@ namespace Renderer
       std::unique_ptr<Shader> shaderLines{};
       std::unique_ptr<Shader> shaderSprites{};
       std::unique_ptr<Shader> shaderParticles{};
+      std::unique_ptr<Shader> shaderPtxWrap{};
 
       std::unique_ptr<Pipeline> pipelineN64{};
       std::unique_ptr<Pipeline> pipelineLines{};
       std::unique_ptr<Pipeline> pipelineSprites{};
       std::unique_ptr<Pipeline> pipelineParticles{};         // alpha blend
-      std::unique_ptr<Pipeline> pipelineParticlesAdd{};      // additive blend
+      std::unique_ptr<Pipeline> pipelineParticlesAdd{};      // additive blend (GPU-clamped, unused for drawing; see accum)
       std::unique_ptr<Pipeline> pipelineParticlesOpaque{};   // no blend (alpha-clip cutout)
+      std::unique_ptr<Pipeline> pipelineParticlesAccum{};    // sums additive groups into a float target (no clamp)
+      std::unique_ptr<Pipeline> pipelinePtxWrapComposite{};  // folds the sum over the scene with the RDP's mod-256 wrap
+      SDL_GPUTextureFormat accumFormat{SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT};
 
       // [mirror][bilinear] address/filter combos matching the RDP texture state of emitters
       SDL_GPUSampler* particleSamplers[4]{};
@@ -92,6 +96,11 @@ namespace Renderer
           default:                      return *pipelineParticles;
         }
       }
+
+      // Wrap-accurate additive (see ParticleWrapPass): accumulation + composite pipelines
+      Pipeline& getParticleAccumPipeline() const { return *pipelineParticlesAccum; }
+      Pipeline& getPtxWrapCompositePipeline() const { return *pipelinePtxWrapComposite; }
+      SDL_GPUTextureFormat getAccumFormat() const { return accumFormat; }
 
       SDL_GPUSampler* getParticleSampler(bool mirror, bool bilinear) const {
         return particleSamplers[(mirror ? 2 : 0) + (bilinear ? 1 : 0)];

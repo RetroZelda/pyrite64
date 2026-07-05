@@ -25,6 +25,7 @@ Project::Assets::Emitter::Emitter()
 
   emitShape.value = SHAPE_POINT;
   shapeSize.value = {0.0f, 0.0f, 0.0f};
+  shapeOffset.value = {0.0f, 0.0f, 0.0f};
 
   velocity.value = {0.0f, 1.0f, 0.0f};
   speedMin.value = 20.0f;
@@ -33,7 +34,7 @@ Project::Assets::Emitter::Emitter()
   gravity.value = {0.0f, -30.0f, 0.0f};
   drag.value = 0.0f;
 
-  worldSpace.value = false;
+  simSpace.value = SPACE_EMITTER;
   rotationMin.value = 0.0f;
   rotationMax.value = 0.0f;
   spinMin.value = 0.0f;
@@ -79,13 +80,14 @@ nlohmann::json Project::Assets::Emitter::serialize() const
     .set(lifetimeVariance)
     .set(emitShape)
     .set(shapeSize)
+    .set(shapeOffset)
     .set(velocity)
     .set(speedMin)
     .set(speedMax)
     .set(spread)
     .set(gravity)
     .set(drag)
-    .set(worldSpace)
+    .set(simSpace)
     .set(rotationMin)
     .set(rotationMax)
     .set(spinMin)
@@ -120,13 +122,18 @@ void Project::Assets::Emitter::deserialize(const nlohmann::json &doc)
   J::readProp(doc, lifetimeVariance);
   J::readProp(doc, emitShape);
   J::readProp(doc, shapeSize);
+  J::readProp(doc, shapeOffset); // absent in pre-offset assets -> stays {0,0,0}
   J::readProp(doc, velocity);
   J::readProp(doc, speedMin);
   J::readProp(doc, speedMax);
   J::readProp(doc, spread);
   J::readProp(doc, gravity);
   J::readProp(doc, drag);
-  J::readProp(doc, worldSpace);
+  J::readProp(doc, simSpace);
+  // legacy (pre-simSpace) assets stored a bool
+  if (!doc.contains("simSpace") && doc.contains("worldSpace") && doc["worldSpace"].is_boolean()) {
+    simSpace.value = doc["worldSpace"].get<bool>() ? SPACE_WORLD : SPACE_EMITTER;
+  }
   J::readProp(doc, rotationMin);
   J::readProp(doc, rotationMax);
   J::readProp(doc, spinMin);
@@ -171,13 +178,13 @@ void Project::Assets::Emitter::build(Utils::BinaryFile &file, Build::SceneCtx &s
 
   // header
   file.write<uint16_t>(0xE117);                 // magic
-  file.write<uint16_t>(1);                      // version
+  file.write<uint16_t>(2);                      // version (v2 added shapeOffset)
   file.write<uint16_t>((uint16_t)std::min<uint32_t>(maxParticles.value, 0xFFFF));
   file.write<uint8_t>((uint8_t)fireMode.value);
   file.write<uint8_t>((uint8_t)emitShape.value);
   file.write<float>(spawnRate.value);
   file.write<uint16_t>((uint16_t)std::min<uint32_t>(burstCount.value, 0xFFFF));
-  file.write<uint8_t>(worldSpace.value ? 1 : 0);
+  file.write<uint8_t>((uint8_t)std::clamp(simSpace.value, 0, 2)); // EmitterSimSpace
   file.write<uint8_t>(texCount);
 
   // lifetime
@@ -185,8 +192,9 @@ void Project::Assets::Emitter::build(Utils::BinaryFile &file, Build::SceneCtx &s
   file.write<float>(lifetimeVariance.value);
 
   // shape + motion
-  file.write<float>(shapeSize.value.x); file.write<float>(shapeSize.value.y); file.write<float>(shapeSize.value.z);
-  file.write<float>(velocity.value.x);  file.write<float>(velocity.value.y);  file.write<float>(velocity.value.z);
+  file.write<float>(shapeSize.value.x);   file.write<float>(shapeSize.value.y);   file.write<float>(shapeSize.value.z);
+  file.write<float>(shapeOffset.value.x); file.write<float>(shapeOffset.value.y); file.write<float>(shapeOffset.value.z);
+  file.write<float>(velocity.value.x);    file.write<float>(velocity.value.y);    file.write<float>(velocity.value.z);
   file.write<float>(speedMin.value);    file.write<float>(speedMax.value);    file.write<float>(spread.value);
   file.write<float>(gravity.value.x);   file.write<float>(gravity.value.y);   file.write<float>(gravity.value.z);
   file.write<float>(drag.value);

@@ -16,6 +16,7 @@
 #include "../../../renderer/object.h"
 #include "../../../renderer/skeleton.h"
 #include "../../../renderer/particleBatch.h"
+#include "../../../renderer/particleWrap.h"
 #include "../../../utils/container.h"
 #include "engine/include/renderer/particles/particleSim.h"
 
@@ -88,13 +89,14 @@ namespace Editor
         uint64_t emitterUUID{0}; // detect asset swap -> reset
         bool seen{false};        // for stale-sweep
       };
-      struct EmitterSubmission { uint64_t objectUUID; uint64_t emitterUUID; glm::vec3 worldPos; };
+      struct EmitterSubmission { uint64_t objectUUID; uint64_t emitterUUID; glm::vec3 worldPos; glm::vec3 parentPos; };
 
       std::unordered_map<uint64_t, EmitterSimState> emitterStates{};
       std::vector<EmitterSubmission> emitterSubmissions{};
       std::vector<Renderer::ParticleVertex> particleVerts{};
       std::vector<Renderer::ParticleDrawGroup> particleGroups{};
       std::shared_ptr<Renderer::ParticleBatch> particleBatch{};
+      Renderer::ParticleWrapPass ptxWrapPass{}; // RDP-accurate (wraparound) additive compositing
 
       void onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& renderScene);
       void onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass *copyPass);
@@ -110,8 +112,10 @@ namespace Editor
       ~Viewport3D();
 
       // Called by compParticle::draw3D each frame for every placed emitter (during the object loop).
-      void submitEmitter(uint64_t objectUUID, uint64_t emitterUUID, const glm::vec3 &worldPos) {
-        emitterSubmissions.push_back({objectUUID, emitterUUID, worldPos});
+      // `parentPos` = the object's parent world position (SPACE_PARENT anchor; origin if parent-less).
+      void submitEmitter(uint64_t objectUUID, uint64_t emitterUUID, const glm::vec3 &worldPos,
+                         const glm::vec3 &parentPos = {}) {
+        emitterSubmissions.push_back({objectUUID, emitterUUID, worldPos, parentPos});
       }
 
       void detach();

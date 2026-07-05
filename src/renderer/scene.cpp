@@ -113,6 +113,36 @@ Renderer::Scene::Scene()
   particleInfo.noAlphaWrite = true; // keep FB alpha at 1 so ImGui composites the view opaquely
   pipelineParticlesOpaque = std::make_unique<Pipeline>(particleInfo);
 
+  // Wrap-accurate additive blending (ParticleWrapPass): the RDP blender's adder has NO clamp —
+  // channel sums past 255 drop the carry and wrap around, while GPU blending saturates. So
+  // additive groups are SUMMED into a float color target instead (float attachments don't clamp
+  // on blend), and a fullscreen composite folds mod(scene + sum, 256) back into the viewport.
+  accumFormat = SDL_GPUTextureSupportsFormat(ctx.gpu, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT,
+      SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET)
+    ? SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT   // integer-exact sums for any particle count
+    : SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;  // universal fallback (tiny error in extreme stacks)
+  particleInfo.translucent = true;
+  particleInfo.additive = true;
+  particleInfo.noAlphaWrite = false;
+  particleInfo.colorFormat = accumFormat;
+  pipelineParticlesAccum = std::make_unique<Pipeline>(particleInfo);
+
+  shaderPtxWrap = std::make_unique<Shader>(ctx.gpu, Shader::Config{
+    .name = "ptxWrap",
+    .vertUboCount = 0,
+    .fragUboCount = 0,
+    .vertTexCount = 0,
+    .fragTexCount = 2, // scene copy + additive sum
+  });
+  pipelinePtxWrapComposite = std::make_unique<Pipeline>(Pipeline::Info{
+    .shader = *shaderPtxWrap,
+    .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+    .drawsObjID = false,
+    .translucent = false,     // straight overwrite; the shader carries the scene through
+    .hasDepthTarget = false,  // fullscreen pass, no depth bound
+    .vertLayout = {},         // fullscreen triangle from gl_VertexIndex
+  });
+
   // Samplers covering the RDP texture state emitters can author: point/bilinear filtering ×
   // infinite-repeat/mirrored-repeat addressing (mirrored-repeat reproduces the tpx mirror trick).
   for(int i = 0; i < 4; ++i) {
