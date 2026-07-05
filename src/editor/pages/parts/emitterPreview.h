@@ -13,6 +13,7 @@
 #include "../../../renderer/framebuffer.h"
 #include "../../../renderer/object.h"
 #include "../../../renderer/skeleton.h"
+#include "../../../renderer/particleBatch.h"
 #include "../../../project/scene/object.h"
 #include "../../../project/component/shared/materialInstance.h"
 #include "engine/include/renderer/particles/particleSim.h"
@@ -24,10 +25,11 @@ namespace Renderer { class Scene; }
 
 namespace Editor
 {
-  // Live 3D preview of a particle emitter, rendered with ImGui's draw list (camera-facing
-  // textured billboards). It runs the SHARED P64::ParticleSim so it matches the engine,
-  // and resolves the emitter's texture(s) to GPU textures for display. An optional
-  // reference model is rendered (n64 GPU pipeline -> framebuffer) behind the particles.
+  // Live 3D preview of a particle emitter. Runs the SHARED P64::ParticleSim and renders the
+  // billboards through the same GPU particle pipelines as the scene viewport (blend mode,
+  // point/bilinear filter, mirror addressing and alpha-clip all match the N64 output). The
+  // particles are composited into a framebuffer over an optional cached reference-model
+  // render; gizmos/grid/wireframes stay on the ImGui draw list as overlays.
   class EmitterPreview
   {
     private:
@@ -60,6 +62,18 @@ namespace Editor
 
       void onCopyPass(SDL_GPUCommandBuffer* cmdBuff, SDL_GPUCopyPass* copyPass);
       void onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene);
+      void renderRefModel(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene);
+      void renderParticlePass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene);
+
+      // GPU particle rendering: billboards built in draw(), uploaded in the copy pass, then
+      // composited into ptxFb (cached model render blitted first) with the shared pipelines.
+      Renderer::Framebuffer ptxFb{};
+      uint32_t ptxFbSize{0};          // fixed alloc-once size (never resized, see fb notes)
+      bool ptxRenderRequested{false}; // set by draw() each visible frame; consumed by the passes
+      bool ptxHasRender{false};       // ptxFb holds a valid image (composite may lag 1 frame)
+      std::shared_ptr<Renderer::ParticleBatch> particleBatch{};
+      std::vector<Renderer::ParticleVertex> particleVerts{};
+      std::vector<Renderer::ParticleDrawGroup> particleGroups{};
 
       std::vector<P64::ParticleSim::Particle> particles{};
       P64::ParticleSim::Rng rng{};

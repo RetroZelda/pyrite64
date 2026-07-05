@@ -6,6 +6,41 @@
 
 #include <cstring>
 
+#include "scene.h"
+#include "texture.h"
+#include "uniforms.h"
+
+void Renderer::drawParticleGroups(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Scene& scene,
+  const ParticleBatch& batch, const UniformGlobal& uniGlobal,
+  const std::vector<ParticleDrawGroup>& groups)
+{
+  if(groups.empty() || !batch.isReady() || batch.getVertexCount() == 0) return;
+
+  batch.bind(pass);
+
+  const Pipeline* boundPipeline = nullptr;
+  for(const auto &g : groups) {
+    auto &pipeline = scene.getParticlePipeline(g.blend);
+    if(&pipeline != boundPipeline) {
+      pipeline.bind(pass);
+      SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
+      boundPipeline = &pipeline;
+    }
+
+    // alpha-compare threshold (std140 vec4, only .x used) — matches rdpq_mode_alphacompare
+    float fragParams[4]{g.alphaThreshold, 0.0f, 0.0f, 0.0f};
+    SDL_PushGPUFragmentUniformData(cmdBuff, 0, fragParams, sizeof(fragParams));
+
+    // texture + hardware-matching sampler; untextured emitters sample the 1px white texture
+    SDL_GPUTextureSamplerBinding texBind{};
+    texBind.texture = (g.tex && g.tex->getGPUTex()) ? g.tex->getGPUTex() : scene.getWhiteTexture();
+    texBind.sampler = scene.getParticleSampler(g.mirror, g.bilinear);
+    SDL_BindGPUFragmentSamplers(pass, 0, &texBind, 1);
+
+    SDL_DrawGPUPrimitives(pass, g.vertCount, 1, g.firstVert, 0);
+  }
+}
+
 Renderer::ParticleBatch::~ParticleBatch()
 {
   if(buffer) SDL_ReleaseGPUBuffer(gpuDevice, buffer);

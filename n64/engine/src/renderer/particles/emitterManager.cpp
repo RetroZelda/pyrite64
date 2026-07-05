@@ -119,10 +119,10 @@ void P64::EmitterManager::update(float deltaTime)
   ticksUpdate = get_ticks() - t0;
 }
 
-void P64::EmitterManager::draw()
+void P64::EmitterManager::draw(float camBaseSize)
 {
   for(auto &s : slots) {
-    if(s.used && s.playing) s.inst.draw();
+    if(s.used && s.playing) s.inst.draw(camBaseSize);
   }
 }
 

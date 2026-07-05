@@ -84,12 +84,14 @@ Renderer::Scene::Scene()
   shaderParticles = std::make_unique<Shader>(ctx.gpu, Shader::Config{
     .name = "particles",
     .vertUboCount = 1,
-    .fragUboCount = 0,
+    .fragUboCount = 1, // alpha-compare threshold (matches rdpq_mode_alphacompare on hardware)
     .vertTexCount = 0,
     .fragTexCount = 1,
     .vertSboCount = 0,
   });
-  pipelineParticles = std::make_unique<Pipeline>(Pipeline::Info{
+  // One pipeline per RDP blend mode the emitter material can pick (None/Multiply/Additive),
+  // all sharing shaders, vertex layout and the depth-test-but-no-write particle behavior.
+  Pipeline::Info particleInfo{
     .shader = *shaderParticles,
     .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
     .useDepth = true,
@@ -102,11 +104,70 @@ Renderer::Scene::Scene()
       {SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offsetof(Renderer::ParticleVertex, color)},
       {SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2     , offsetof(Renderer::ParticleVertex, uv)},
     }
-  });
+  };
+  pipelineParticles = std::make_unique<Pipeline>(particleInfo);
+  particleInfo.additive = true;
+  pipelineParticlesAdd = std::make_unique<Pipeline>(particleInfo);
+  particleInfo.additive = false;
+  particleInfo.translucent = false;
+  particleInfo.noAlphaWrite = true; // keep FB alpha at 1 so ImGui composites the view opaquely
+  pipelineParticlesOpaque = std::make_unique<Pipeline>(particleInfo);
+
+  // Samplers covering the RDP texture state emitters can author: point/bilinear filtering ×
+  // infinite-repeat/mirrored-repeat addressing (mirrored-repeat reproduces the tpx mirror trick).
+  for(int i = 0; i < 4; ++i) {
+    const bool mirror = (i & 2) != 0, bilinear = (i & 1) != 0;
+    SDL_GPUSamplerCreateInfo si{};
+    si.min_filter = bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+    si.mag_filter = si.min_filter;
+    si.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    si.address_mode_u = mirror ? SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT : SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    si.address_mode_v = si.address_mode_u;
+    si.address_mode_w = si.address_mode_u;
+    particleSamplers[i] = SDL_CreateGPUSampler(ctx.gpu, &si);
+  }
+
+  // 1x1 white texture so untextured emitters render flat per-particle color, like the
+  // engine's COLOR_A_S16 path (texCol becomes 1.0 in the shared particle shader).
+  {
+    SDL_GPUTextureCreateInfo ti{};
+    ti.type = SDL_GPU_TEXTURETYPE_2D;
+    ti.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    ti.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    ti.width = 1; ti.height = 1;
+    ti.layer_count_or_depth = 1;
+    ti.num_levels = 1;
+    ti.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    whiteTex = SDL_CreateGPUTexture(ctx.gpu, &ti);
+
+    SDL_GPUTransferBufferCreateInfo tbi{};
+    tbi.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tbi.size = 4;
+    SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(ctx.gpu, &tbi);
+    auto* px = (uint8_t*)SDL_MapGPUTransferBuffer(ctx.gpu, tb, false);
+    px[0] = px[1] = px[2] = px[3] = 0xFF;
+    SDL_UnmapGPUTransferBuffer(ctx.gpu, tb);
+
+    SDL_GPUTextureTransferInfo transInfo{};
+    transInfo.transfer_buffer = tb;
+    SDL_GPUTextureRegion region{};
+    region.texture = whiteTex;
+    region.w = 1; region.h = 1; region.d = 1;
+
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(ctx.gpu);
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+    SDL_UploadToGPUTexture(copyPass, &transInfo, &region, false);
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(cmd);
+    SDL_ReleaseGPUTransferBuffer(ctx.gpu, tb);
+  }
 }
 
 Renderer::Scene::~Scene() {
-  //SDL_ReleaseGPUTexture(ctx.gpu, fb3D);
+  for(auto* &sampler : particleSamplers) {
+    if(sampler) { SDL_ReleaseGPUSampler(ctx.gpu, sampler); sampler = nullptr; }
+  }
+  if(whiteTex) { SDL_ReleaseGPUTexture(ctx.gpu, whiteTex); whiteTex = nullptr; }
 }
 
 void Renderer::Scene::update()

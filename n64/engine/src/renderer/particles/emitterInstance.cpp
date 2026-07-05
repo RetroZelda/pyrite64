@@ -11,13 +11,10 @@
 
 namespace
 {
-  // Tuning constants (visual scale on hardware — adjust to taste).
-  // SIZE_TO_INT8 maps the sim size to the tpx int8 size byte (size 1.0 -> byte 64). The
-  // on-screen scale is governed mostly by base_size, which drawPtx() now sets from the camera
-  // far plane (camera-correct, matching the editor preview's SIZE_TO_WORLD=8.0 world billboards).
-  // If the on-device size still differs from the preview, nudge this single constant.
-  // Note the int8 [1,127] clamp: size 1.0 -> 64, so sizes above ~1.98 clamp.
-  constexpr float SIZE_TO_INT8 = 64.0f;  // particle size 1.0 -> int8 ~64
+  // The sim->int8 size mapping lives in particleSim.h (PS::SIZE_TO_INT8 / PS::hwSizeByte) so the
+  // editor previews clamp/quantize identically. The on-screen scale is governed mostly by
+  // base_size, which drawPtx() sets from the camera far plane (camera-correct, matching the
+  // editor preview's SIZE_TO_WORLD=8.0 world billboards).
   constexpr float FRAME_STRIDE = 32.0f;  // one 8px sprite-sheet frame in tpx tex-offset units
 
   namespace PS = P64::ParticleSim;
@@ -51,6 +48,11 @@ namespace
     c.sizeStart = d->sizeStart;
     c.sizeEnd = d->sizeEnd;
     c.texFrames = d->texFrames < 1 ? 1 : d->texFrames;
+    c.mirrorAnim = d->mirrorAnim != 0;
+    // u8 tex-offset budget: 8 sections per particle (mirrored playback doubles the logical
+    // frames, so only 4 real frames fit). The editor clamps too; this is the defensive side.
+    uint32_t maxFrames = c.mirrorAnim ? (PS::MAX_FRAME_SECTIONS / 2) : PS::MAX_FRAME_SECTIONS;
+    if(c.texFrames > maxFrames) c.texFrames = maxFrames;
     c.frameMode = d->frameMode;
     c.frameRate = d->frameRate;
     c.uvScrollSpeed = d->uvScrollSpeed;
@@ -60,14 +62,20 @@ namespace
     return c;
   }
 
-  void uploadTexTile(sprite_t* spr, bool mirror)
+  void uploadTexTile(sprite_t* spr, bool mirror, uint32_t frames)
   {
     if(!spr) return;
-    // tpx maps the texture to an 8x8 base per particle; scale_log fits the real size to that.
-    // Derive it PER AXIS from the actual width/height — using height for both axes tiles a
-    // non-square texture (e.g. a 32x64) on the mismatched axis and renders the image doubled.
-    int shiftS = -__builtin_ctz(spr->width  / 8);
-    int shiftT = -__builtin_ctz(spr->height / 8);
+    // tpx maps an 8x8 base tile onto every particle; scale_log fits the real texel size to it.
+    // The S axis must fit ONE FRAME (not the whole sheet) so each frame is exactly one 8px
+    // section and the per-particle offset (FRAME_STRIDE) lands on frame boundaries. T fits the
+    // full height. Deriving both per axis keeps non-square single images from tiling/doubling.
+    // Frame width/height must be powers of two >= 8 (the editor validates this).
+    uint32_t frameW = spr->width;
+    if(frames > 1 && frames <= (uint32_t)spr->width && (spr->width % frames) == 0) {
+      frameW = spr->width / frames;
+    }
+    int shiftS = -__builtin_ctz(frameW >= 8 ? frameW / 8 : 1);
+    int shiftT = -__builtin_ctz(spr->height >= 8 ? (uint32_t)spr->height / 8 : 1);
     rdpq_texparms_t p{};
     p.s = {.translate = 0, .scale_log = shiftS, .repeats = REPEAT_INFINITE, .mirror = mirror};
     p.t = {.translate = 0, .scale_log = shiftT, .repeats = REPEAT_INFINITE, .mirror = mirror};
@@ -80,29 +88,36 @@ void P64::PTX::EmitterInstance::buildSetupBlock()
   rspq_block_begin();
   {
     rdpq_mode_begin();
-      // combiner: per-particle color is fed as PRIM; default modulates texture by it.
-      rdpq_combiner_t comb = def->cc
-        ? (rdpq_combiner_t)def->cc
-        : RDPQ_COMBINER1((PRIM,0,TEX0,0), (TEX0,0,PRIM,0));
+      // Combiner: per-particle color is fed as PRIM by the tpx ucode (one SET_PRIM_COLOR per
+      // particle) — a custom `cc` referencing PRIM therefore sees the per-particle color, not
+      // the material's prim color (that one is folded in CPU-side as a tint, see update()).
+      rdpq_combiner_t comb;
+      if(def->cc) {
+        comb = (rdpq_combiner_t)def->cc;
+      } else if(textured) {
+        comb = RDPQ_COMBINER1((PRIM,0,TEX0,0), (TEX0,0,PRIM,0));
+      } else {
+        comb = RDPQ_COMBINER1((0,0,0,PRIM), (0,0,0,PRIM)); // flat per-particle color
+      }
       rdpq_mode_combiner(comb);
 
       rdpq_mode_filter(def->hasMat(EMAT_FILTER) ? (rdpq_filter_t)def->filter : FILTER_POINT);
       rdpq_mode_alphacompare(def->hasMat(EMAT_ALPHACMP) ? def->alphaComp : 10);
-      if(def->hasMat(EMAT_BLENDER)) rdpq_mode_blender(def->blender);
+      // Alpha blending is the default (drawPtx() runs with the blender off, so it must be set
+      // here): the fade authored via colorEnd alpha only works with a blender. An explicit
+      // material "Blending" choice (incl. "None") still wins.
+      rdpq_mode_blender(def->hasMat(EMAT_BLENDER) ? def->blender : RDPQ_BLENDER_MULTIPLY);
       if(def->hasMat(EMAT_FOG))     rdpq_mode_fog(def->fog);
       rdpq_mode_zbuf(true, false); // depth-test, no depth-write (particles)
     rdpq_mode_end();
 
-    if(def->hasMat(EMAT_PRIM)) {
-      rdpq_set_prim_color((color_t){def->primColor[0], def->primColor[1], def->primColor[2], def->primColor[3]});
-    }
     if(def->hasMat(EMAT_ENV)) {
       rdpq_set_env_color((color_t){def->envColor[0], def->envColor[1], def->envColor[2], def->envColor[3]});
     }
 
     // Single-texture emitters upload here (once). Swap emitters upload per-frame in draw().
-    if(def->texCount <= 1 && texSprites && texSprites[0]) {
-      uploadTexTile(texSprites[0], def->mirrorAnim != 0);
+    if(textured && def->texCount <= 1) {
+      uploadTexTile(texSprites[0], PS::mirrorActive(cfg), cfg.texFrames);
     }
     tpx_state_set_scale(1.0f, 1.0f);
   }
@@ -115,17 +130,33 @@ void P64::PTX::EmitterInstance::init(const EmitterDef* d, uint32_t seed)
   cfg = configFromDef(d);
   uint32_t maxP = cfg.maxParticles < 2 ? 2 : cfg.maxParticles;
 
-  system = new System(System::TEX_A_S16, maxP);
-  parts = (ParticleSim::Particle*)malloc(sizeof(ParticleSim::Particle) * maxP);
-  drawOrder = (uint16_t*)malloc(sizeof(uint16_t) * maxP);
-
-  // preload swap textures
+  // preload swap textures (before the System: its buffer type depends on `textured`)
+  textured = false;
   if(d->texCount > 0) {
     texSprites = (sprite_t**)malloc(sizeof(sprite_t*) * d->texCount);
     for(uint8_t i = 0; i < d->texCount; ++i) {
       texSprites[i] = (d->texAssetIdx[i] != 0xFFFF)
         ? (sprite_t*)AssetManager::getByIndex(d->texAssetIdx[i]) : nullptr;
+      if(texSprites[i]) textured = true;
     }
+    // draw() indexes texSprites[0] for the single-texture path; never leave it null-with-others
+    if(textured && !texSprites[0]) {
+      for(uint8_t i = 1; i < d->texCount; ++i) {
+        if(texSprites[i]) { texSprites[0] = texSprites[i]; break; }
+      }
+    }
+  }
+
+  // Untextured emitters draw flat-colored quads: the tex variant would sample whatever tile
+  // state happens to be current (garbage). Both use the same S16 buffer layout.
+  system = new System(textured ? System::TEX_A_S16 : System::COLOR_A_S16, maxP);
+  parts = (ParticleSim::Particle*)malloc(sizeof(ParticleSim::Particle) * maxP);
+  drawOrder = (uint16_t*)malloc(sizeof(uint16_t) * maxP);
+
+  // The material prim color can't reach the RDP (tpx feeds the per-particle color through
+  // PRIM), so it's applied CPU-side as a tint on every particle color instead.
+  for(int i = 0; i < 4; ++i) {
+    tint[i] = def->hasMat(EMAT_PRIM) ? (def->primColor[i] / 255.0f) : 1.0f;
   }
 
   mat = (T3DMat4FP*)malloc_uncached(sizeof(T3DMat4FP));
@@ -210,22 +241,21 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
     auto &p = parts[doSort ? drawOrder[i] : i];
     float t = ParticleSim::lifeT(p);
 
+    // tpx s16 positions: world-space particles further than +/-32767 units from the origin wrap
     int16_t* pp = tpx_buffer_s16_get_pos(buff, i);
     pp[0] = (int16_t)p.pos.x;
     pp[1] = (int16_t)p.pos.y;
     pp[2] = (int16_t)p.pos.z;
 
-    float sz = ParticleSim::sizeAt(cfg, t) * SIZE_TO_INT8;
-    if(sz < 1.0f) sz = 1.0f; else if(sz > 127.0f) sz = 127.0f;
-    *tpx_buffer_s16_get_size(buff, i) = (int8_t)sz;
+    *tpx_buffer_s16_get_size(buff, i) = (int8_t)ParticleSim::hwSizeByte(cfg, t);
 
     float col[4];
     ParticleSim::colorAt(cfg, t, col);
     uint8_t* rgba = tpx_buffer_s16_get_rgba(buff, i);
-    rgba[0] = (uint8_t)(col[0] * 255.0f);
-    rgba[1] = (uint8_t)(col[1] * 255.0f);
-    rgba[2] = (uint8_t)(col[2] * 255.0f);
-    rgba[3] = (uint8_t)(col[3] * 255.0f);
+    rgba[0] = (uint8_t)(col[0] * tint[0] * 255.0f);
+    rgba[1] = (uint8_t)(col[1] * tint[1] * 255.0f);
+    rgba[2] = (uint8_t)(col[2] * tint[2] * 255.0f);
+    rgba[3] = (uint8_t)(col[3] * tint[3] * 255.0f);
 
     uint32_t frame = ParticleSim::frameForParticle(cfg, p, emitterTime);
     *tpx_buffer_s16_get_tex_offset(buff, i) = (uint8_t)(frame * (uint32_t)FRAME_STRIDE);
@@ -246,27 +276,36 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
   }
 }
 
-void P64::PTX::EmitterInstance::draw()
+void P64::PTX::EmitterInstance::draw(float camBaseSize)
 {
   if(!system || system->count == 0) return;
 
   rspq_block_run(setupDPL);
 
-  // swap emitters re-upload the current texture each frame (the ucode only uses TILE0)
-  if(def->texCount > 1 && texSprites) {
-    uint32_t si = ParticleSim::swapIndexForTime(cfg, emitterTime);
-    if(si >= def->texCount) si = 0;
-    uploadTexTile(texSprites[si], def->mirrorAnim != 0);
-  }
+  // Per-emitter base size: the size bytes are normalized to the emitter's max size
+  // (particleSim.h), so raise the camera-derived base by the same factor to compensate.
+  // At a max size of ~1.98 (the old int8 limit) this is exactly the legacy scale.
+  float base = camBaseSize * ParticleSim::sizeQuantMax(cfg) * (ParticleSim::SIZE_TO_INT8 / 127.0f);
+  if(base < 1.0f) base = 1.0f;
+  if(base > 32767.0f) base = 32767.0f; // the ucode reads the base as a signed 16-bit lane
+  tpx_state_set_base_size((uint16_t)base);
 
-  // global horizontal UV scroll + optional sprite-sheet mirror.
-  // Mirroring only makes sense for an animated sprite-sheet (texFrames>1): the mirror point is a
-  // half-frame boundary that halves the frame count. With a single image (texFrames==1) passing
-  // mirrorPt=1 mirrors the texture across the particle midline -> the image renders DOUBLED, so
-  // force no-mirror (0 -> tpx treats as 128 = none) unless there are real frames to mirror.
-  int16_t scrollOff = (int16_t)(emitterTime * cfg.uvScrollSpeed * FRAME_STRIDE);
-  uint16_t mirrorPt = (def->mirrorAnim && cfg.texFrames > 1) ? (uint16_t)cfg.texFrames : 0;
-  tpx_state_set_tex_params(scrollOff, mirrorPt);
+  if(textured) {
+    // swap emitters re-upload the current texture each frame (the ucode only uses TILE0)
+    if(def->texCount > 1) {
+      uint32_t si = ParticleSim::swapIndexForTime(cfg, emitterTime);
+      if(si >= def->texCount) si = 0;
+      uploadTexTile(texSprites[si], ParticleSim::mirrorActive(cfg), cfg.texFrames);
+    }
+
+    // global horizontal UV scroll + optional sprite-sheet mirror.
+    // Mirroring only makes sense for an animated sprite-sheet (texFrames>1): with a single image
+    // passing mirrorPt=1 mirrors the texture across the particle midline -> the image renders
+    // DOUBLED, so force no-mirror (0 -> tpx treats as 128 = none) unless there are real frames.
+    int16_t scrollOff = (int16_t)(ParticleSim::uvScrollSections(cfg, emitterTime) * FRAME_STRIDE);
+    uint16_t mirrorPt = ParticleSim::mirrorActive(cfg) ? (uint16_t)cfg.texFrames : 0;
+    tpx_state_set_tex_params(scrollOff, mirrorPt);
+  }
 
   system->draw(); // pushes/pops our transform matrix internally
 }

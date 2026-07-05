@@ -140,16 +140,13 @@ void P64::DrawLayer::drawPtx()
   // on-screen size is wrong-by-far and a fixed 128 makes particles hugely oversized (e.g. ~16x
   // at the default far=4000). base_size = 64 * 500 / far cancels the far term in tpx's
   // perspective math, so particle size becomes camera-correct & far-independent like the editor
-  // preview. (Scoped to emitters; the baked PTX layers above keep their tuned base_size of 128.)
+  // preview. Each emitter then multiplies this by its own size-normalization factor and sets
+  // the final base itself (EmitterInstance::draw). The baked PTX layers above keep their 128.
   float emitFar = 500.0f;
   if(Camera* cam = SceneManager::getCurrent().getActiveCameraPtr()) {
     if(cam->far >= 1.0f) emitFar = cam->far;
   }
-  uint32_t emitBase = (uint32_t)(64.0f * 500.0f / emitFar);
-  if(emitBase < 1) emitBase = 1; else if(emitBase > 0xFFFF) emitBase = 0xFFFF;
-  tpx_state_set_base_size((uint16_t)emitBase);
-
-  EmitterManager::draw();
+  EmitterManager::draw(64.0f * 500.0f / emitFar);
 }
 
 void P64::DrawLayer::draw2D()

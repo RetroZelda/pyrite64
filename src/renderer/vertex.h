@@ -32,4 +32,8 @@ namespace Renderer
     glm::u8vec4 color{}; // RGBA8 (UBYTE4_NORM)
     glm::vec2 uv{};
   };
+
+  // Blend modes of the particle pipelines, mirroring the RDP blender choices the emitter
+  // material offers (None / Multiply / Additive) so previews composite like hardware.
+  enum class ParticleBlend : uint8_t { Alpha = 0, Additive = 1, Opaque = 2 };
 }

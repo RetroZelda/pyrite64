@@ -24,5 +24,8 @@ namespace P64::Comp
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData) { return sizeof(Particle); }
     static void initDelete(Object& obj, Particle* data, uint16_t* initData);
     static void update(Object& obj, Particle* data, float deltaTime);
+    // Non-auto-play emitters (re)play when the object receives EVENT_TYPE_PARTICLE_PLAY, letting
+    // a ParticleSync coordinator start several emitters on one object together.
+    static void onEvent(Object& obj, Particle* data, const ObjectEvent& event);
   };
 }

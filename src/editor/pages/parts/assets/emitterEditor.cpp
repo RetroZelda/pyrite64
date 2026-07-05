@@ -9,6 +9,23 @@
 #include "../../../imgui/helper.h"
 #include "../../../../project/assets/emitter.h"
 #include "../../../../context.h"
+#include "engine/include/renderer/particles/particleSim.h"
+
+namespace
+{
+  constexpr ImVec4 WARN_COL{1.0f, 0.75f, 0.25f, 1.0f};
+
+  constexpr bool isPow2(uint32_t x) { return x > 0 && (x & (x - 1)) == 0; }
+
+  // full-width warning row inside an ImTable
+  void warnRow(const char* text)
+  {
+    ImTable::add("");
+    ImGui::PushStyleColor(ImGuiCol_Text, WARN_COL);
+    ImGui::TextWrapped("%s", text);
+    ImGui::PopStyleColor();
+  }
+}
 
 void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
 {
@@ -74,6 +91,8 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
     ImTable::addProp("Init Max (deg)", em.rotationMax);
     ImTable::addProp("Spin Min (deg/s)", em.spinMin);
     ImTable::addProp("Spin Max (deg/s)", em.spinMax);
+    warnRow("Not supported by the N64 particle ucode (billboards can't rotate) — "
+            "no effect on hardware or in previews.");
   });
 
   subSection("Size over Life", [&]
@@ -88,11 +107,22 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
     ImTable::addProp("End", em.colorEnd);
   });
 
-  // Primary texture (the material's tex0). Tile/scale/mirror settings here apply to
-  // whichever texture is bound at runtime, including the swap-list entries below.
+  // Primary texture (the material's tex0). Tile params are hidden: emitters don't bake
+  // them (tpx maps a fixed 8x8 UV base per particle) — frames/scroll/mirror live in the
+  // Texture Animation section instead.
   if(ImGui::CollapsingSubHeader("Texture", ImGuiTreeNodeFlags_DefaultOpen) && ImTable::start("Texture", nullptr, labelWidth))
   {
-    TextureEditor::draw(em.material.tex0);
+    TextureEditor::draw(em.material.tex0, /*tileParams*/ false);
+
+    // TMEM check: the RDP can only hold ~4KB of texture (whole sheet is uploaded at once).
+    // The source-image size is a worst-case estimate (RGBA16 = 2B/px; CI formats are smaller).
+    if(em.material.tex0.texSize.value.x > 0) {
+      uint32_t estBytes = (uint32_t)(em.material.tex0.texSize.value.x * em.material.tex0.texSize.value.y) * 2;
+      if(estBytes > 4096) {
+        warnRow("Texture likely exceeds TMEM (4KB): won't upload on hardware "
+                "unless a small color-indexed format is used.");
+      }
+    }
     ImTable::end();
   }
 
@@ -120,8 +150,13 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
 
   subSection("Texture Animation", [&]
   {
+    // hardware budget: per-particle tex offsets address 8 sections of 8px (u8, 1/4px units);
+    // mirrored playback doubles the logical frames, halving the real ones that fit.
+    const uint32_t maxFrames = em.mirrorAnim.value
+      ? P64::ParticleSim::MAX_FRAME_SECTIONS / 2 : P64::ParticleSim::MAX_FRAME_SECTIONS;
+
     ImTable::addProp("Frames", em.texFrames);
-    em.texFrames.value = glm::clamp(em.texFrames.value, 1u, 64u);
+    em.texFrames.value = glm::clamp(em.texFrames.value, 1u, maxFrames);
 
     ImTable::add("Frame Mode");
     ImGui::Combo("##frameMode", &em.frameMode.value, "Off\0Loop\0Over Lifetime\0Random\0");
@@ -134,12 +169,25 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
     ImTable::addProp("Swap Rate", em.swapRate);
 
     ImTable::addProp("Mirror Frames", em.mirrorAnim);
+
+    // frame layout check: tpx fits ONE frame onto its 8x8 UV base via a power-of-two shift,
+    // so sheets must split into pow2-sized frames of at least 8px.
+    if(em.texFrames.value > 1 && em.material.tex0.texSize.value.x > 0) {
+      uint32_t sheetW = (uint32_t)em.material.tex0.texSize.value.x;
+      uint32_t frames = em.texFrames.value;
+      uint32_t frameW = frames <= sheetW ? sheetW / frames : 0;
+      if(frameW < 8 || !isPow2(frameW) || (sheetW % frames) != 0) {
+        warnRow("Sheet width / Frames must give a power-of-two frame width of at least "
+                "8px — frames will sample wrong on hardware.");
+      }
+    }
   });
 
   if(ImGui::CollapsingHeader("Material / Blend", ImGuiTreeNodeFlags_DefaultOpen))
   {
-    // Emitters bind one texture at a time and manage it via the Texture section above,
-    // so skip the placeholder-based texture sub-sections here.
-    Editor::Helpers::drawMaterialSettings(em.material, labelWidth, /*includeTextures*/ false, /*usePlaceholder*/ false);
+    // Emitters bind one texture at a time and manage it via the Texture section above, so
+    // skip the texture sub-sections; emitterMode hides everything .emit64 doesn't bake.
+    Editor::Helpers::drawMaterialSettings(em.material, labelWidth,
+      /*includeTextures*/ false, /*usePlaceholder*/ false, /*emitterMode*/ true);
   }
 }

@@ -14,6 +14,9 @@ namespace P64
   constexpr uint16_t EVENT_TYPE_ENABLE  = 0xFFFF - 0;
   constexpr uint16_t EVENT_TYPE_DISABLE = 0xFFFF - 1;
   constexpr uint16_t EVENT_TYPE_READY   = 0xFFFF - 2;
+  // Sent to an object to (re)play its Particle components that do NOT have FLAG_AUTO_PLAY set,
+  // so several emitters on one object can be started in sync (see Comp::Particle::onEvent).
+  constexpr uint16_t EVENT_TYPE_PARTICLE_PLAY = 0xFFFF - 3;
 
   // Safe ranges for user-defined custom events
   constexpr uint16_t EVENT_TYPE_CUSTOM_START = 0x0000;

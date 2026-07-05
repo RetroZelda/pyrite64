@@ -202,7 +202,10 @@ void Project::Assets::Emitter::build(Utils::BinaryFile &file, Build::SceneCtx &s
   file.write<float>(sizeEnd.value);
 
   // texture animation
-  file.write<uint8_t>((uint8_t)std::min<uint32_t>(texFrames.value, 255));
+  // (per-particle tex offsets are a u8 = 8 addressable 8px sections; mirrored playback
+  //  doubles the logical frames, so only 4 real frames fit — the UI clamps the same way)
+  uint32_t maxFrames = mirrorAnim.value ? 4u : 8u;
+  file.write<uint8_t>((uint8_t)std::clamp(texFrames.value, 1u, maxFrames));
   file.write<uint8_t>((uint8_t)frameMode.value);
   file.write<uint8_t>((uint8_t)swapMode.value);
   file.write<uint8_t>(mirrorAnim.value ? 1 : 0);

@@ -44,4 +44,15 @@ namespace P64::Comp
   {
     data->handle.setPos(obj.pos); // follow the object (no-op on a stale/empty handle)
   }
+
+  void Particle::onEvent(Object &obj, Particle* data, const ObjectEvent& event)
+  {
+    // auto-play emitters already started in initDelete(); only the ones waiting for an external
+    // trigger (auto-play off) react to the sync event.
+    if(event.type == EVENT_TYPE_PARTICLE_PLAY && !(data->flags & FLAG_AUTO_PLAY))
+    {
+      data->handle.setPos(obj.pos);
+      data->handle.replay();
+    }
+  }
 }

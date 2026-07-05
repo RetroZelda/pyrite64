@@ -27,7 +27,7 @@ namespace
     "x32\0";
 }
 
-void Editor::TextureEditor::draw(Project::Assets::MaterialTex &tex)
+void Editor::TextureEditor::draw(Project::Assets::MaterialTex &tex, bool tileParams)
 {
   auto &assetManager = ctx.project->getAssets();
   const auto &assets = assetManager.getTypeEntries(Project::FileType::IMAGE);
@@ -61,6 +61,8 @@ void Editor::TextureEditor::draw(Project::Assets::MaterialTex &tex)
     ImTable::addProp("Size", tex.texSize);
     ImGui::EndDisabled();
   }
+
+  if(!tileParams) return;
 
   ImTable::addProp("Offset", tex.offset);
   tex.offset.value = glm::clamp(tex.offset.value, 0.0f, 1023.75f);

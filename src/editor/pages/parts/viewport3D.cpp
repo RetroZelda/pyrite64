@@ -560,7 +560,8 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       }
 
       PS::Config cfg = Utils::Emitter::toConfig(em);
-      if(cfg.maxParticles > 64u) cfg.maxParticles = 64u; // editor cap (many emitters can be placed)
+      // density must match hardware, which runs the authored maxParticles (UI clamps to 2048)
+      if(cfg.maxParticles > 2048u) cfg.maxParticles = 2048u;
       auto seq = em.textureSequence();
       cfg.swapCount = seq.empty() ? 1u : (uint32_t)seq.size();
 
@@ -578,7 +579,7 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       if(cfg.fireMode == PS::FIRE_ONE_SHOT && state.particles.empty() && !state.oneShotPending) state.oneShotPending = true;
       if(state.particles.empty()) continue;
 
-      // resolve the current swap texture (no texture -> skip; the placed icon still marks it)
+      // resolve the current swap texture (none -> flat-colored quads, like the hardware path)
       Renderer::Texture* tex = nullptr;
       if(!seq.empty()) {
         uint32_t si = PS::swapIndexForTime(cfg, state.simTime);
@@ -586,57 +587,18 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
         auto *te = assets.getEntryByUUID(seq[si]);
         if(te && te->texture && te->texture->getGPUTex()) tex = te->texture.get();
       }
-      if(!tex) continue;
 
-      // back-to-front along the view axis for correct alpha compositing (depth-write is off)
-      std::sort(state.particles.begin(), state.particles.end(), [&](const PS::Particle &a, const PS::Particle &b){
-        glm::vec3 ca{a.pos.x, a.pos.y, a.pos.z}; if(!cfg.worldSpace) ca += sub.worldPos;
-        glm::vec3 cb{b.pos.x, b.pos.y, b.pos.z}; if(!cfg.worldSpace) cb += sub.worldPos;
-        return glm::dot(ca, camFwd) > glm::dot(cb, camFwd);
-      });
-
-      const float scroll = PS::uvScrollOffset(cfg, state.simTime);
+      // hardware-faithful billboards: sorted, int8-quantized sizes, frame/mirror UVs, no rotation
       const uint32_t groupFirst = (uint32_t)particleVerts.size();
-
-      for(auto &p : state.particles) {
-        float t = PS::lifeT(p);
-        glm::vec3 center{p.pos.x, p.pos.y, p.pos.z};
-        if(!cfg.worldSpace) center += sub.worldPos; // relative particles follow the emitter object
-        float ws = PS::sizeAt(cfg, t) * Utils::Emitter::SIZE_TO_WORLD;
-        if(ws < 0.01f) continue;
-
-        float col4[4]; PS::colorAt(cfg, t, col4);
-        glm::u8vec4 col{
-          (uint8_t)(std::clamp(col4[0], 0.0f, 1.0f) * 255.0f),
-          (uint8_t)(std::clamp(col4[1], 0.0f, 1.0f) * 255.0f),
-          (uint8_t)(std::clamp(col4[2], 0.0f, 1.0f) * 255.0f),
-          (uint8_t)(std::clamp(col4[3], 0.0f, 1.0f) * 255.0f)};
-
-        uint32_t f = PS::frameForParticle(cfg, p, state.simTime);
-        float u0 = (float)f / (float)cfg.texFrames + scroll;
-        float u1 = (float)(f + 1) / (float)cfg.texFrames + scroll;
-
-        // rotate the quad in the billboard plane by the particle's spin
-        float ang = PS::angleAt(p) * 0.01745329f;
-        float cs = std::cos(ang), sn = std::sin(ang);
-        auto worldCorner = [&](float lx, float ly) {
-          float rx = lx * cs - ly * sn, ry = lx * sn + ly * cs;
-          return center + camRight * (rx * ws) + camUp * (ry * ws);
-        };
-        glm::vec3 tl = worldCorner(-1.0f,  1.0f), tr = worldCorner( 1.0f,  1.0f),
-                  br = worldCorner( 1.0f, -1.0f), bl = worldCorner(-1.0f, -1.0f);
-
-        // two triangles (cull disabled): tl,tr,br + tl,br,bl
-        particleVerts.push_back({tl, col, {u0, 0.0f}});
-        particleVerts.push_back({tr, col, {u1, 0.0f}});
-        particleVerts.push_back({br, col, {u1, 1.0f}});
-        particleVerts.push_back({tl, col, {u0, 0.0f}});
-        particleVerts.push_back({br, col, {u1, 1.0f}});
-        particleVerts.push_back({bl, col, {u0, 1.0f}});
-      }
+      Utils::Emitter::buildBillboards(particleVerts, state.particles,
+        cfg, state.simTime, sub.worldPos, camRight, camUp, camFwd);
 
       uint32_t cnt = (uint32_t)particleVerts.size() - groupFirst;
-      if(cnt > 0) particleGroups.push_back({tex, groupFirst, cnt});
+      if(cnt > 0) {
+        auto info = Utils::Emitter::toRenderInfo(em, cfg);
+        particleGroups.push_back({tex, groupFirst, cnt,
+          info.blend, info.mirrorSampler, info.bilinear, info.alphaThreshold});
+      }
     }
   }
 
@@ -652,17 +614,7 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
 
 void Editor::Viewport3D::drawParticles(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Renderer::Scene& renderScene)
 {
-  if(particleGroups.empty() || !particleBatch->isReady() || particleBatch->getVertexCount() == 0) return;
-
-  renderScene.getPipeline("particles").bind(pass);
-  SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
-  particleBatch->bind(pass);
-
-  for(const auto &g : particleGroups) {
-    if(!g.tex || !g.tex->getGPUTex()) continue; // defensive: never bind a freed/empty texture
-    g.tex->bind(pass); // fragment sampler (set=2, binding=0)
-    SDL_DrawGPUPrimitives(pass, g.vertCount, 1, g.firstVert, 0);
-  }
+  Renderer::drawParticleGroups(cmdBuff, pass, renderScene, *particleBatch, uniGlobal, particleGroups);
 }
 
 void Editor::Viewport3D::onPostRender(Renderer::Scene &renderScene) {

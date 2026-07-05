@@ -100,11 +100,23 @@ namespace P64::ParticleSim
     uint32_t texFrames{1};        // sprite-sheet sub-frames (>=1)
     int frameMode{ANIM_OFF};
     float frameRate{8.0f};
-    float uvScrollSpeed{0.0f};    // horizontal (U) scroll, UV units/sec
+    float uvScrollSpeed{0.0f};    // horizontal (U) scroll, sheet-frames/sec (1.0 = one frame width)
+    bool mirrorAnim{false};       // mirrored playback: doubles the frames via tpx's mirror trick
     int swapMode{ANIM_OFF};
     float swapRate{4.0f};
     uint32_t swapCount{1};        // textures available to swap between (>=1)
   };
+
+  // -- hardware limits (tpx / .emit64 constraints; previews must obey them too) --
+  // Global size convention: at the camera-derived base size, a sim-size of 1.0 corresponds
+  // to a tpx size byte of 64. Since the byte clamps at 127, sizes are NORMALIZED per emitter:
+  // bytes span the full int8 range relative to the emitter's max size (sizeQuantMax) and the
+  // tpx base-size is raised by the same factor at draw time (EmitterInstance::draw), so any
+  // authored size range renders instead of clamping at ~2.0.
+  constexpr float SIZE_TO_INT8 = 64.0f;
+  // The per-particle tex offset is a u8 in 1/4px units of 8px sections -> 8 addressable
+  // sections. Mirrored playback spends its logical frames in the same budget.
+  constexpr uint32_t MAX_FRAME_SECTIONS = 8;
 
   // One live particle (local space). The engine keeps these in a parallel SoA;
   // the editor keeps a vector of them.
@@ -194,22 +206,57 @@ namespace P64::ParticleSim
     return lerp(cfg.sizeStart, cfg.sizeEnd, t);
   }
 
-  // Current sprite-sheet sub-frame index [0, texFrames) for a particle.
+  // The emitter's size-normalization factor: its max reachable size (sizes lerp start->end).
+  inline float sizeQuantMax(const Config &cfg)
+  {
+    float m = cfg.sizeStart > cfg.sizeEnd ? cfg.sizeStart : cfg.sizeEnd;
+    return m > 1e-4f ? m : 1.0f;
+  }
+
+  // Per-particle tpx size byte [1,127], normalized to the emitter's max size.
+  inline int32_t hwSizeByte(const Config &cfg, float t)
+  {
+    float s = sizeAt(cfg, t) * (127.0f / sizeQuantMax(cfg));
+    if(s < 1.0f) return 1;
+    if(s > 127.0f) return 127;
+    return (int32_t)s;
+  }
+
+  // The size the hardware actually shows: the quantized byte scaled back to sim units.
+  // Previews use this so the on-device quantization/clamping is reproduced exactly.
+  inline float hwSizeAt(const Config &cfg, float t)
+  {
+    return (float)hwSizeByte(cfg, t) * (sizeQuantMax(cfg) / 127.0f);
+  }
+
+  // Mirrored playback needs real frames to mirror (a mirrored single image renders doubled).
+  inline bool mirrorActive(const Config &cfg) { return cfg.mirrorAnim && cfg.texFrames > 1; }
+
+  // Frames the animation runs over: mirroring doubles them (the second half samples the
+  // sheet mirrored on both axes in reverse order, handled by the tpx ucode / mirror sampler).
+  inline uint32_t logicalFrameCount(const Config &cfg)
+  {
+    uint32_t n = cfg.texFrames < 1 ? 1 : cfg.texFrames;
+    return mirrorActive(cfg) ? n * 2 : n;
+  }
+
+  // Current logical sprite-sheet frame [0, logicalFrameCount) for a particle.
   inline uint32_t frameForParticle(const Config &cfg, const Particle &p, [[maybe_unused]] float emitterTime)
   {
-    if(cfg.texFrames <= 1 || cfg.frameMode == ANIM_OFF) return 0;
+    uint32_t frames = logicalFrameCount(cfg);
+    if(frames <= 1 || cfg.frameMode == ANIM_OFF) return 0;
     switch(cfg.frameMode)
     {
       case ANIM_OVER_LIFETIME: {
-        uint32_t f = (uint32_t)(lifeT(p) * (float)cfg.texFrames);
-        return f >= cfg.texFrames ? cfg.texFrames - 1 : f;
+        uint32_t f = (uint32_t)(lifeT(p) * (float)frames);
+        return f >= frames ? frames - 1 : f;
       }
       case ANIM_RANDOM_STATIC:
-        return p.seed % cfg.texFrames;
+        return p.seed % frames;
       case ANIM_LOOP:
       default: {
         uint32_t f = (uint32_t)((p.age * cfg.frameRate));
-        return f % cfg.texFrames;
+        return f % frames;
       }
     }
   }
@@ -225,11 +272,37 @@ namespace P64::ParticleSim
     return (uint32_t)(emitterTime * cfg.swapRate) % cfg.swapCount;
   }
 
-  // Accumulated horizontal (U-axis) UV scroll offset, wrapped to [0,1).
-  inline float uvScrollOffset(const Config &cfg, float emitterTime)
+  // Accumulated horizontal (U-axis) UV scroll in SECTIONS (1 section = one sheet frame).
+  // The engine converts sections to tpx 1/4px units (*32); previews divide by texFrames for
+  // texture-normalized U. Wrapped to the repeat/mirror period so long-running emitters never
+  // overflow the tpx int16 offset, and previews wrap identically.
+  inline float uvScrollSections(const Config &cfg, float emitterTime)
   {
+    float period = (float)logicalFrameCount(cfg);
     float o = cfg.uvScrollSpeed * emitterTime;
-    return o - std::floor(o);
+    o -= std::floor(o / period) * period;
+    return o;
+  }
+
+  // Texture-normalized UV window of a logical frame incl. scroll, for the editor previews
+  // (the engine passes section offsets to tpx directly). U is continuous in sheet units and
+  // may leave [0,1]: sample with a REPEAT sampler, or MIRRORED-REPEAT when mirrorActive() —
+  // that reproduces the RDP's infinite-repeat/mirror addressing exactly, including the
+  // reversed frame order in the mirrored half. Frames in the mirrored half also flip V
+  // (tpx's double-mirror = 180° rotated frames), expressed here as v in [1,2] so the
+  // mirrored-repeat sampler performs the flip.
+  inline void frameUV(const Config &cfg, uint32_t logicalFrame, float scrollSections,
+                      float &u0, float &v0, float &u1, float &v1)
+  {
+    float n = (float)(cfg.texFrames < 1 ? 1 : cfg.texFrames);
+    float s = (float)logicalFrame + scrollSections;
+    u0 = s / n;
+    u1 = (s + 1.0f) / n;
+    v0 = 0.0f; v1 = 1.0f;
+    if(mirrorActive(cfg)) {
+      float m = std::fmod(s + 0.5f, 2.0f * n); // window center within the mirror cycle
+      if(m >= n) { v0 = 1.0f; v1 = 2.0f; }     // mirrored half -> V flips via the sampler
+    }
   }
 
   // Spawn scheduler: returns how many particles to emit this frame given remaining

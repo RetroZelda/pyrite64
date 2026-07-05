@@ -29,6 +29,8 @@ namespace Renderer
         bool useDepth{};
         bool drawsObjID{};
         bool translucent{};
+        bool additive{};       // with translucent: additive blend (src*alpha + dst) instead of alpha
+        bool noAlphaWrite{};   // mask the alpha channel (keeps an FB's alpha at 1 for compositing)
         bool depthWrite{true}; // write to the depth buffer (set false for alpha-blended particles)
         uint32_t vertPitch{};
         std::vector<InfoVertDef> vertLayout{};

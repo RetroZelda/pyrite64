@@ -53,6 +53,7 @@ namespace
 Editor::EmitterPreview::EmitterPreview()
   : dummySkeleton{ctx.gpu}
 {
+  particleBatch = std::make_shared<Renderer::ParticleBatch>(ctx.gpu);
   passId = (uint32_t)(Utils::Hash::sha256_64bit("Editor::EmitterPreview") & 0xFFFFFFFF);
   ctx.scene->addCopyPass(passId, [this](SDL_GPUCommandBuffer* c, SDL_GPUCopyPass* cp){ onCopyPass(c, cp); });
   ctx.scene->addRenderPass(passId, [this](SDL_GPUCommandBuffer* c, Renderer::Scene& s){ onRenderPass(c, s); });
@@ -66,11 +67,16 @@ Editor::EmitterPreview::~EmitterPreview()
   }
 }
 
-// Uploads the bone matrices for the reference model's skeleton (bind pose) before the
-// render pass. Static models use an identity dummy skeleton. Must run every frame the
-// skeleton is used, since the storage buffer is what use() binds.
+// Uploads the particle billboard batch built by draw(), plus the bone matrices for the
+// reference model's skeleton (bind pose) before the render pass. Static models use an
+// identity dummy skeleton (the storage buffer is what use() binds, so update every frame).
 void Editor::EmitterPreview::onCopyPass(SDL_GPUCommandBuffer*, SDL_GPUCopyPass* copyPass)
 {
+  if(ptxRenderRequested && particleBatch) {
+    particleBatch->setVertices(particleVerts);
+    particleBatch->upload(copyPass);
+  }
+
   if(!renderRequested || refModelUUID == 0 || !ctx.project) return;
   auto *asset = ctx.project->getAssets().getEntryByUUID(refModelUUID);
   if(!asset || asset->type != Project::FileType::MODEL_3D) return;
@@ -89,9 +95,22 @@ void Editor::EmitterPreview::onCopyPass(SDL_GPUCommandBuffer*, SDL_GPUCopyPass* 
   }
 }
 
-// Renders the reference model (if any) into our framebuffer using the preview camera.
-// Runs during the scene's GPU submit; the camera/uniGlobal + fb size were set in draw().
+// Runs during the scene's GPU submit; the camera/uniGlobal + fb sizes were set in draw().
+// Renders the reference model (if any, cached) and then composites the particle billboards
+// over it into ptxFb with the hardware-matching blend pipelines.
 void Editor::EmitterPreview::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene)
+{
+  renderRefModel(cmdBuff, scene);
+
+  bool wantedPtx = ptxRenderRequested;
+  ptxRenderRequested = false;
+  if(wantedPtx && ptxFbSize != 0) {
+    renderParticlePass(cmdBuff, scene);
+  }
+}
+
+// Renders the reference model into our framebuffer using the preview camera.
+void Editor::EmitterPreview::renderRefModel(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene)
 {
   // NOTE: do NOT reset hasRefRender here — when the render is skipped (cached, not dirty) the FB
   // still holds the last image and the composite must keep showing it.
@@ -139,6 +158,38 @@ void Editor::EmitterPreview::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Rendere
 
   hasRefRender = true;
   refDirty = false; // FB now matches the current camera/model; skip re-render until it changes
+}
+
+// Composites the particle billboards into ptxFb: the cached reference-model render is blitted
+// in as the background (or a flat clear when there is none), then the billboards draw with the
+// SAME pipelines/samplers as the scene viewport — alpha/additive/opaque blending, point or
+// bilinear filtering, mirrored-repeat addressing and the alpha-compare discard all match the
+// RDP output. Blending happens directly against the background, so the composite is exact.
+void Editor::EmitterPreview::renderParticlePass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& scene)
+{
+  const bool haveModelBg = hasRefRender && fb.getTexture();
+  if(haveModelBg) {
+    SDL_GPUBlitInfo blit{};
+    blit.source.texture = fb.getTexture();
+    blit.source.w = fbW;
+    blit.source.h = fbH;
+    blit.destination.texture = ptxFb.getTexture();
+    blit.destination.w = ptxFbSize;
+    blit.destination.h = ptxFbSize;
+    blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+    blit.filter = SDL_GPU_FILTER_NEAREST;
+    SDL_BlitGPUTexture(cmdBuff, &blit);
+  }
+
+  SDL_GPUColorTargetInfo targets[2]{ptxFb.getTargetInfo()[0], ptxFb.getTargetInfo()[1]};
+  if(haveModelBg) targets[0].load_op = SDL_GPU_LOADOP_LOAD; // keep the blitted background
+  SDL_GPUDepthStencilTargetInfo depthInfo = ptxFb.getDepthTargetInfo();
+
+  SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmdBuff, targets, 2, &depthInfo);
+  Renderer::drawParticleGroups(cmdBuff, pass, scene, *particleBatch, uniGlobal, particleGroups);
+  SDL_EndGPURenderPass(pass);
+
+  ptxHasRender = true;
 }
 
 void Editor::EmitterPreview::reset()
@@ -279,10 +330,17 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     fb.resize(FB_RES, FB_RES);
     fbW = fbH = FB_RES;
   }
+  // particle composite target (allocated once, never resized — same defrag-crash caveat)
+  if(ptxFbSize == 0) {
+    ptxFb.resize(FB_RES, FB_RES);
+    ptxFb.setClearColor({24.0f / 255.0f, 26.0f / 255.0f, 32.0f / 255.0f, 1.0f});
+    ptxFbSize = FB_RES;
+  }
 
   // --- simulation ---
   PS::Config cfg = toConfig(em);
-  if(cfg.maxParticles > 256u) cfg.maxParticles = 256u; // preview cap: keep the editor responsive
+  // density must match hardware, which runs the authored maxParticles (UI clamps to 2048)
+  if(cfg.maxParticles > 2048u) cfg.maxParticles = 2048u;
   auto seq = em.textureSequence();
   cfg.swapCount = seq.empty() ? 1u : (uint32_t)seq.size();
 
@@ -308,10 +366,38 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     }
   }
 
-  // --- render ---
+  // --- build the particle billboards (GPU-rendered; composited into ptxFb this frame) ---
+  {
+    // resolve the current swap texture (none -> flat-colored quads, like the hardware path)
+    Renderer::Texture* tex = nullptr;
+    if(!seq.empty()) {
+      uint32_t si = PS::swapIndexForTime(cfg, simTime);
+      if(si >= seq.size()) si = 0;
+      auto *e = assets.getEntryByUUID(seq[si]);
+      if(e && e->texture && e->texture->getGPUTex()) tex = e->texture.get();
+    }
+
+    particleVerts.clear();
+    particleGroups.clear();
+
+    glm::vec3 camRight = camera.rot * glm::vec3(1, 0, 0);
+    glm::vec3 camUp    = camera.rot * glm::vec3(0, 1, 0);
+    glm::vec3 camFwd   = camera.rot * glm::vec3(0, 0, -1);
+    Utils::Emitter::buildBillboards(particleVerts, particles,
+      cfg, simTime, emitterPos, camRight, camUp, camFwd);
+
+    if(!particleVerts.empty()) {
+      auto info = Utils::Emitter::toRenderInfo(em, cfg);
+      particleGroups.push_back({tex, 0, (uint32_t)particleVerts.size(),
+        info.blend, info.mirrorSampler, info.bilinear, info.alphaThreshold});
+    }
+    ptxRenderRequested = true; // composite runs even with zero particles (background/model)
+  }
+
+  // --- render (composite image below, line/gizmo overlays on the draw list above) ---
   auto *dl = ImGui::GetWindowDrawList();
-  if(refModelUUID != 0 && hasRefRender && fb.getTexture()) {
-    dl->AddImage(ImTextureRef(fb.getTexture()), rectMin, rectMax); // reference model + clear bg
+  if(ptxHasRender && ptxFb.getTexture()) {
+    dl->AddImage(ImTextureRef(ptxFb.getTexture()), rectMin, rectMax); // bg/model + particles
   } else {
     dl->AddRectFilled(rectMin, rectMax, IM_COL32(24, 26, 32, 255));
   }
@@ -388,80 +474,8 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     }
   }
 
-  // resolve the current swap texture
-  ImTextureRef texRef{};
-  bool hasTex = false;
-  if(!seq.empty()) {
-    uint32_t si = PS::swapIndexForTime(cfg, simTime);
-    if(si >= seq.size()) si = 0;
-    auto *e = assets.getEntryByUUID(seq[si]);
-    if(e && e->texture && e->texture->getGPUTex()) {
-      texRef = ImTextureRef(e->texture->getGPUTex());
-      hasTex = true;
-    }
-  }
-
-  glm::vec3 camRight = camera.rot * glm::vec3(1, 0, 0);
-  glm::vec3 camUp = camera.rot * glm::vec3(0, 1, 0);
-  float scroll = PS::uvScrollOffset(cfg, simTime);
-
-  struct Quad { ImVec2 tl, tr, br, bl; float u0, u1; ImU32 col; float depth; };
-  std::vector<Quad> quads;
-  quads.reserve(particles.size());
-
-  for(auto &p : particles) {
-    float t = PS::lifeT(p);
-    glm::vec3 center{p.pos.x, p.pos.y, p.pos.z};
-    if(!cfg.worldSpace) center += emitterPos; // relative particles follow the emitter
-    float ws = PS::sizeAt(cfg, t) * SIZE_TO_WORLD;
-    if(ws < 0.01f) continue;
-
-    ImVec2 sc, sr, su; float dc, dr, du;
-    if(!projectPoint(uniGlobal, vp, rectMin, center, sc, dc)) continue;
-    projectPoint(uniGlobal, vp, rectMin, center + camRight * ws, sr, dr);
-    projectPoint(uniGlobal, vp, rectMin, center + camUp * ws, su, du);
-
-    float hw = std::fabs(sr.x - sc.x); if(hw < 1.0f) hw = 1.0f;
-    float hh = std::fabs(su.y - sc.y); if(hh < 1.0f) hh = 1.0f;
-
-    float col4[4];
-    PS::colorAt(cfg, t, col4);
-    ImU32 col = IM_COL32(
-      (int)(std::clamp(col4[0], 0.0f, 1.0f) * 255.0f),
-      (int)(std::clamp(col4[1], 0.0f, 1.0f) * 255.0f),
-      (int)(std::clamp(col4[2], 0.0f, 1.0f) * 255.0f),
-      (int)(std::clamp(col4[3], 0.0f, 1.0f) * 255.0f));
-
-    uint32_t f = PS::frameForParticle(cfg, p, simTime);
-    float u0 = (float)f / (float)cfg.texFrames + scroll;
-    float u1 = (float)(f + 1) / (float)cfg.texFrames + scroll;
-
-    // rotate the billboard quad by the particle's spin
-    float ang = PS::angleAt(p) * 0.01745329f;
-    float cs = std::cos(ang), sn = std::sin(ang);
-    auto corner = [&](float ox, float oy) {
-      return ImVec2{sc.x + ox * cs - oy * sn, sc.y + ox * sn + oy * cs};
-    };
-
-    Quad q;
-    q.tl = corner(-hw, -hh);
-    q.tr = corner(hw, -hh);
-    q.br = corner(hw, hh);
-    q.bl = corner(-hw, hh);
-    q.u0 = u0; q.u1 = u1; q.col = col; q.depth = dc;
-    quads.push_back(q);
-  }
-
-  std::sort(quads.begin(), quads.end(), [](const Quad &a, const Quad &b){ return a.depth > b.depth; });
-
-  for(auto &q : quads) {
-    if(hasTex) {
-      dl->AddImageQuad(texRef, q.tl, q.tr, q.br, q.bl,
-        {q.u0, 0.0f}, {q.u1, 0.0f}, {q.u1, 1.0f}, {q.u0, 1.0f}, q.col);
-    } else {
-      dl->AddQuadFilled(q.tl, q.tr, q.br, q.bl, q.col);
-    }
-  }
+  // (particle billboards were built above and render into ptxFb via the GPU pipelines —
+  //  the ImGui draw list only carries the wireframe/gizmo/stat overlays now)
 
   dl->PopClipRect();
 

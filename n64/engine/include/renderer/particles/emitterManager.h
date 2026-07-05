@@ -47,7 +47,9 @@ namespace P64::EmitterManager
 {
   void init();
   void update(float deltaTime);
-  void draw();
+  // `camBaseSize` = camera-far-derived tpx base size (see DrawLayer::drawPtx); emitters
+  // scale it per-instance for their normalized size bytes.
+  void draw(float camBaseSize);
   void destroyAll();
 
   // create(): preloaded & NOT playing, refCount=1 — the caller MUST destroy() it.

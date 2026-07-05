@@ -8,6 +8,7 @@
 #include <SDL3/SDL.h>
 
 #include "pipeline.h"
+#include "vertex.h"
 #include "glm/vec3.hpp"
 #include "glm/vec4.hpp"
 
@@ -44,7 +45,13 @@ namespace Renderer
       std::unique_ptr<Pipeline> pipelineN64{};
       std::unique_ptr<Pipeline> pipelineLines{};
       std::unique_ptr<Pipeline> pipelineSprites{};
-      std::unique_ptr<Pipeline> pipelineParticles{};
+      std::unique_ptr<Pipeline> pipelineParticles{};         // alpha blend
+      std::unique_ptr<Pipeline> pipelineParticlesAdd{};      // additive blend
+      std::unique_ptr<Pipeline> pipelineParticlesOpaque{};   // no blend (alpha-clip cutout)
+
+      // [mirror][bilinear] address/filter combos matching the RDP texture state of emitters
+      SDL_GPUSampler* particleSamplers[4]{};
+      SDL_GPUTexture* whiteTex{nullptr}; // 1px white: untextured emitters draw flat-colored quads
 
       std::vector<Light> lights{};
 
@@ -77,5 +84,19 @@ namespace Renderer
         if (name == "particles") return *pipelineParticles;
         throw std::runtime_error("Pipeline not found: " + name);
       }
+
+      Pipeline& getParticlePipeline(ParticleBlend blend) const {
+        switch(blend) {
+          case ParticleBlend::Additive: return *pipelineParticlesAdd;
+          case ParticleBlend::Opaque:   return *pipelineParticlesOpaque;
+          default:                      return *pipelineParticles;
+        }
+      }
+
+      SDL_GPUSampler* getParticleSampler(bool mirror, bool bilinear) const {
+        return particleSamplers[(mirror ? 2 : 0) + (bilinear ? 1 : 0)];
+      }
+
+      SDL_GPUTexture* getWhiteTexture() const { return whiteTex; }
   };
 }

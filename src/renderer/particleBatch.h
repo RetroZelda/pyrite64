@@ -10,6 +10,30 @@
 
 namespace Renderer
 {
+  class Scene;
+  class Texture;
+  struct UniformGlobal;
+
+  // One emitter's slice of a billboard batch plus the hardware-faithful render state the
+  // previews copy from the material (blend mode, filter, mirror addressing, alpha-clip).
+  // The texture is resolved and drawn within the same frame — it never dangles.
+  struct ParticleDrawGroup
+  {
+    Texture* tex;        // null -> 1px white (flat-colored, untextured emitter)
+    uint32_t firstVert;
+    uint32_t vertCount;
+    ParticleBlend blend;
+    bool mirror;
+    bool bilinear;
+    float alphaThreshold;
+  };
+
+  // Draws grouped billboard batches with the matching particle pipeline/sampler per group.
+  // Shared by the scene viewport and the emitter-preview tab so both composite identically.
+  void drawParticleGroups(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Scene& scene,
+    const class ParticleBatch& batch, const UniformGlobal& uniGlobal,
+    const std::vector<ParticleDrawGroup>& groups);
+
   /**
    * A reusable GPU vertex buffer for per-frame particle-billboard batches. It allocates once and
    * only GROWS (never shrinks / reallocates per frame), so a steady particle count never churns

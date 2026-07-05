@@ -89,13 +89,11 @@ namespace Editor
         bool seen{false};        // for stale-sweep
       };
       struct EmitterSubmission { uint64_t objectUUID; uint64_t emitterUUID; glm::vec3 worldPos; };
-      // tex resolved + used in the same frame (copy pass builds, render pass draws) — never dangles.
-      struct ParticleDrawGroup { Renderer::Texture* tex; uint32_t firstVert; uint32_t vertCount; };
 
       std::unordered_map<uint64_t, EmitterSimState> emitterStates{};
       std::vector<EmitterSubmission> emitterSubmissions{};
       std::vector<Renderer::ParticleVertex> particleVerts{};
-      std::vector<ParticleDrawGroup> particleGroups{};
+      std::vector<Renderer::ParticleDrawGroup> particleGroups{};
       std::shared_ptr<Renderer::ParticleBatch> particleBatch{};
 
       void onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::Scene& renderScene);

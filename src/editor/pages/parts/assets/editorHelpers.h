@@ -117,12 +117,16 @@ namespace Editor::Helpers
    * @param usePlaceholder  in the texture sub-sections, expose the dynamic-placeholder
    *                        combo (model materials). When false, a plain texture picker is
    *                        shown — used by emitters, which bind textures directly.
+   * @param emitterMode     only show the settings the emitter build actually bakes into
+   *                        .emit64 (combiner, filter, alpha-clip, blend, fog, prim/env) —
+   *                        everything else would be dead UI for particles.
    */
   inline void drawMaterialSettings(
     Project::Assets::Material &mat,
     const ImVec2 &labelWidth,
     bool includeTextures = true,
-    bool usePlaceholder = true)
+    bool usePlaceholder = true,
+    bool emitterMode = false)
   {
     auto subSection = [&labelWidth](const char* name, auto cb)
     {
@@ -243,11 +247,13 @@ namespace Editor::Helpers
 
     subSection("Sampling", [&]
     {
-      toggleProp("Perspect.", mat.perspSet.value, mat.persp);
+      if(!emitterMode) {
+        toggleProp("Perspect.", mat.perspSet.value, mat.persp);
 
-      toggleProp("Dither", mat.ditherSet.value, [&] {
-        ImGui::Combo("##Dither", &mat.dither.value, DITHER_MODES);
-      });
+        toggleProp("Dither", mat.ditherSet.value, [&] {
+          ImGui::Combo("##Dither", &mat.dither.value, DITHER_MODES);
+        });
+      }
 
       toggleProp("Filtering", mat.filterSet.value, [&] {
         int val = mat.filter.value == 0 ? 0 : 1; // map 2->1
@@ -256,20 +262,23 @@ namespace Editor::Helpers
       });
     });
 
-    if(usage.prim || usage.env || usage.lod || usage.k4k5)
+    if(usage.prim || usage.env || (!emitterMode && (usage.lod || usage.k4k5)))
     {
       subSection("Values", [&]
       {
         if(usage.prim)toggleProp("Prim", mat.primColorSet.value, mat.primColor);
         if(usage.env)toggleProp("Env", mat.envColorSet.value, mat.envColor);
-        if(usage.lod)toggleProp("LOD", mat.primLodSet.value, mat.primLod);
-        if(usage.k4k5)toggleProp("K4/K5", mat.k4k5Set.value, mat.k4k5);
+        if(!emitterMode) {
+          if(usage.lod)toggleProp("LOD", mat.primLodSet.value, mat.primLod);
+          if(usage.k4k5)toggleProp("K4/K5", mat.k4k5Set.value, mat.k4k5);
+        }
 
         mat.primLod.value = glm::clamp(mat.primLod.value, 0u, 255u);
         mat.k4k5.value = glm::clamp(mat.k4k5.value, 0, 255);
       });
     }
 
+    if(!emitterMode)
     subSection("Geometry Modes", [&]
     {
       ImTable::add("Vertex FX");
@@ -294,13 +303,15 @@ namespace Editor::Helpers
         );
       });
 
-      toggleProp("Depth", mat.zmodeSet.value, [&] {
-        ImGui::Combo("##", &mat.zmode.value, Z_MODES);
-      });
+      if(!emitterMode) {
+        toggleProp("Depth", mat.zmodeSet.value, [&] {
+          ImGui::Combo("##", &mat.zmode.value, Z_MODES);
+        });
 
-      toggleProp("Anti-Alias", mat.aaSet.value, [&] {
-        ImGui::Combo("##AA", &mat.aa.value, AA_MODES);
-      });
+        toggleProp("Anti-Alias", mat.aaSet.value, [&] {
+          ImGui::Combo("##AA", &mat.aa.value, AA_MODES);
+        });
+      }
 
       toggleProp("Blending", mat.blenderSet.value, [&]
       {
@@ -321,12 +332,14 @@ namespace Editor::Helpers
         ImTable::addVecComboBox("", fogs, mat.fog.value);
       });
 
-      toggleProp("Fixed-Z", mat.zprimSet.value, [&] {
-        ImGui::SideBySide(
-          [&]{ ImGui::InputInt("##0", &mat.zprim.value); },
-          [&]{ ImGui::InputInt("##1", &mat.zdelta.value); }
-        );
-      });
+      if(!emitterMode) {
+        toggleProp("Fixed-Z", mat.zprimSet.value, [&] {
+          ImGui::SideBySide(
+            [&]{ ImGui::InputInt("##0", &mat.zprim.value); },
+            [&]{ ImGui::InputInt("##1", &mat.zdelta.value); }
+          );
+        });
+      }
     });
   }
 }
