@@ -44,7 +44,10 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
   subSection("Emission", [&]
   {
     ImTable::add("Fire Mode");
-    ImGui::Combo("##fm", &em.fireMode.value, "Continuous\0One-Shot\0");
+    ImGui::Combo("##fm", &em.fireMode.value, "Continuous\0One-Shot\0Fill\0");
+    ImGui::SetItemTooltip("Continuous: emit at Spawn Rate forever.\n"
+      "One-Shot: emit Burst Count particles at once, then stop.\n"
+      "Fill: emit at Spawn Rate until Max Particles have been emitted, then stop.");
 
     if(em.fireMode.value == Em::FIRE_ONE_SHOT) {
       ImTable::addProp("Burst Count", em.burstCount);

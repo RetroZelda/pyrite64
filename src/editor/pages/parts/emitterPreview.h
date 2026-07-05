@@ -81,6 +81,7 @@ namespace Editor
       P64::ParticleSim::Rng rng{};
       float spawnAccum{0.0f};
       float simTime{0.0f};
+      uint32_t fillEmitted{0}; // FIRE_FILL: running total emitted this cycle (caps the fill)
       bool playing{true};
       bool oneShotPending{true};
 

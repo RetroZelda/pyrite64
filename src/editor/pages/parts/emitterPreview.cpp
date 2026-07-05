@@ -202,6 +202,7 @@ void Editor::EmitterPreview::reset()
   particles.clear();
   spawnAccum = 0.0f;
   simTime = 0.0f;
+  fillEmitted = 0;
   rng.seed(0x9E3779B9u); // fixed seed -> deterministic, matches engine when same-seeded
   oneShotPending = true;
   emitterPos = {0, 0, 0};
@@ -359,7 +360,7 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
     simTime += dt;
     uint32_t used = (uint32_t)particles.size();
     uint32_t freeSlots = cfg.maxParticles > used ? cfg.maxParticles - used : 0;
-    uint32_t n = PS::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending);
+    uint32_t n = PS::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending, fillEmitted);
     PS::Vec3 origin{emitterPos.x - anchor.x, emitterPos.y - anchor.y, emitterPos.z - anchor.z};
     for(uint32_t i = 0; i < n; ++i) particles.push_back(PS::spawn(cfg, rng, origin));
 
@@ -371,8 +372,11 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
         ++i;
       }
     }
-    if(cfg.fireMode == PS::FIRE_ONE_SHOT && particles.empty() && !oneShotPending) {
-      oneShotPending = true; // loop the one-shot preview
+    // loop the finite-emission previews (one-shot burst / fill quota) once they've drained
+    if((cfg.fireMode == PS::FIRE_ONE_SHOT || cfg.fireMode == PS::FIRE_FILL)
+       && particles.empty() && !oneShotPending) {
+      oneShotPending = true;
+      fillEmitted = 0; // re-arm the fill quota
     }
   }
 
@@ -536,9 +540,10 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
 
     const char* spaceName = cfg.simSpace == PS::SPACE_WORLD ? "World"
       : cfg.simSpace == PS::SPACE_PARENT ? "Parent (static here)" : "Relative";
+    const char* fireName = cfg.fireMode == PS::FIRE_ONE_SHOT ? "One-Shot"
+      : cfg.fireMode == PS::FIRE_FILL ? "Fill" : "Continuous";
     snprintf(line, sizeof(line), "%s  |  %u / %u particles  |  %s",
-      cfg.fireMode == PS::FIRE_ONE_SHOT ? "One-Shot" : "Continuous",
-      (uint32_t)particles.size(), cfg.maxParticles, spaceName);
+      fireName, (uint32_t)particles.size(), cfg.maxParticles, spaceName);
     put(line);
     snprintf(line, sizeof(line), "spawn %.0f/s   life %.2fs   reserved ~%u B",
       cfg.spawnRate, cfg.lifetime, cfg.maxParticles * 12u);

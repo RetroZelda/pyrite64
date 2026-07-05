@@ -38,7 +38,9 @@ namespace P64::ParticleSim
   inline float lerp(float a, float b, float t) { return a + (b - a) * t; }
 
   // -- enums (mirror Project::Assets::Emitter / engine EmitterDef) --
-  enum FireMode { FIRE_CONTINUOUS = 0, FIRE_ONE_SHOT = 1 };
+  // FIRE_FILL: emit at spawnRate (like CONTINUOUS) but only until a cumulative maxParticles
+  // have been emitted, then stop — a spread-over-time one-shot that fills the buffer once.
+  enum FireMode { FIRE_CONTINUOUS = 0, FIRE_ONE_SHOT = 1, FIRE_FILL = 2 };
   enum Shape    { SHAPE_POINT = 0, SHAPE_SPHERE = 1, SHAPE_BOX = 2, SHAPE_CONE = 3 };
   enum AnimMode { ANIM_OFF = 0, ANIM_LOOP = 1, ANIM_OVER_LIFETIME = 2, ANIM_RANDOM_STATIC = 3 };
   // What already-spawned particles are anchored to (what they move with):
@@ -327,8 +329,12 @@ namespace P64::ParticleSim
 
   // Spawn scheduler: returns how many particles to emit this frame given remaining
   // capacity. `accum` carries the continuous fractional remainder between frames.
-  // For one-shot, pass the per-emitter `firstFrame` flag and it bursts once.
-  inline uint32_t spawnCount(const Config &cfg, float dt, float &accum, uint32_t freeSlots, bool &oneShotPending)
+  // `oneShotPending` is the per-emitter "finite emission not yet complete" latch: for
+  // FIRE_ONE_SHOT it gates the single burst; for FIRE_FILL it goes false once the fill
+  // quota is met so the emitter stops spawning (then drains). `emitted` accumulates the
+  // running total emitted since reset — only FIRE_FILL uses it (to cap at maxParticles).
+  inline uint32_t spawnCount(const Config &cfg, float dt, float &accum, uint32_t freeSlots,
+                             bool &oneShotPending, uint32_t &emitted)
   {
     if(cfg.fireMode == FIRE_ONE_SHOT) {
       if(!oneShotPending) return 0;
@@ -336,9 +342,21 @@ namespace P64::ParticleSim
       uint32_t n = cfg.burstCount;
       return n > freeSlots ? freeSlots : n;
     }
+
+    // FIRE_FILL that already emitted its full quota: stop (existing particles drain out).
+    if(cfg.fireMode == FIRE_FILL && !oneShotPending) return 0;
+
     accum += cfg.spawnRate * dt;
     uint32_t n = (uint32_t)accum;
     accum -= (float)n;
-    return n > freeSlots ? freeSlots : n;
+    if(n > freeSlots) n = freeSlots;
+
+    if(cfg.fireMode == FIRE_FILL) {
+      uint32_t remaining = cfg.maxParticles > emitted ? cfg.maxParticles - emitted : 0;
+      if(n > remaining) n = remaining;
+      emitted += n;
+      if(emitted >= cfg.maxParticles) oneShotPending = false; // filled -> stop spawning
+    }
+    return n;
   }
 }

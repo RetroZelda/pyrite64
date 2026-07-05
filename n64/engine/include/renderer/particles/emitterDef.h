@@ -18,7 +18,7 @@ namespace P64::PTX
     EMAT_ENV      = 1 << 5,
   };
 
-  enum EmitterFireMode : uint8_t { EMIT_CONTINUOUS = 0, EMIT_ONE_SHOT = 1 };
+  enum EmitterFireMode : uint8_t { EMIT_CONTINUOUS = 0, EMIT_ONE_SHOT = 1, EMIT_FILL = 2 };
   enum EmitterShape    : uint8_t { ESHAPE_POINT = 0, ESHAPE_SPHERE = 1, ESHAPE_BOX = 2, ESHAPE_CONE = 3 };
   enum EmitterAnimMode : uint8_t { EANIM_OFF = 0, EANIM_LOOP = 1, EANIM_OVER_LIFETIME = 2, EANIM_RANDOM = 3 };
   // mirrors ParticleSim::SimSpace — what spawned particles are anchored to

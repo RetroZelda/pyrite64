@@ -561,7 +561,7 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       state.seen = true;
       if(state.emitterUUID != sub.emitterUUID) { // first appearance or asset swap -> (re)init
         state.particles.clear();
-        state.simTime = 0.0f; state.spawnAccum = 0.0f; state.oneShotPending = true;
+        state.simTime = 0.0f; state.spawnAccum = 0.0f; state.oneShotPending = true; state.fillEmitted = 0;
         state.emitterUUID = sub.emitterUUID;
         state.rng.seed((uint32_t)(sub.objectUUID ^ (sub.objectUUID >> 32)) | 1u);
       }
@@ -576,7 +576,7 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
       state.simTime += dt;
       uint32_t used = (uint32_t)state.particles.size();
       uint32_t freeSlots = cfg.maxParticles > used ? cfg.maxParticles - used : 0;
-      uint32_t n = PS::spawnCount(cfg, dt, state.spawnAccum, freeSlots, state.oneShotPending);
+      uint32_t n = PS::spawnCount(cfg, dt, state.spawnAccum, freeSlots, state.oneShotPending, state.fillEmitted);
       // sim-space anchor particles are stored relative to (and follow): EMITTER -> the emitter,
       // WORLD -> the world origin, PARENT -> the object's parent (matches the engine runtime)
       glm::vec3 anchor{0.0f};
@@ -588,7 +588,8 @@ void Editor::Viewport3D::buildParticles(SDL_GPUCopyPass* copyPass)
         if(!PS::step(state.particles[i], cfg, dt)) { state.particles[i] = state.particles.back(); state.particles.pop_back(); }
         else ++i;
       }
-      if(cfg.fireMode == PS::FIRE_ONE_SHOT && state.particles.empty() && !state.oneShotPending) state.oneShotPending = true;
+      if((cfg.fireMode == PS::FIRE_ONE_SHOT || cfg.fireMode == PS::FIRE_FILL)
+         && state.particles.empty() && !state.oneShotPending) { state.oneShotPending = true; state.fillEmitted = 0; }
       if(state.particles.empty()) continue;
 
       // resolve the current swap texture (none -> flat-colored quads, like the hardware path)

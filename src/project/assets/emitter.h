@@ -34,6 +34,7 @@ namespace Project::Assets
     // -- fire mode --
     static constexpr int FIRE_CONTINUOUS = 0;
     static constexpr int FIRE_ONE_SHOT   = 1;
+    static constexpr int FIRE_FILL       = 2; // emit at spawnRate until maxParticles emitted, then stop
 
     // -- emission shape --
     static constexpr int SHAPE_POINT  = 0;

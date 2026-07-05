@@ -186,6 +186,7 @@ void P64::PTX::EmitterInstance::reset()
 {
   spawnAccum = 0.0f;
   emitterTime = 0.0f;
+  fillEmitted = 0;
   oneShotPending = true;
   emitting = true;
   lastSwapIdx = 0xFFFF;
@@ -196,8 +197,10 @@ bool P64::PTX::EmitterInstance::finished() const
 {
   if(system && system->count > 0) return false; // still has live particles to drain
   if(!emitting) return true;                     // stopped spawning and everything has drained
-  // Still emitting: only a one-shot that already fired its single burst is finished.
-  return cfg.fireMode == ParticleSim::FIRE_ONE_SHOT && !oneShotPending;
+  // Still emitting: a finite mode is finished once its emission completed (oneShotPending
+  // latched false) — a one-shot after its single burst, or a fill after its quota.
+  return (cfg.fireMode == ParticleSim::FIRE_ONE_SHOT || cfg.fireMode == ParticleSim::FIRE_FILL)
+         && !oneShotPending;
 }
 
 void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool haveCam)
@@ -215,7 +218,7 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
 
   // spawn (skipped once emission is stopped: the live particles keep draining, none are added)
   uint32_t freeSlots = cfg.maxParticles > system->count ? cfg.maxParticles - system->count : 0;
-  uint32_t n = emitting ? ParticleSim::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending) : 0;
+  uint32_t n = emitting ? ParticleSim::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending, fillEmitted) : 0;
   ParticleSim::Vec3 origin{pos.x - follow.x, pos.y - follow.y, pos.z - follow.z}; // emitter in anchor space
   for(uint32_t i = 0; i < n; ++i) {
     parts[system->count] = ParticleSim::spawn(cfg, rng, origin);

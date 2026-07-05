@@ -37,6 +37,7 @@ namespace P64::PTX
       ParticleSim::Rng rng{};
       float spawnAccum{0.0f};
       float emitterTime{0.0f};
+      uint32_t fillEmitted{0};    // FIRE_FILL: running total spawned since reset (caps the fill)
       bool oneShotPending{true};
       bool emitting{true};        // false: stopped spawning, existing particles drain then finished()
       bool textured{false};       // any resolvable texture -> TEX_A_S16 draw path
