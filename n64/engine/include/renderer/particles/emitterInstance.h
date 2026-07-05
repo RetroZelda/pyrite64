@@ -38,6 +38,7 @@ namespace P64::PTX
       float spawnAccum{0.0f};
       float emitterTime{0.0f};
       bool oneShotPending{true};
+      bool emitting{true};        // false: stopped spawning, existing particles drain then finished()
       bool textured{false};       // any resolvable texture -> TEX_A_S16 draw path
       float tint[4]{1, 1, 1, 1};  // material prim color, folded into per-particle colors
       uint32_t lastSwapIdx{0xFFFF};
@@ -51,6 +52,11 @@ namespace P64::PTX
       void teardown();
       void reset(); // restart the emission from scratch (keeps allocations)
 
+      // Graceful stop: stop spawning new particles but keep updating/drawing the live ones
+      // until they all die. Once drained, finished() reports true so the manager reclaims it.
+      void stopEmitting() { emitting = false; }
+      [[nodiscard]] bool isEmitting() const { return emitting; }
+
       // `camPos`/`haveCam` let update() sort live particles back-to-front (matches the editor
       // preview) so overlapping transparent particles layer correctly; pass haveCam=false to skip.
       void update(float dt, const fm_vec3_t &camPos, bool haveCam);
@@ -61,7 +67,7 @@ namespace P64::PTX
       void setPos(const fm_vec3_t &p) { pos = p; }
       void move(const fm_vec3_t &delta) { pos.x += delta.x; pos.y += delta.y; pos.z += delta.z; }
 
-      [[nodiscard]] bool finished() const; // one-shot drained
+      [[nodiscard]] bool finished() const; // no live particles left and no more will spawn
       [[nodiscard]] uint32_t aliveCount() const { return system ? system->count : 0; }
       [[nodiscard]] uint32_t maxParticles() const { return def ? def->maxParticles : 0; }
       [[nodiscard]] const EmitterDef* getDef() const { return def; }

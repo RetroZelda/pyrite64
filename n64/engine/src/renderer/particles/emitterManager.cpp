@@ -108,7 +108,8 @@ void P64::EmitterManager::update(float deltaTime)
   bool haveCam = false;
   if(cam) { camPos = cam->getPos(); haveCam = true; }
 
-  // simulate only playing slots; a finished one-shot stops (reclaimed next pass if refCount==0)
+  // simulate only playing slots; a drained emitter (one-shot burst done, or stopped and its
+  // last particle died) stops here and is reclaimed next pass if refCount==0
   for(auto &s : slots) {
     if(s.used && s.playing) {
       s.inst.update(deltaTime, camPos, haveCam);
@@ -186,9 +187,15 @@ bool P64::PTX::Handle::isPlaying() const
   return s && s->playing;
 }
 
-void P64::PTX::Handle::stop()
+void P64::PTX::Handle::stop(bool immediate)
 {
-  if(Slot* s = validSlot(slot, uuid)) s->playing = false;
+  Slot* s = validSlot(slot, uuid);
+  if(!s) return;
+  if(immediate) {
+    s->playing = false;     // stop updating/drawing now; live particles are dropped
+  } else {
+    s->inst.stopEmitting(); // stop spawning; keep drawing until the last particle dies
+  }
 }
 
 void P64::PTX::Handle::replay()
@@ -196,16 +203,21 @@ void P64::PTX::Handle::replay()
   if(Slot* s = validSlot(slot, uuid)) { s->inst.reset(); s->playing = true; }
 }
 
-void P64::PTX::Handle::destroy()
+void P64::PTX::Handle::destroy(bool immediate)
 {
   Slot* s = validSlot(slot, uuid);
   if(!s) return;
   if(s->refCount > 0) s->refCount--;
-  // A continuous emitter never finishes on its own; once unreferenced, stop it so the
-  // lazy-cleanup pass can reclaim it (one-shots are left to finish naturally).
-  if(s->refCount == 0 && s->playing && s->inst.getDef()
-     && s->inst.getDef()->fireMode == EMIT_CONTINUOUS) {
+  if(s->refCount > 0) return; // still owned by another reference
+
+  // Last reference released. By default let any live particles finish: stop spawning but keep
+  // `playing` so the update loop drains it and reclaims the slot once finished(). A continuous
+  // emitter would otherwise never finish on its own; stopEmitting() makes it drainable.
+  // immediate=true clears `playing` so the lazy-cleanup pass frees the slot next update.
+  if(immediate) {
     s->playing = false;
+  } else {
+    s->inst.stopEmitting();
   }
 }
 

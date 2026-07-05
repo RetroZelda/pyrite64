@@ -186,13 +186,17 @@ void P64::PTX::EmitterInstance::reset()
   spawnAccum = 0.0f;
   emitterTime = 0.0f;
   oneShotPending = true;
+  emitting = true;
   lastSwapIdx = 0xFFFF;
   if(system) system->count = 0;
 }
 
 bool P64::PTX::EmitterInstance::finished() const
 {
-  return cfg.fireMode == ParticleSim::FIRE_ONE_SHOT && system && system->count == 0 && !oneShotPending;
+  if(system && system->count > 0) return false; // still has live particles to drain
+  if(!emitting) return true;                     // stopped spawning and everything has drained
+  // Still emitting: only a one-shot that already fired its single burst is finished.
+  return cfg.fireMode == ParticleSim::FIRE_ONE_SHOT && !oneShotPending;
 }
 
 void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool haveCam)
@@ -200,9 +204,9 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
   if(!system || !parts) return;
   emitterTime += dt;
 
-  // spawn
+  // spawn (skipped once emission is stopped: the live particles keep draining, none are added)
   uint32_t freeSlots = cfg.maxParticles > system->count ? cfg.maxParticles - system->count : 0;
-  uint32_t n = ParticleSim::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending);
+  uint32_t n = emitting ? ParticleSim::spawnCount(cfg, dt, spawnAccum, freeSlots, oneShotPending) : 0;
   ParticleSim::Vec3 origin = cfg.worldSpace ? ParticleSim::Vec3{pos.x, pos.y, pos.z} : ParticleSim::Vec3{};
   for(uint32_t i = 0; i < n; ++i) {
     parts[system->count] = ParticleSim::spawn(cfg, rng, origin);
@@ -261,9 +265,8 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
     *tpx_buffer_s16_get_tex_offset(buff, i) = (uint8_t)(frame * (uint32_t)FRAME_STRIDE);
   }
 
-  if(cfg.fireMode == ParticleSim::FIRE_ONE_SHOT && system->count == 0 && !oneShotPending) {
-    // drained — handled by the manager (reclaim/stop)
-  }
+  // Draining (one-shot burst done, or emission stopped) is detected via finished() and the
+  // reclaim/stop is handled by the manager's update loop.
 
   // refresh the transform matrix: relative emitters follow `pos`, world-space emitters are baked.
   if(mat) {

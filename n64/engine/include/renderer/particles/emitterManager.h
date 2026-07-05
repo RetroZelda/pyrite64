@@ -29,9 +29,15 @@ namespace P64::PTX
       [[nodiscard]] bool isValid() const;
       [[nodiscard]] bool isPlaying() const;
 
-      void stop();    // stop emitting/drawing (kept alive if refCount>0)
+      // Graceful by default: stop spawning but let the live particles finish (keeps updating &
+      // drawing until drained). immediate=true stops now (particles vanish this frame).
+      // Kept alive if refCount>0 either way (replay() can restart it).
+      void stop(bool immediate = false);
       void replay();  // restart emission from scratch and play
-      void destroy(); // release the owning reference (pairs with create())
+      // Release the owning reference (pairs with create()). Graceful by default: once the last
+      // reference is gone the emitter stops spawning and drains its live particles before the
+      // slot is reclaimed. immediate=true reclaims as soon as unreferenced (particles vanish).
+      void destroy(bool immediate = false);
       void setPos(const fm_vec3_t &p);
       void move(const fm_vec3_t &delta);
   };
@@ -42,6 +48,11 @@ namespace P64::PTX
  * ref-counted handles. Two-list behaviour is achieved by branching on `playing`: update()
  * and draw() only touch playing slots; alive-but-idle slots (refCount>0, not playing) cost
  * nothing. Slots are reclaimed when not playing and refCount hits 0.
+ *
+ * stop()/destroy() are graceful by default: they stop the emitter spawning but keep it
+ * `playing` so its live particles drain out normally; once finished() (no particles left) the
+ * update loop clears `playing` and the slot is reclaimed. Pass immediate=true to skip the
+ * drain and drop the particles at once.
  */
 namespace P64::EmitterManager
 {
