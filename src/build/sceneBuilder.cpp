@@ -6,6 +6,7 @@
 #include "../utils/string.h"
 #include <filesystem>
 #include <algorithm>
+#include <stdexcept>
 
 #include "../utils/binaryFile.h"
 #include "../utils/fs.h"
@@ -61,12 +62,17 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
       Project::Component::TABLE[comp.id].funcBuild(obj, comp, ctx);
     } else {
       Utils::Logger::log("Component ID not found: " + std::to_string(comp.id), Utils::Logger::LEVEL_ERROR);
-      assert(false);
+      throw std::runtime_error("Object '" + obj.name + "': unknown component id " + std::to_string(comp.id));
     }
 
     ctx.fileObj.align(4);
     auto size = (ctx.fileObj.getPos() - compPos) / 4;
-    assert(size < 256);
+    // the record size is a u8 word count: a bigger record would corrupt the whole object stream,
+    // so fail the build (nothing gets written) instead of truncating it
+    if (size > 255) {
+      throw std::runtime_error("Component '" + comp.name + "' (" + std::string(Project::Component::TABLE[comp.id].name)
+        + ") on object '" + obj.name + "' is " + std::to_string(size * 4) + " bytes; the limit is 1020 bytes (255 words)");
+    }
 
     ctx.fileObj.posPush(compPos);
     ctx.fileObj.write<uint8_t>(comp.id);
@@ -87,12 +93,36 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
     }
   }
 
-  // sort by component prio
+  // Some components can only exist once per object (the runtime uses the first one, e.g. for
+  // object references). Object::addComponent() refuses a second one, but a prefab can still pass
+  // one on to an instance that has its own (an instance in a scene that was not loaded when it was
+  // added to the prefab, or a hand-edited file): warn, older projects must keep building.
+  const size_t prefabCompCount = srcObj != &obj ? srcObj->components.size() : 0;
+  for (int singleId : {11, 14}) // rigidbody, spline
+  {
+    size_t count = 0;
+    size_t fromPrefab = 0;
+    for (size_t i = 0; i < compList.size(); ++i) {
+      if (compList[i]->id != singleId)continue;
+      ++count;
+      if (i < prefabCompCount)++fromPrefab;
+    }
+    if (count > 1) {
+      Utils::Logger::log("Object '" + obj.name + "' has " + std::to_string(count) + " "
+        + std::string(Project::Component::TABLE[singleId].name) + " components"
+        + (fromPrefab > 0 && fromPrefab < count ? " (from its prefab and its own)" : "")
+        + ", but only one per object is supported: remove the extra one", Utils::Logger::LEVEL_WARN);
+    }
+  }
+
+  // sort by component prio (unknown ids sort as 0, saveComp() then fails the build for them)
+  auto getPrio = [](const Project::Component::Entry* comp) {
+    bool known = comp->id >= 0 && comp->id < (int)Project::Component::TABLE.size();
+    return known ? Project::Component::TABLE[comp->id].prio : 0;
+  };
   std::stable_sort(compList.begin(), compList.end(),
-    [](const Project::Component::Entry* a, const Project::Component::Entry* b) {
-      int prioA = Project::Component::TABLE[a->id].prio;
-      int prioB = Project::Component::TABLE[b->id].prio;
-      return prioA < prioB;
+    [&getPrio](const Project::Component::Entry* a, const Project::Component::Entry* b) {
+      return getPrio(a) < getPrio(b);
     }
   );
 

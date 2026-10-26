@@ -16,6 +16,7 @@
 #include "../utils/json.h"
 #include "../utils/proc.h"
 #include "undoRedo.h"
+#include "splineEdit.h"
 #include "pages/editorScene.h"
 //#include <stacktrace>
 
@@ -187,7 +188,8 @@ namespace Editor::Actions
     });
 
     registerAction(Type::COPY, [](const std::string&) {
-      if(!ctx.project)return false;
+      // while editing spline points, Ctrl+C / Ctrl+V must not copy / paste whole objects
+      if(!ctx.project || SplineEdit::isEditing())return false;
       auto scene = ctx.project->getScenes().getLoadedScene();
       if(!scene)return false;
 
@@ -229,7 +231,7 @@ namespace Editor::Actions
     });
 
     registerAction(Type::PASTE, [](const std::string&) {
-      if(!ctx.project || ctx.clipboard.entries.empty())return false;
+      if(!ctx.project || ctx.clipboard.entries.empty() || SplineEdit::isEditing())return false;
       auto scene = ctx.project->getScenes().getLoadedScene();
       if(!scene)return false;
 

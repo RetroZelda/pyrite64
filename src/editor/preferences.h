@@ -48,6 +48,9 @@ namespace Editor
     glm::vec4 cameraLineColor       = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 cameraLineColorSelected = {1.0f, 0.7, 0.18f, 1.0f};
     glm::vec4 culledLineColor       = {1.0f, 0.0f, 0.0f, 1.0f};
+    float splineLineThickness = 2.5f;
+    glm::vec4 splineLineColor         = {0.15f, 0.75f, 0.85f, 1.0f};
+    glm::vec4 splineLineColorSelected = {1.0f, 0.75f, 0.2f, 1.0f};
 
     // ctx.prefs.culledLineThickness
     void load();

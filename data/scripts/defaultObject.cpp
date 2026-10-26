@@ -11,11 +11,18 @@ namespace P64::Script::__UUID__
     // - uint8_t, int8_t, uint16_t, int16_t, uint32_t, int32_t
     // - float
     // - AssetRef<sprite_t>
-    // - ObjectRef
+    // - ObjectRef (only objects placed directly in a scene: it is 0 inside prefabs and for spawned objects)
     //
     // For unsigned integers (uint8_t/uint16_t/uint32_t) you can add a
     // [[P64::Bitmask("0=Fire, 1=Water, 2=Earth")]] attribute to edit them as a
     // named multi-select of bits instead of a plain number.
+    // [[P64::Enum("0=Off, 1=On")]] on integers shows a select-box with named values, and
+    // [[P64::RequireComponent("Spline")]] on an ObjectRef only lists objects with that component.
+    // Bitmask / Enum numbers can be decimal or 0x hex.
+    // Put several attributes into one block: [[P64::Name("Mode"), P64::Enum("0=A, 1=B")]]
+    //
+    // Avoid member names the object already uses (pos, rot, scale, ...):
+    // prefab instances can't override such a member while that property is overridden.
     //
     // Other types can be used but are not exposed in the editor.
   );

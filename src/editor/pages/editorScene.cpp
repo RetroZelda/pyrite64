@@ -11,6 +11,7 @@
 #include "../actions.h"
 #include "../undoRedo.h"
 #include "../canvasHistory.h"
+#include "../splineEdit.h"
 #include "../../context.h"
 #include "../../project/assets/emitter.h"
 
@@ -228,6 +229,10 @@ void Editor::Scene::draw()
     }
   }
 
+  // Spline point editor: end the session / clamp its point selection after undo, reloads,
+  // reconcile or selection changes (no-op during builds), before anything draws it.
+  SplineEdit::validate(ctx.project ? ctx.project->getScenes().getLoadedScene() : nullptr);
+
   // Safe point to destroy viewports closed last frame: their render has completed.
   viewportsPendingClose.clear();
 
@@ -326,7 +331,9 @@ void Editor::Scene::draw()
     auto &vp = viewports[i];
     bool open = true;
     std::string title = vp->getWindowTitle();
-    if(ImGui::Begin(title.c_str(), &open)) {
+    // No keyboard nav: the viewport's keys (e.g. Tab = Toggle Point Edit / ortho) would also tab
+    // nav focus onto the toolbar's camera combo, which Space / Enter then open.
+    if(ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoNavInputs)) {
       // Right-clicking the docked tab offers opening another viewport.
       ImGuiWindow* win = ImGui::GetCurrentWindow();
       if(win->DockIsActive &&
@@ -340,6 +347,7 @@ void Editor::Scene::draw()
       }
       vp->draw();
       if(vp->isViewHovered()) hoveredViewport = vp;
+      if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) activeViewport = vp;
     }
     ImGui::End();
     if(!open) viewportsToClose.push_back(i);
@@ -560,8 +568,13 @@ void Editor::Scene::draw()
   }
   else if (ctx.project->getScenes().getLoadedScene())
   {
+    // Objects the Graph adds to the scene root start in the middle of the 3D viewport the user
+    // last worked in (the first one before any was focused), so they are in view right away.
+    auto activeVp = activeViewport.lock();
+    if(!activeVp && !viewports.empty()) activeVp = viewports.front();
+
     ImGui::Begin("Graph");
-      sceneGraph.draw();
+      sceneGraph.draw(activeVp ? activeVp->getViewCenter() : glm::vec3{0.0f});
     ImGui::End();
 
     ImGui::Begin("Scene");

@@ -3,6 +3,7 @@
 * @license MIT
 */
 #pragma once
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -21,6 +22,10 @@ namespace Utils::CPP
     // Parsed [[P64::Bitmask("0=Fire, 1=Water")]] entries as (bit-index, name) pairs.
     // Only populated for unsigned integer fields that carry the attribute.
     std::vector<std::pair<int, std::string>> bitmask;
+    // Parsed [[P64::Enum("0=Auto, 1=Loop")]] entries as (value, name) pairs.
+    // Only populated for integer fields that carry the attribute.
+    // 64-bit, so every value of the member type fits (e.g. 3000000000 for a uint32_t).
+    std::vector<std::pair<int64_t, std::string>> enumValues;
   };
 
   struct Struct {

@@ -25,3 +25,4 @@ Components
   components/audio2d
   components/code
   components/nodeGraph
+  components/spline

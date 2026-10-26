@@ -45,6 +45,12 @@ namespace Editor::Input {
     ImGuiKey deleteObject   = ImGuiKey_Delete;
     ImGuiKey snapObject     = ImGuiKey_S;
 
+    // Spline point editor
+    ImGuiKey splineEditToggle  = ImGuiKey_Tab;
+    ImGuiKey splineExtrude     = ImGuiKey_E;
+    ImGuiKey splineInsertPoint = ImGuiKey_I;
+    ImGuiKeyChord splineSelectAll = ImGuiMod_Ctrl | ImGuiKey_A;
+
     nlohmann::json serialize(KeymapPreset preset) const;
     void deserialize(const nlohmann::json& parent, KeymapPreset preset);
   };
@@ -57,8 +63,10 @@ namespace Editor::Input {
     .toggleOrtho      = ImGuiKey_Tab, 
     .focusObject      = ImGuiKey_F,  
     .gizmoTranslate   = ImGuiKey_W,  
-    .gizmoRotate      = ImGuiKey_E,  
+    .gizmoRotate      = ImGuiKey_E,
     .gizmoScale       = ImGuiKey_R,
+    .splineEditToggle = ImGuiKey_P,
+    .splineExtrude    = ImGuiKey_N,
   };
 
   std::string GetKeyChordName(ImGuiKeyChord key_chord);

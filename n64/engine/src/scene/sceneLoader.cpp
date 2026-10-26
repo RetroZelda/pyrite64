@@ -132,10 +132,10 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
   while(ptrIn[1] != 0)
   {
     uint8_t compId = ptrIn[0];
-    uint8_t argSize = ptrIn[1] * 4;
+    uint32_t argSize = (uint32_t)ptrIn[1] * 4u; // u8 word count incl. the header: up to 1020 bytes
 
     const auto &compDef = COMP_TABLE[compId];
-    // debugf("Alloc: comp %d (arg: %d)\n", compId, argSize);
+    // debugf("Alloc: comp %d (arg: %lu)\n", compId, argSize);
 
     objCompTablePtr->type = compId;
     objCompTablePtr->flags = 0;

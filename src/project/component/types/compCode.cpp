@@ -5,11 +5,20 @@
 #include "../components.h"
 #include "../../../context.h"
 #include "../../../editor/imgui/helper.h"
+#include "../../../editor/imgui/notification.h"
 #include "../../../utils/json.h"
 #include "../../../utils/jsonBuilder.h"
 #include "../../../utils/binaryFile.h"
 #include "../../../utils/logger.h"
 #include "../../../utils/string.h"
+#include <algorithm>
+#include <cctype>
+#include <compare>
+#include <cstring>
+#include <functional>
+#include <iterator>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace Project::Component::Code
 {
@@ -19,6 +28,110 @@ namespace Project::Component::Code
     bool openScriptComboBox{true}; // Open the Script ComboBox when the component is added
     std::unordered_map<std::string, PropString> args{};
   };
+
+  namespace
+  {
+    // Instance overrides of args live in Object::propOverrides, keyed by crc64(field name) like every other
+    // property of the object (transform, other components). So a field named e.g. "scale" shares its key
+    // with the transform scale. Args only ever store string overrides: an entry of another type belongs
+    // to that other property, it is never used as the arg's value and never changed through the arg.
+    GenericValue* findArgOverride(Object &obj, const PropString &prop)
+    {
+      auto it = obj.propOverrides.find(prop.id);
+      if (it == obj.propOverrides.end() || it->second.type != GenericValue::typeToId<std::string>())return nullptr;
+      return &it->second;
+    }
+
+    bool isArgKeyTaken(const Object &obj, const PropString &prop)
+    {
+      auto it = obj.propOverrides.find(prop.id);
+      return it != obj.propOverrides.end() && it->second.type != GenericValue::typeToId<std::string>();
+    }
+
+    // Value of the arg on this object: its instance override, otherwise the value of the component
+    std::string& resolveArg(Object &obj, PropString &prop)
+    {
+      auto *ovr = findArgOverride(obj, prop);
+      return ovr ? ovr->valString : prop.value;
+    }
+
+    std::string getKeyTakenTooltip(const Utils::CPP::Field &field)
+    {
+      return "Can't override, another property of this object is also named '" + field.name + "'";
+    }
+
+    // Overriding an arg whose key is taken would replace the other property's override (see findArgOverride)
+    void refuseArgOverride(const Object &obj, const Utils::CPP::Field &field, const std::string &label)
+    {
+      std::string msg = "Can't override '" + label + "' on '" + obj.name + "': its script field '" + field.name
+        + "' has the same name as another property of the object, which already uses that override."
+        + " Rename the field in the script to override it per instance.";
+      Utils::Logger::log(msg, Utils::Logger::LEVEL_WARN);
+      Editor::Noti::add(Editor::Noti::ERROR, msg);
+    }
+
+    // Instance row of an arg whose key is taken, drawn like an arg that is not overridden:
+    // the component's value (read-only), with a lock that refuses to enable the override.
+    void drawKeyTakenArg(
+      Object &obj, const Utils::CPP::Field &field, const std::string &label, PropString &prop,
+      const std::function<bool(std::string*)> &editFunc
+    ) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text("%s", label.c_str());
+      ImGui::TableSetColumnIndex(1);
+
+      ImGui::PushID(&prop);
+      ImGui::BeginDisabled();
+
+      bool isOverride = false;
+      if (ImGui::IconToggle(isOverride, ICON_MDI_LOCK_OPEN, ICON_MDI_LOCK, ImVec2{16,16})) {
+        refuseArgOverride(obj, field, label);
+      }
+      ImGui::SetItemTooltip("%s", getKeyTakenTooltip(field).c_str());
+      ImGui::SameLine();
+
+      std::string value = prop.value; // a copy, nothing is written here
+      editFunc(&value);
+
+      ImGui::EndDisabled();
+      ImGui::PopID();
+    }
+
+    // Component id an ObjectRef with [[P64::RequireComponent("Spline")]] asks for, -1 without the attribute.
+    // The name has to match a component exactly. An unknown one (e.g. "spline") can't filter anything:
+    // `warning` is set for the inspector and the problem is logged once per script field.
+    int getRequiredComponent(const AssetManagerEntry &script, const Utils::CPP::Field &field, std::string &warning)
+    {
+      auto requireAttr = field.attr.find("P64::RequireComponent");
+      if (requireAttr == field.attr.end())return -1;
+
+      const std::string &compName = requireAttr->second;
+      const char *similarName = nullptr; // same name in another case, to suggest it
+      for (const auto &info : TABLE) {
+        if (compName == info.name)return info.id;
+
+        bool isSimilar = std::equal(compName.begin(), compName.end(), info.name, info.name + strlen(info.name),
+          [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); }
+        );
+        if (isSimilar)similarName = info.name;
+      }
+
+      std::string suggestion = similarName ? ("did you mean \"" + std::string{similarName} + "\"?") : "";
+      warning = "Unknown component \"" + compName + "\"" + (similarName ? ", " + suggestion : "");
+
+      static std::unordered_set<std::string> warned{};
+      if (warned.insert(std::to_string(script.getUUID()) + ":" + field.name + ":" + compName).second) {
+        Utils::Logger::log(
+          "Script " + script.name + ", field " + field.name + ": P64::RequireComponent(\"" + compName
+            + "\") is not a component name, so all objects are offered" + (similarName ? " (" + suggestion + ")" : "") + ".",
+          Utils::Logger::LEVEL_WARN
+        );
+      }
+      return -1;
+    }
+  }
 
   std::shared_ptr<void> init(Object &obj) {
     auto data = std::make_shared<Data>();
@@ -72,7 +185,8 @@ namespace Project::Component::Code
 
     for (auto &field : script->params.fields) {
       auto &prop = data.args[field.name];
-      auto val = prop.resolve(obj.propOverrides);
+      // not prop.resolve(): an override of another property with the same name is not this arg's value
+      std::string val = resolveArg(obj, prop);
       if (val.empty())val = field.defaultValue;
       if (val.empty())val = "0";
 
@@ -131,11 +245,24 @@ namespace Project::Component::Code
           name = metaName->second;
 
           if(data.args.find(field.name) == data.args.end()) {
+            // keeps id = crc64(name), the same id deserialize() creates, so prefab-instance
+            // overrides made before the next save/reload stay attached to the argument
             data.args[field.name] = PropString{field.name, field.defaultValue};
-            data.args[field.name].id = Utils::Hash::randomU64();
           }
 
           auto &prop = data.args[field.name];
+          // on an instance, the arg can't be overridden while another property holds its override key
+          const bool isKeyTaken = isInstanceMode && isArgKeyTaken(obj, prop);
+
+          // value args: with a taken key it is drawn read-only, with a lock refusing to override it
+          auto drawArg = [&](const std::function<bool(std::string*)> &editFunc) {
+            if (isKeyTaken) {
+              drawKeyTakenArg(obj, field, name, prop, editFunc);
+            } else {
+              ImTable::addObjProp<std::string>(name, prop, editFunc, nullptr);
+            }
+          };
+
           if(field.type == Utils::DataType::ASSET_SPRITE ||
              field.type == Utils::DataType::ASSET_EMITTER ||
              field.type == Utils::DataType::OBJECT_REF ||
@@ -144,30 +271,42 @@ namespace Project::Component::Code
             ImGui::PushID(static_cast<int>(prop.id & 0xFFFFFFFFULL));
             ImTable::add(name);
             
-            bool isOverridden = obj.propOverrides.find(prop.id) != obj.propOverrides.end();
+            bool isOverridden = findArgOverride(obj, prop) != nullptr;
             
             // Lock toggle button
             if (isInstanceMode)
             {
               if (ImGui::IconToggle(isOverridden, ICON_MDI_LOCK_OPEN, ICON_MDI_LOCK, ImVec2{16,16})) {
-                if (isOverridden) {
+                if (isKeyTaken) {
+                  isOverridden = false;
+                  refuseArgOverride(obj, field, name);
+                } else if (isOverridden) {
                   obj.addPropOverride(prop);
                 } else {
                   obj.removePropOverride(prop);
                 }
               }
-              ImGui::SetItemTooltip(isOverridden ? "Disable Override" : "Enable Override");
+              if (isKeyTaken) {
+                ImGui::SetItemTooltip("%s", getKeyTakenTooltip(field).c_str());
+              } else {
+                ImGui::SetItemTooltip(isOverridden ? "Disable Override" : "Enable Override");
+              }
               ImGui::SameLine();
             }
             
             ImTable::PrefabEditScope prefabScope(isOverridden);
-            std::string resolved = prop.resolve(obj.propOverrides);
+            std::string resolved = resolveArg(obj, prop);
             uint64_t uuid = resolved.empty() ? 0 : Utils::parseU64(resolved);
             auto validationFunc = [&](uint64_t newId) {
-                if (isInstanceMode && obj.propOverrides.find(prop.id) == obj.propOverrides.end()) {
+                if (isInstanceMode && !findArgOverride(obj, prop)) {
+                  // e.g. something dropped onto the locked select-box
+                  if (isKeyTaken) {
+                    refuseArgOverride(obj, field, name);
+                    return;
+                  }
                   obj.addPropOverride(prop);
                 }
-                prop.resolve(obj.propOverrides) = std::to_string(newId);
+                resolveArg(obj, prop) = std::to_string(newId);
               };
             
             if(field.type == Utils::DataType::ASSET_SPRITE) {
@@ -178,34 +317,141 @@ namespace Project::Component::Code
               ImTable::addAssetVecComboBox("", assets, uuid, validationFunc);
             } else if(field.type == Utils::DataType::OBJECT_REF) {
               // @TODO: do this in scene itself
-              auto &map = ctx.project->getScenes().getLoadedScene()->objectsMap;
+              auto scene = ctx.project->getScenes().getLoadedScene();
               std::vector<ImTable::ComboEntry> objList;
 
-              for (auto &[id, object] : map) {
+              // [[P64::RequireComponent("Spline")]] only offers objects with that component
+              std::string requireWarning{};
+              const int requiredComp = getRequiredComponent(*script, field, requireWarning);
+              auto hasRequiredComp = [requiredComp](const std::vector<Entry> &comps) {
+                return std::any_of(comps.begin(), comps.end(), [requiredComp](const Entry &comp) {
+                  return comp.id == requiredComp;
+                });
+              };
+
+              if (scene) {
+                for (auto &[id, object] : scene->objectsMap) {
+                  // materialized prefab children get new uuids on every load, a reference would dangle
+                  if (scene->isPrefabSubobject(*object))continue;
+
+                  if (requiredComp >= 0 && !hasRequiredComp(object->components)) {
+                    // components of a prefab instance live on its prefab source node
+                    auto srcNode = object->isPrefabInstance() ? assets.getPrefabSourceNode(*object) : nullptr;
+                    if (!srcNode || !hasRequiredComp(srcNode->components))continue;
+                  }
+
+                  objList.push_back({
+                  .value = object->uuid,
+                  .name = object->name,
+                  });
+                }
+              }
+
+              // by name (case-insensitive), equal names by uuid so the order is stable
+              std::sort(objList.begin(), objList.end(), [](const ImTable::ComboEntry &a, const ImTable::ComboEntry &b) {
+                auto order = std::lexicographical_compare_three_way(
+                  a.name.begin(), a.name.end(), b.name.begin(), b.name.end(),
+                  [](unsigned char ca, unsigned char cb) { return std::tolower(ca) <=> std::tolower(cb); }
+                );
+                return order != 0 ? order < 0 : a.value < b.value;
+              });
+
+              // objects with the same name (e.g. a copied "Spline Path") get their uuid appended to tell them apart
+              std::unordered_map<std::string, int> nameCount{};
+              for (const auto &e : objList)++nameCount[e.name];
+              for (auto &e : objList) {
+                if (nameCount[e.name] > 1)e.name += " (#" + std::to_string(e.value) + ")";
+              }
+              const auto validCount = std::ssize(objList);
+
+              // Show a reference that is filtered out or gone instead of "[None]"
+              bool isListed = std::any_of(objList.begin(), objList.end(), [uuid](const ImTable::ComboEntry &e) {
+                return e.value == uuid;
+              });
+              if (uuid != 0 && !isListed) {
+                auto refObj = scene ? scene->getObjectByUUID(static_cast<uint32_t>(uuid)) : nullptr;
                 objList.push_back({
-                .value = object->uuid,
-                .name = object->name,
+                .value = static_cast<uint32_t>(uuid),
+                .name = refObj ? (refObj->name + " (invalid)") : ("<missing " + std::to_string(uuid) + ">"),
                 });
               }
 
-              // combo adds a leading "[None]" row to clear the reference
-              ImTable::addObjectVecComboBox("", objList, uuid, validationFunc);
+              // combo adds a leading "[None]" row to clear the reference,
+              // dropped objects are only accepted if they are in the (filtered) list
+              ImTable::addObjectVecComboBox("", objList, uuid,
+                [&objList, validCount](uint32_t dropId) {
+                  return std::any_of(objList.begin(), objList.begin() + validCount, [dropId](const ImTable::ComboEntry &e) {
+                    return e.value == dropId;
+                  });
+                },
+                validationFunc, true
+              );
+
+              // a misspelled component name filters nothing, show that instead of silently listing everything
+              if (!requireWarning.empty()) {
+                ImGui::TextColored({1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " %s", requireWarning.c_str());
+                ImGui::SetItemTooltip(
+                  "P64::RequireComponent must name a component exactly as listed under \"Add Component\", e.g. \"Spline\".\n"
+                  "Until then, all objects are offered."
+                );
+              }
             } else if(field.type == Utils::DataType::PREFAB) {
               const auto &prefabs = ctx.project->getAssets().getTypeEntries(FileType::PREFAB);
               ImTable::addAssetVecComboBox("", prefabs, uuid, validationFunc);
             }
             ImGui::PopID();
+          } else if(!field.enumValues.empty()) {
+            drawArg([&](std::string *val) -> bool {
+              // an empty value means the default from the script (or 0 without one), same as in build()
+              std::string valStr = val->empty() ? field.defaultValue : *val;
+              if (valStr.empty())valStr = "0";
+              // decimal like build() reads it, 64-bit so every uint32_t value fits
+              int64_t current = 0;
+              bool isNumber = true;
+              try {
+                current = std::stoll(valStr);
+              } catch (...) {
+                isNumber = false;
+              }
+
+              std::string preview = isNumber ? std::to_string(current) : valStr;
+              for (auto &[value, label] : field.enumValues) {
+                if (isNumber && value == current) {
+                  preview = label;
+                  break;
+                }
+              }
+
+              bool changed = false;
+              if (ImGui::BeginCombo("##enum", preview.c_str())) {
+                for (size_t i = 0; i < field.enumValues.size(); ++i) {
+                  auto &[value, label] = field.enumValues[i];
+                  bool selected = isNumber && value == current;
+                  ImGui::PushID(static_cast<int>(i));
+                  if (ImGui::Selectable(label.c_str(), selected) && !selected) {
+                    *val = std::to_string(value);
+                    changed = true;
+                  }
+                  if (selected)ImGui::SetItemDefaultFocus();
+                  ImGui::PopID();
+                }
+                ImGui::EndCombo();
+              }
+              return changed;
+            });
           } else if(!field.bitmask.empty()) {
-            ImTable::addObjProp<std::string>(name, prop, [&](std::string *val) -> bool {
+            drawArg([&](std::string *val) -> bool {
               uint32_t mask = val->empty() ? 0u : static_cast<uint32_t>(Utils::parseU64(*val));
               if (ImTable::bitMaskCombo("##bitmask", mask, field.bitmask)) {
                 *val = std::to_string(mask);
                 return true;
               }
               return false;
-            }, nullptr);
+            });
           } else {
-            ImTable::addObjProp(name, prop);
+            drawArg([](std::string *val) -> bool {
+              return ImTable::typedInput<std::string>(val);
+            });
           }
         }
       }

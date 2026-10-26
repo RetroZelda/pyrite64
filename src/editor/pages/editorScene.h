@@ -37,6 +37,7 @@ namespace Editor
       std::vector<std::shared_ptr<Viewport3D>> viewportsPendingClose{};
       uint32_t nextViewportWinId{0};
       std::shared_ptr<Viewport3D> hoveredViewport{};
+      std::weak_ptr<Viewport3D> activeViewport{}; // the viewport window focused last (expires when closed)
       bool wantNewViewport{false};
       bool wantResetLayout{false};
 

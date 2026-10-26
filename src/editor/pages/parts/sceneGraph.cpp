@@ -14,6 +14,8 @@
 #include "imgui_internal.h"
 #include "../../undoRedo.h"
 #include "../../selectionUtils.h"
+#include "../../splineEdit.h"
+#include "../../../project/component/types/compSpline.h"
 
 namespace
 {
@@ -22,6 +24,7 @@ namespace
   uint32_t renameObjectUUID{0};
   std::string renameBuffer{};
   bool startingRename{false};
+  glm::vec3 rootViewCenter{0.0f}; // SceneGraph::draw()'s viewCenter
 
   struct DragDropTask {
     uint32_t sourceUUID{0};
@@ -41,7 +44,7 @@ namespace
   // Deferred structural edits to a prefab template (add/remove subobject). These mutate the
   // scene graph via reconcile, so they must run after the tree iteration, not during it.
   struct PrefabEditTask {
-    enum class Type { NONE, ADD_CHILD, REMOVE_NODE };
+    enum class Type { NONE, ADD_CHILD, ADD_SPLINE_PATH, REMOVE_NODE };
     Type type{Type::NONE};
     uint32_t nodeUUID{0};
   };
@@ -148,6 +151,33 @@ namespace
     } else {
       clearRenaming();
     }
+  }
+
+  /**
+   * Turns a freshly added child of `parent` into a "Spline Path": its name, a Spline component (the
+   * default loop) and a position at the parent (editor positions are world space) or, under the
+   * scene root, at the centre of the active 3D viewport, so the path is in view right away.
+   * A prefab subobject gets them on its template node (the prefab definition, which reconcile
+   * copies to the instances); the instance node mirrors the name and position at once.
+   *
+   * @param added  The new object (scene object or materialized prefab subobject).
+   * @param parent The object it was added under.
+   */
+  void initSplinePath(Project::Object &added, Project::Object &parent)
+  {
+    Project::Object *target = &added;
+    if (added.isPrefabInstance()) {
+      target = ctx.project->getAssets().getPrefabSourceNode(added);
+      if (!target) return;
+    }
+
+    const glm::vec3 pos = parent.parent ? parent.pos.resolve(parent.propOverrides) : rootViewCenter;
+    added.name = target->name = "Spline Path";
+    added.pos.value = target->pos.value = pos;
+    target->addComponent(Project::Component::Spline::ID);
+
+    // after the component: markPrefabDirty diffs the prefab's current state against the saved one
+    if (target != &added) ctx.project->getAssets().markPrefabDirty(added.uuidPrefab.value);
   }
 
   bool DrawDropTarget(uint32_t& dragDropTarget, uint32_t uuid, float thickness = 2.0f, float hitHeight = 8.0f)
@@ -446,6 +476,23 @@ namespace
         }
         if (addDisabled) ImGui::EndDisabled();
 
+        // New object with a Spline component (AI patrol path etc.), ready for point editing.
+        // Inside a prefab only while editing it, like Add Object (hidden while it is locked).
+        if (!addDisabled && ImGui::MenuItem(ICON_MDI_VECTOR_CURVE " Add Spline Path")) {
+          if (isPrefab) {
+            // Defer: prefabAddChild reconciles (mutates the tree we're iterating).
+            prefabEditTask = {PrefabEditTask::Type::ADD_SPLINE_PATH, obj.uuid};
+          } else {
+            auto added = scene.addObject(obj);
+            if (added) {
+              initSplinePath(*added, obj);
+              ctx.setObjectSelection(added->uuid);
+              startRenaming(added->uuid);
+            }
+            Editor::UndoRedo::getHistory().markChanged("Add Spline Path");
+          }
+        }
+
         if (obj.parent) {
           if (!obj.isPrefabInstance() && ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED_PLUS " To Prefab")) {
             scene.createPrefabFromObject(obj.uuid);
@@ -476,10 +523,11 @@ namespace
   }
 }
 
-void Editor::SceneGraph::draw()
+void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
 {
   auto scene = ctx.project->getScenes().getLoadedScene();
   if (!scene)return;
+  rootViewCenter = viewCenter;
 
   // Breadcrumb: which prefab(s) are currently in edit mode (the active edit scope). Makes it
   // explicit which prefab a drop/edit will modify.
@@ -517,7 +565,10 @@ void Editor::SceneGraph::draw()
   bool isRenaming = renameObjectUUID != 0;
 
   ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 16.0_px);
-  bool keyDelete = isFocus && !isRenaming && (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace));
+  // While editing spline points, Delete removes points (in the viewport) and never the edited object,
+  // which stays selected; the context menu's Delete still removes it (and ends point edit).
+  bool keyDelete = isFocus && !isRenaming && !Editor::SplineEdit::isEditing()
+    && (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace));
   // F2 starts renaming the current object, matching common scene-tree/file-explorer behavior
   bool keyRename = isFocus && !isRenaming && ImGui::IsKeyPressed(ImGuiKey_F2);
 
@@ -575,6 +626,14 @@ void Editor::SceneGraph::draw()
           startRenaming(added->uuid);
         }
         UndoRedo::getHistory().markChanged("Add Prefab Subobject");
+      } else if (prefabEditTask.type == PrefabEditTask::Type::ADD_SPLINE_PATH) {
+        auto added = scene->prefabAddChild(*node);
+        if (added) {
+          initSplinePath(*added, *node);
+          ctx.setObjectSelection(added->uuid);
+          startRenaming(added->uuid);
+          UndoRedo::getHistory().markChanged("Add Spline Path");
+        }
       } else if (prefabEditTask.type == PrefabEditTask::Type::REMOVE_NODE) {
         scene->prefabRemoveNode(*node);
         UndoRedo::getHistory().markChanged("Remove Prefab Subobject");

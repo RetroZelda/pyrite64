@@ -25,6 +25,9 @@
 #include "IconsMaterialDesignIcons.h"
 #include "../../undoRedo.h"
 #include "../../selectionUtils.h"
+#include "../../splineEdit.h"
+#include "../../sceneRaycast.h"
+#include "../../../project/component/types/compSpline.h"
 
 #include "../../../utils/logger.h"
 namespace
@@ -131,6 +134,11 @@ namespace
 
       for(auto &comp : srcObj->components) {
         callback(*child, &comp);
+      }
+      if(srcObj != child.get()) { // components added directly on a prefab instance (the scene build exports them too)
+        for(auto &comp : child->components) {
+          if(comp.id == Project::Component::Spline::ID) callback(*child, &comp); // only Splines are previewed (minimal behaviour change)
+        }
       }
       callback(*child, nullptr);
 
@@ -292,6 +300,7 @@ nlohmann::json Editor::Viewport3D::saveState() const
     {"showCollMesh", showCollMesh},
     {"showCollObj", showCollObj},
     {"showIcons", showIcons},
+    {"showSplines", showSplines},
     {"boundCam", boundCameraUUID},
     {"camRes", useCameraRes},
   };
@@ -303,8 +312,20 @@ void Editor::Viewport3D::loadState(const nlohmann::json &j)
   showCollMesh = j.value("showCollMesh", showCollMesh);
   showCollObj = j.value("showCollObj", showCollObj);
   showIcons = j.value("showIcons", showIcons);
+  showSplines = j.value("showSplines", showSplines);
   boundCameraUUID = j.value("boundCam", (uint64_t)0);
   useCameraRes = j.value("camRes", false);
+}
+
+glm::vec3 Editor::Viewport3D::getViewCenter() const
+{
+  // The free camera's orbit pivot always sits on its view axis (focus, orbit, look, pan, fly, zoom).
+  if (!boundCameraUUID) return camera.pivot;
+
+  // Bound to a scene camera: pos/rot mirror that camera and the pivot is left where it was, so take
+  // the point ahead of it at the pivot distance, kept past the near plane and within sight.
+  float dist = glm::clamp(glm::length(camera.pivot - camera.pos), 100.0f, 2000.0f);
+  return camera.pos + glm::normalize(camera.rot * glm::vec3{0.0f, 0.0f, -1.0f}) * dist;
 }
 
 bool Editor::Viewport3D::alignFocusedObjectToCamera()
@@ -423,6 +444,7 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
     // @TODO: use flag in component
     if(!showCollMesh && comp->id == 4)return;
     if(!showCollObj && comp->id == 5)return;
+    if(!showSplines && comp->id == Project::Component::Spline::ID && !SplineEdit::isEditing(obj.uuid, comp->uuid))return;
 
     if(def.funcDrawPost3D) {
       def.funcDrawPost3D(obj, *comp, *this, cmdBuff, renderPass3D);
@@ -433,7 +455,8 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
   // orientation stays visible while rotating, even when it has no visual component.
   // Green (thicker) = local up (+Y), blue = local forward (+Z, the facing direction).
   // Only shown in rotate mode (gizmoOp == 1), where the facing cue is actually needed.
-  if (gizmoOp == 1) {
+  // Hidden while editing spline points: the object gizmo is replaced by the point gizmo then.
+  if (gizmoOp == 1 && !SplineEdit::isEditing()) {
     constexpr float AXIS_LEN = 70.0f;
     constexpr float UP_THICKNESS = 4.0f;
     constexpr float FWD_THICKNESS = 2.5f;
@@ -667,20 +690,33 @@ void Editor::Viewport3D::draw()
   if(pickedObjID.hasResult())
   {
     uint32_t newUUID = pickedObjID.consume();
-    auto newObj = scene->getObjectByUUID(newUUID);
-    if(newObj && !newObj->selectable) {
-      newUUID = 0;
-    }
-
-    if (newUUID == 0) {
-      if (!pickAdditive) {
-        ctx.clearObjectSelection();
-      }
+    if(SplineEdit::isEditing() && !cleanPreview) {
+      // stale pick requested before the point-edit session started: ignore, never touch the selection
+      // (a clean preview's click is an object click even during point edit; cleanPreview is still last frame's)
+      curvePickUUID = 0;
     } else {
-      if (pickAdditive) {
-        ctx.toggleObjectSelection(newUUID);
+      auto newObj = scene->getObjectByUUID(newUUID);
+      if(newObj && !newObj->selectable) {
+        newUUID = 0;
+      }
+
+      // Spline curves write no object id: the CPU curve hit stored with the click wins over
+      // "nothing" or static level geometry only, so objects standing on a path stay clickable.
+      if(curvePickUUID && (newUUID == 0 || SplineEdit::isStaticGeometry(*scene, newUUID))) {
+        newUUID = curvePickUUID;
+      }
+      curvePickUUID = 0;
+
+      if (newUUID == 0) {
+        if (!pickAdditive) {
+          ctx.clearObjectSelection();
+        }
       } else {
-        ctx.setObjectSelection(newUUID);
+        if (pickAdditive) {
+          ctx.toggleObjectSelection(newUUID);
+        } else {
+          ctx.setObjectSelection(newUUID);
+        }
       }
     }
   }
@@ -795,11 +831,38 @@ void Editor::Viewport3D::draw()
   bool leftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
   bool leftReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-  if (!overGizmo && isMouseHover && leftClicked && !isAltDown && !overRotGizmo) {
+  // Spline point editor: while a session is active (or over a passive point handle of the selected
+  // spline) it owns the left click, so no object pick / box select starts. The image rect is
+  // completed once the image is placed (see SplineEdit::drawViewport below). In object mode the
+  // object gizmo is drawn over the passive handles and wins the click (objGizmoHovered: this
+  // viewport's own gizmo, the top-of-frame overGizmo belongs to the last viewport drawn).
+  SplineEdit::ViewInfo svi{
+    .view = &uniGlobal.cameraMat,
+    .proj = &uniGlobal.projMat,
+    .imageMin = {0, 0},
+    .imageSize = currSize,
+    .hovered = isMouseHover,
+    .mouseBlocked = isAltDown || overRotGizmo,
+    .worldSpace = isTransWorld,
+    .overlaysHidden = cleanPreview,
+    .showSplines = showSplines,
+    .objectGizmoHovered = hasSelection && objGizmoHovered && !SplineEdit::isEditing(),
+  };
+  const bool splineOwnsMouse = SplineEdit::wantsMouse(svi, mousePos);
+
+  if (!splineOwnsMouse && !overGizmo && isMouseHover && leftClicked && !isAltDown && !overRotGizmo) {
     selectionPending = true;
     selectionDragging = false;
     selectionStart = mousePos;
     selectionEnd = mousePos;
+  }
+
+  // A point-edit session started during an object click / box drag (e.g. by its toggle key):
+  // drop that object selection, point editing never changes the selected object. Not in a clean
+  // preview: it shows no point editor, so a click there stays an object click (and ends point edit).
+  if (SplineEdit::isEditing() && !cleanPreview) {
+    selectionPending = false;
+    selectionDragging = false;
   }
 
   if (selectionPending && leftDown) {
@@ -843,6 +906,7 @@ void Editor::Viewport3D::draw()
         }
       });
     } else {
+      curvePickUUID = SplineEdit::pickCurve(svi, mousePos, 6.0f * ImGui::Theme::zoomFactor);
       pickedObjID.request();
       mousePosClick = mousePos;
       pickAdditive = additiveSelect;
@@ -866,8 +930,9 @@ void Editor::Viewport3D::draw()
     }
 
     // Handle object deletion when Delete is pressed while the viewport is focused and an object is selected
+    // (while editing spline points, Delete removes the selected points instead: SplineEdit::drawViewport)
     bool deletedSelection = false;
-    if (ImGui::IsWindowFocused() && obj && ImGui::IsKeyPressed(ctx.prefs.keymap.deleteObject)) {
+    if (!SplineEdit::isEditing() && ImGui::IsWindowFocused() && obj && ImGui::IsKeyPressed(ctx.prefs.keymap.deleteObject)) {
       UndoRedo::getHistory().markChanged("Delete Object");
       if (Editor::SelectionUtils::deleteSelectedObjects(*scene)) {
         deletedSelection = true;
@@ -899,7 +964,16 @@ void Editor::Viewport3D::draw()
         if (ImGui::IsKeyDown(ctx.prefs.keymap.gizmoTranslate))gizmoOp = 0;
         if (ImGui::IsKeyDown(ctx.prefs.keymap.gizmoRotate))gizmoOp = 1;
         if (ImGui::IsKeyDown(ctx.prefs.keymap.gizmoScale))gizmoOp = 2;
-        if (!camLocked && ImGui::IsKeyPressed(ctx.prefs.keymap.focusObject))camera.focusSelection(ctx);
+        if (!camLocked && ImGui::IsKeyPressed(ctx.prefs.keymap.focusObject)) {
+          // while editing spline points, frame the selected points (or the whole path) instead
+          glm::vec3 focusCenter{0.0f};
+          float focusRadius = 0.0f;
+          if (SplineEdit::isEditing() && SplineEdit::getFocusBounds(focusCenter, focusRadius)) {
+            camera.focus(focusCenter, std::max(focusRadius * 2.5f, 150.0f));
+          } else {
+            camera.focusSelection(ctx);
+          }
+        }
       }
     }
   }
@@ -997,6 +1071,13 @@ void Editor::Viewport3D::draw()
   }
   ImGui::SetItemTooltip(cleanPreview ? "Overlays hidden (camera resolution)" : (showIcons ? "Hide Icons" : "Show Icons"));
 
+  ImGui::SameLine();
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 4_px);
+  if(ConnectedToggleButton(ICON_MDI_VECTOR_CURVE, showSplines && !cleanPreview, true, true, ImVec2(32_px, 24_px))) {
+    showSplines = !showSplines;
+  }
+  ImGui::SetItemTooltip("%s Splines", showSplines ? "Hide" : "Show");
+
   ImGui::EndDisabled();
 
   // Camera select + resolution toggle: mirror the editor view onto a scene camera.
@@ -1078,74 +1159,21 @@ void Editor::Viewport3D::draw()
       uint64_t prefabUUID = *((uint64_t*)payload->Data);
       auto prefab = ctx.project->getAssets().getPrefabByUUID(prefabUUID);
       if(prefab) {
+        // Spawn where the mouse ray hits static level geometry, else in front of the camera.
+        // The ray uses a fresh mouse position (mousePos is already zeroed here unless the camera
+        // is dragged) and is cast before the instance exists, so it cannot hit its own mesh.
+        const ImVec2 mAbs = ImGui::GetMousePos();
+        const auto ray = SceneRaycast::mouseRay({mAbs.x - currPos.x, mAbs.y - currPos.y}, {currSize.x, currSize.y},
+                                                uniGlobal.cameraMat, uniGlobal.projMat);
+        glm::vec3 spawnPos{};
+        if (!SceneRaycast::raycastStaticMeshes(*scene, ray, spawnPos)) {
+          glm::vec3 camForward = camera.rot * glm::vec3{0, 0, -1};
+          spawnPos = camera.pos + camForward * 150.0f;
+        }
+
         UndoRedo::getHistory().markChanged("Add Prefab");
         auto newObj = scene->addPrefabInstance(prefabUUID);
         if (newObj) {
-          // Build a world-space ray through the mouse position
-          glm::vec4 vp{0.0f, 0.0f, currSize.x, currSize.y};
-          glm::vec3 screenNear{mousePos.x, currSize.y - mousePos.y, 0.0f};
-          glm::vec3 screenFar {mousePos.x, currSize.y - mousePos.y, 1.0f};
-          glm::vec3 rayNear = glm::unProject(screenNear, uniGlobal.cameraMat, uniGlobal.projMat, vp);
-          glm::vec3 rayDir  = glm::normalize(
-            glm::unProject(screenFar, uniGlobal.cameraMat, uniGlobal.projMat, vp) - rayNear);
-
-          // Raycast against every static-mesh triangle in the scene
-          float closestT = 1e20f;
-          bool hitMesh = false;
-          glm::vec3 spawnPos{};
-
-          iterateObjects(scene->getRootObject(), [&](Project::Object &obj, Project::Component::Entry *comp) {
-            if (!comp || comp->id != 1) return; // 1 = Model (Static)
-
-            auto json = Project::Component::TABLE[1].funcSerialize(*comp);
-            uint64_t modelUUID = json.value("model", uint64_t{0});
-            if (!modelUUID) return;
-
-            auto *asset = ctx.project->getAssets().getEntryByUUID(modelUUID);
-            if (!asset || asset->type != Project::FileType::MODEL_3D) return;
-
-            glm::vec3 skew{};
-            glm::vec4 persp{0, 0, 0, 1};
-            glm::mat4 modelMat = glm::recompose(
-              obj.scale.resolve(obj.propOverrides),
-              obj.rot.resolve(obj.propOverrides),
-              obj.pos.resolve(obj.propOverrides),
-              skew, persp);
-
-            for (auto &model : asset->model.t3dm.models) {
-              for (auto &tri : model.triangles) {
-                glm::vec3 v0(modelMat * glm::vec4(tri.vert[0].pos[0], tri.vert[0].pos[1], tri.vert[0].pos[2], 1.0f));
-                glm::vec3 v1(modelMat * glm::vec4(tri.vert[1].pos[0], tri.vert[1].pos[1], tri.vert[1].pos[2], 1.0f));
-                glm::vec3 v2(modelMat * glm::vec4(tri.vert[2].pos[0], tri.vert[2].pos[1], tri.vert[2].pos[2], 1.0f));
-
-                // Möller-Trumbore ray-triangle intersection
-                constexpr float EPS = 1e-5f;
-                glm::vec3 e1 = v1 - v0, e2 = v2 - v0;
-                glm::vec3 h = glm::cross(rayDir, e2);
-                float a = glm::dot(e1, h);
-                if (std::abs(a) < EPS) continue;
-                float f = 1.0f / a;
-                glm::vec3 s = rayNear - v0;
-                float u = f * glm::dot(s, h);
-                if (u < 0.0f || u > 1.0f) continue;
-                glm::vec3 q = glm::cross(s, e1);
-                float v = f * glm::dot(rayDir, q);
-                if (v < 0.0f || u + v > 1.0f) continue;
-                float t = f * glm::dot(e2, q);
-                if (t > EPS && t < closestT) {
-                  closestT = t;
-                  spawnPos = rayNear + rayDir * t;
-                  hitMesh = true;
-                }
-              }
-            }
-          });
-
-          if (!hitMesh) {
-            glm::vec3 camForward = camera.rot * glm::vec3{0, 0, -1};
-            spawnPos = camera.pos + camForward * 150.0f;
-          }
-
           newObj->pos.resolve(newObj->propOverrides) = spawnPos;
           ctx.setObjectSelection(newObj->uuid);
         }
@@ -1180,7 +1208,17 @@ void Editor::Viewport3D::draw()
   ImGuizmo::SetDrawlist(draw_list);
   ImGuizmo::SetRect(currPos.x, currPos.y, currSize.x, currSize.y);
 
-  if (hasSelection) {
+  // Spline point editor: handles/banner overlay, point gizmo (own nested gizmo id), mouse and keys.
+  // While a session is active it replaces the object gizmo (incl. Shift+S snap) below.
+  svi.imageMin = currPos;
+  svi.imageSize = currSize;
+  svi.hovered = isMouseHover;
+  svi.mouseBlocked = isAltDown || overRotGizmo || isCameraFlying || (mouseHeldMiddle && inputActive);
+  svi.objectGizmoHovered = hasSelection && objGizmoHovered && !SplineEdit::isEditing();
+  SplineEdit::drawViewport(svi, splineState);
+
+  objGizmoHovered = false; // stays false while no object gizmo is drawn (no selection, point edit)
+  if (hasSelection && !SplineEdit::isEditing()) {
     auto selectedObjects = Editor::SelectionUtils::collectSelectedObjects(*scene);
     if (!selectedObjects.empty()) {
       obj = scene->getObjectByUUID(selectedObjects.back()->uuid);
@@ -1236,6 +1274,9 @@ void Editor::Viewport3D::draw()
         obj->pos.resolve(obj->propOverrides) = pos;
       }
 
+      // A gizmo origin behind the camera makes Manipulate() return before drawing, leaving its clip
+      // rect pushed and IsOver() testing stale axes: detect that by the clip rect stack depth.
+      const int clipDepth = draw_list->_ClipRectStack.Size;
       if(ImGuizmo::Manipulate(
         glm::value_ptr(uniGlobal.cameraMat),
         glm::value_ptr(uniGlobal.projMat),
@@ -1394,7 +1435,16 @@ void Editor::Viewport3D::draw()
           }
         }
       }
+
+      // Taken right after THIS viewport's Manipulate(), under its gizmo id (read next frame)
+      objGizmoHovered = ImGuizmo::IsUsing()
+        || (draw_list->_ClipRectStack.Size == clipDepth && ImGuizmo::IsOver());
     }
+  } else if (SplineEdit::isEditing() && ImGuizmo::IsUsing()) {
+    // A point-edit session started during an object gizmo drag: the object gizmo is no longer
+    // drawn, so drop its grab (commits the move below), else it resumes once the session ends.
+    ImGuizmo::Enable(false);
+    ImGuizmo::Enable(true);
   }
 
   // If the gizmo was active but is no longer being used, end the transform snapshot

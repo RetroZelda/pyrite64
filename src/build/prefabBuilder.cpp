@@ -8,6 +8,7 @@
 #include "../utils/logger.h"
 #include "../utils/proc.h"
 #include <filesystem>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
@@ -52,7 +53,14 @@ bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
     uint32_t idCounter = 1;
     uint32_t prefabObjCount = assignPrefabRuntimeIds(asset.prefab->obj, nullptr, idCounter);
     sceneCtx.fileObj.write<uint32_t>(prefabObjCount);
-    writeObject(sceneCtx, asset.prefab->obj, true);
+    try {
+      writeObject(sceneCtx, asset.prefab->obj, true);
+    } catch(const std::exception &e) {
+      // e.g. an oversized component record: never write a corrupt .pf, fail the build
+      Utils::Logger::log("Prefab build failed (" + asset.name + "): " + e.what(), Utils::Logger::LEVEL_ERROR);
+      sceneCtx.fileObj = {};
+      return false;
+    }
     sceneCtx.fileObj.writeToFile(outPath);
     sceneCtx.fileObj = {};
   }

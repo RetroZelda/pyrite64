@@ -19,6 +19,7 @@
 #include "../../../renderer/particleWrap.h"
 #include "../../../utils/container.h"
 #include "engine/include/renderer/particles/particleSim.h"
+#include "../../splineEdit.h"
 
 namespace Renderer { class Texture; }
 
@@ -76,6 +77,14 @@ namespace Editor
       bool inputActive{false};    // this viewport captured the camera drag (started inside it)
       bool viewGizmoOwned{false}; // this viewport owns the active orientation-cube drag
 
+      SplineEdit::ViewportState splineState{}; // spline point editor transients (session is global)
+      bool showSplines{true};
+      uint32_t curvePickUUID{0};               // CPU curve hit stored with a click, used when the GPU pick returns
+      // This viewport's object gizmo was under the mouse (or in use) right after its own Manipulate(),
+      // read on the next frame: it wins over the passive spline handles drawn under it. ImGuizmo keeps
+      // ONE hover state, which belongs to whichever viewport called Manipulate() last.
+      bool objGizmoHovered{false};
+
       // --- Live particle billboards for placed ParticleEmitter components ---
       // Per-OBJECT sim state (keyed by object UUID, so two objects sharing an emitter asset
       // animate independently). compParticle::draw3D feeds submissions each frame; the particle
@@ -128,6 +137,12 @@ namespace Editor
       }
 
       bool isViewHovered() const { return isMouseHover; }
+
+      /**
+       * World point at the centre of this viewport's view: the free camera's orbit pivot, or a point
+       * ahead of the bound scene camera. Used to place new objects where the user is looking.
+       */
+      glm::vec3 getViewCenter() const;
 
       nlohmann::json saveState() const;
       void loadState(const nlohmann::json &j);

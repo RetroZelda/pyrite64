@@ -289,6 +289,9 @@ void Utils::Mesh::addLinePyramid(Renderer::Mesh &mesh, const glm::vec3 &pos, con
 
 void Utils::Mesh::addLine(Renderer::Mesh &mesh, const glm::vec3 &start, const glm::vec3 &end, const glm::vec4 &color, float thickness)
 {
+    // Indices are u16 and a line adds 8 vertices: drop lines that would wrap them (garbage triangles)
+    if (mesh.vertLines.size() > 65528) return;
+
     // Convert float RGBA (0-1) → u8 RGBA once
     glm::u8vec4 u8Color{
         static_cast<uint8_t>(color.r * 255.0f),
@@ -346,6 +349,9 @@ void Utils::Mesh::addLine(Renderer::Mesh &mesh, const glm::vec3 &start, const gl
 
 void Utils::Mesh::addSprite(Renderer::Mesh &mesh, const glm::vec3 &pos, uint32_t objectId, uint8_t spriteIdx, const glm::vec4 &color)
 {
+  // Indices are u16 and a sprite adds 4 vertices: drop sprites that would wrap them
+  if (mesh.vertLines.size() > 65532) return;
+
   // Convert float RGBA (0-1) → u8 RGBA for sprite (the alpha channel is used as sprite index)
   glm::u8vec4 col{
       static_cast<uint8_t>(color.r * 255.0f),

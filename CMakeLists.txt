@@ -147,6 +147,10 @@ add_executable(pyrite64 src/main.cpp
         src/editor/window.cpp
         src/editor/keymap.h
         src/editor/keymap.cpp
+        src/editor/splineEdit.h
+        src/editor/splineEdit.cpp
+        src/editor/sceneRaycast.h
+        src/editor/sceneRaycast.cpp
         src/utils/json.h
         src/utils/colors.h
         src/editor/imgui/theme.h
@@ -277,6 +281,8 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/canvasViewport.cpp
         src/project/component/types/compConstraint.cpp
         src/project/component/types/compCulling.cpp
+        src/project/component/types/compSpline.h
+        src/project/component/types/compSpline.cpp
         src/editor/pages/parts/nodeEditor.cpp
         src/project/component/shared/materialInstance.cpp
         src/project/component/shared/meshFilter.cpp
@@ -320,6 +326,7 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/emitterPreview.h
         src/editor/pages/parts/emitterPreview.cpp
         n64/engine/include/renderer/particles/particleSim.h
+        n64/engine/include/lib/splineMath.h
         src/project/assets/model3d.h
         src/n64/libdragon.h
         src/n64/ccMapping.cpp

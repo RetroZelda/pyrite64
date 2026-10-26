@@ -41,7 +41,8 @@ namespace Editor::UndoRedo
       std::vector<uint32_t> snapshotSelUUIDs{};
       std::string nextChangedReason{};
       std::optional<std::string> savedState{};
-      
+      uint64_t generation{0};
+
     public:
       /**
        * Undo the last command.
@@ -69,6 +70,13 @@ namespace Editor::UndoRedo
 
       uint32_t getUndoCount() const { return (uint32_t)undoStack.size(); }
       uint32_t getRedoCount() const { return (uint32_t)redoStack.size(); }
+
+      /**
+       * Changes whenever undo, redo or clear (scene load, project open / close) replaced the scene's objects: every
+       * Object, component Entry and its data is new. State kept across frames about them (e.g. a running
+       * drag) compares it to notice that.
+       */
+      [[nodiscard]] uint64_t getGeneration() const { return generation; }
 
       void begin();
       void end();

@@ -440,6 +440,10 @@ namespace ImTable
         hasMatches = true;
         bool selected = (i == current);
 
+        // Rows with equal labels (e.g. two objects named "Spline Path") must not share an ImGui ID,
+        // or only the first of them can be clicked. Use the unfiltered index so IDs stay stable while filtering.
+        ImGui::PushID(i);
+
         // The uses has chosen the row
         if (ImGui::Selectable(itemLabel, selected)) {
           // Is an object-backed edit --> Add to history
@@ -457,6 +461,8 @@ namespace ImTable
         if (selected) {
           ImGui::SetItemDefaultFocus();
         }
+
+        ImGui::PopID();
       }
 
       // Is searchable and there are no matches --> Display info text
@@ -908,6 +914,9 @@ namespace ImTable
 
     if(isDisabled)ImGui::BeginDisabled();
 
+    // removing the override erases the entry `val` points into: this frame shows a copy of its value
+    T removedValue{};
+
     if(isPrefabLocked())
     {
       bool isOverrideLocal = isOverride;
@@ -920,6 +929,8 @@ namespace ImTable
         if(isOverrideLocal) {
           obj->addPropOverride(prop);
         } else {
+          removedValue = *val;
+          val = &removedValue;
           obj->removePropOverride(prop);
         }
       }

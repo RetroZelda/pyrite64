@@ -253,6 +253,9 @@ void P64::Debug::Overlay::ovlComponents()
       case 9:  return "NodeGraph";
       case 10: return "AnimModel";
       case 11: return "RigidBody";
+      case 12: return "CharBody";
+      case 13: return "Particle";
+      case 14: return "Spline";
       
       default: break;// return "Comp X";
     }

@@ -74,6 +74,10 @@ nlohmann::json Editor::Input::Keymap::serialize(KeymapPreset preset) const {
   writeKey("gizmoScale",     gizmoScale,     defaultKeymap.gizmoScale);
   writeKey("deleteObject",   deleteObject,   defaultKeymap.deleteObject);
   writeKey("snapObject",     snapObject,     defaultKeymap.snapObject);
+  writeKey("splineEditToggle",  splineEditToggle,  defaultKeymap.splineEditToggle);
+  writeKey("splineExtrude",     splineExtrude,     defaultKeymap.splineExtrude);
+  writeKey("splineInsertPoint", splineInsertPoint, defaultKeymap.splineInsertPoint);
+  writeChord("splineSelectAll", splineSelectAll,   defaultKeymap.splineSelectAll);
   return json.doc;
 }
 
@@ -116,6 +120,10 @@ void Editor::Input::Keymap::deserialize(const nlohmann::json& parent, KeymapPres
   gizmoScale     = readKey("gizmoScale",     defaultKeymap.gizmoScale);
   deleteObject   = readKey("deleteObject",   defaultKeymap.deleteObject);
   snapObject     = readKey("snapObject",     defaultKeymap.snapObject);
+  splineEditToggle  = readKey("splineEditToggle",  defaultKeymap.splineEditToggle);
+  splineExtrude     = readKey("splineExtrude",     defaultKeymap.splineExtrude);
+  splineInsertPoint = readKey("splineInsertPoint", defaultKeymap.splineInsertPoint);
+  splineSelectAll   = readChord("splineSelectAll", defaultKeymap.splineSelectAll);
 }
 
 std::string Editor::Input::GetKeyChordName(ImGuiKeyChord key_chord)

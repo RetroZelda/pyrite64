@@ -6,6 +6,7 @@
 
 #include "scene.h"
 #include <algorithm>
+#include "../../context.h"
 #include "../../utils/hash.h"
 #include "../../utils/jsonBuilder.h"
 #include "../../utils/json.h"
@@ -70,25 +71,75 @@ namespace
     builder.set("children", children);
     return builder.doc;
   }
+
+  bool hasCompWithId(const Project::Object &obj, int compID)
+  {
+    return std::any_of(obj.components.begin(), obj.components.end(), [compID](const Project::Component::Entry &comp) {
+      return comp.id == compID;
+    });
+  }
+
+  // Searches the tree below `node` for a prefab instance whose source node is `templateNode` and
+  // that has its own `compID` component (instance-additive, written after the template's ones).
+  const Project::Object* findInstanceWithComp(
+    Project::AssetManager &assets, const Project::Object &node, const Project::Object &templateNode, int compID)
+  {
+    if (&node != &templateNode && node.isPrefabInstance() && hasCompWithId(node, compID)
+      && assets.getPrefabSourceNode(node) == &templateNode)
+    {
+      return &node;
+    }
+    for (const auto &child : node.children) {
+      if (auto *found = findInstanceWithComp(assets, *child, templateNode, compID))return found;
+    }
+    return nullptr;
+  }
 }
 
 void Project::Object::addComponent(int compID) {
   if (compID < 0 || compID >= static_cast<int>(Component::TABLE.size()))return;
   auto &def = Component::TABLE[compID];
 
-  // if components already contains a rigidbody don't add another one and show an error message instead
-  if (def.id == 11) // rigidbody
-  { 
-    for (const auto &comp : components)
+  // some components can only exist once per object (the runtime only uses the first one):
+  // don't add another one and show an error message instead
+  if (def.id == 11 || def.id == 14) // rigidbody, spline
+  {
+    // prefab instances also get the components of their source node at build time
+    const Object *srcObj = nullptr;
+    if (isPrefabInstance() && ctx.project) {
+      srcObj = ctx.project->getAssets().getPrefabSourceNode(*this);
+    }
+
+    std::string msg{};
+    if (hasCompWithId(*this, def.id) || (srcObj && srcObj != this && hasCompWithId(*srcObj, def.id)))
     {
-      auto &compDef = Component::TABLE[comp.id];
-      
-      if (compDef.id == 11)
-      {
-        Utils::Logger::log("Object '" + name + "' already has a Rigidbody component, cannot add another one", Utils::Logger::LEVEL_ERROR);
-        Editor::Noti::add(Editor::Noti::Type::ERROR, "Object '" + name + "' already has a Rigidbody component, cannot add another one");
-        return;
+      msg = "Object '" + name + "' already has a " + def.name + " component, cannot add another one";
+    }
+    else if (ctx.project)
+    {
+      // ... and the other way around: a prefab template node passes its components on to every
+      // instance of it, an instance with its own one would end up with two. Checks the loaded scene
+      // and the nested prefab references in prefab templates (the build warns about other scenes).
+      auto &assets = ctx.project->getAssets();
+      const Object *inst = nullptr;
+      if (auto *scene = ctx.project->getScenes().getLoadedScene()) {
+        inst = findInstanceWithComp(assets, scene->getRootObject(), *this, def.id);
       }
+      for (const auto &entry : assets.getTypeEntries(FileType::PREFAB)) {
+        if (inst)break;
+        if (entry.prefab)inst = findInstanceWithComp(assets, entry.prefab->obj, *this, def.id);
+      }
+      if (inst) {
+        msg = "Prefab instance '" + inst->name + "' already has its own " + def.name
+          + " component, cannot add one to its prefab ('" + name + "')";
+      }
+    }
+
+    if (!msg.empty())
+    {
+      Utils::Logger::log(msg, Utils::Logger::LEVEL_ERROR);
+      Editor::Noti::add(Editor::Noti::Type::ERROR, msg);
+      return;
     }
   }
 

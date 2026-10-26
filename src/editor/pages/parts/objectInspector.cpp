@@ -473,9 +473,13 @@ void Editor::ObjectInspector::draw() {
   if (compCopy) {
     const int compCopyId = compCopy->id;
     const std::string compCopyName = compCopy->name;
-    UndoRedo::getHistory().markChanged("Duplicate Component");
+    const size_t countBefore = srcObj->components.size();
     srcObj->addComponent(compCopyId);
-    srcObj->components.back().name = compCopyName + " Copy";
+    // single-instance components (e.g. Spline, Rigid-Body) reject the copy: don't rename an existing one
+    if (srcObj->components.size() > countBefore) {
+      UndoRedo::getHistory().markChanged("Duplicate Component");
+      srcObj->components.back().name = compCopyName + " Copy";
+    }
   }
   if (compDelUUID) {
     UndoRedo::getHistory().markChanged("Delete Component");

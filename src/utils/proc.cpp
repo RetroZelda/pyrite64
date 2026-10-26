@@ -5,6 +5,7 @@
 #include "proc.h"
 
 #include <array>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <format>
@@ -20,7 +21,6 @@
   #include <windows.h>
 #elif __APPLE__
   #include <mach-o/dyld.h>
-  #include <climits>
 #else
   #include <unistd.h>
 #endif

@@ -20,6 +20,7 @@
 #include "scene/components/animModel.h"
 #include "scene/components/charBody.h"
 #include "scene/components/particle.h"
+#include "scene/components/spline.h"
 
 // some template magic to auto-detect if a function exists in a component
 #define HAS_FUNC_TPL(NAME_HAS, NAME_GET, FUNC) \
@@ -77,5 +78,8 @@ namespace P64
     SET_COMP(RigidBody),
     SET_COMP(CharBody),
     SET_COMP(Particle),
+    SET_COMP(Spline),
   };
+
+  static_assert(P64::Comp::Spline::ID < P64::COMP_TABLE_SIZE);
 }

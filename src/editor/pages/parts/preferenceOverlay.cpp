@@ -61,6 +61,7 @@ bool Editor::PreferenceOverlay::draw()
     ImTable::add("Camera Line Thickness", ctx.prefs.cameraLineThickness);
     ImTable::add("Culled Line Thickness", ctx.prefs.culledLineThickness);
     ImTable::add("Light Line Thickness", ctx.prefs.lightLineThickness);
+    ImTable::add("Spline Line Thickness", ctx.prefs.splineLineThickness);
 
     ImTable::add("AABB Line Color", ctx.prefs.aabbLineColor);
     ImTable::add("Collider Line Color", ctx.prefs.colliderLineColor);
@@ -69,6 +70,8 @@ bool Editor::PreferenceOverlay::draw()
     ImTable::add("Camera Line Color", ctx.prefs.cameraLineColor);
     ImTable::add("Camera Line Color(Selected)", ctx.prefs.cameraLineColorSelected);
     ImTable::add("Culled Line Color", ctx.prefs.culledLineColor);
+    ImTable::add("Spline Line Color", ctx.prefs.splineLineColor);
+    ImTable::add("Spline Line Color(Selected)", ctx.prefs.splineLineColorSelected);
     
     ImTable::end();
   }
@@ -111,6 +114,15 @@ bool Editor::PreferenceOverlay::draw()
       ImTable::addKeybind("Gizmo Scale",     ctx.prefs.keymap.gizmoScale,     defaults.gizmoScale);
       ImTable::addKeybind("Delete Object",   ctx.prefs.keymap.deleteObject,   defaults.deleteObject);
       ImTable::addKeybind("Snap Object",     ctx.prefs.keymap.snapObject,     defaults.snapObject);
+      ImTable::end();
+      ImGui::TreePop();
+    }
+    if (ImGui::TreeNodeEx("Spline Editing", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImTable::start("Spline Editing");
+      ImTable::addKeybind("Toggle Point Edit", ctx.prefs.keymap.splineEditToggle,  defaults.splineEditToggle);
+      ImTable::addKeybind("Extrude Point",     ctx.prefs.keymap.splineExtrude,     defaults.splineExtrude);
+      ImTable::addKeybind("Insert Point",      ctx.prefs.keymap.splineInsertPoint, defaults.splineInsertPoint);
+      ImTable::addKeybind("Select All Points", ctx.prefs.keymap.splineSelectAll,   defaults.splineSelectAll);
       ImTable::end();
       ImGui::TreePop();
     }

@@ -136,6 +136,18 @@ In the editor, you can now see the values showing up:
 :align: center
 ```
 
+Further attributes change how a value is edited, see the sections below.\
+To use several of them on a member, put them all into one `[[...]]` block, separated by commas:
+
+```cpp
+P64_DATA(
+  [[P64::Name("Quality"), P64::Enum("0=Low, 1=Medium, 2=High")]]
+  uint8_t quality = 1;
+);
+```
+
+Separate blocks directly in front of the same member (e.g. one per line) are merged as well.
+
 ### Bitmask Attribute
 
 For unsigned integer members (`uint8_t`, `uint16_t`, `uint32_t`) you can add a\
@@ -161,7 +173,106 @@ At runtime the member is just a regular integer, so you can test the bits as usu
 if(data->elementFlags & (1 << 0)) { /* Fire is set */ }
 ```
 
-\
+Entries without a `bit=` part continue from the previous entry (starting at `0`),\
+so `P64::Bitmask("Fire, Water, Earth")` is the same as the example above.\
+Numbers can be decimal or hex with a `0x` prefix (a leading `0` does not make a number octal).\
+An entry whose number can't be read (e.g. `1.5=Half`) or whose bit the member can't hold\
+(e.g. bit `8` of a `uint8_t`) is skipped with a warning in the log.
+
+### Enum Attribute
+
+For integer members (`uint8_t`, `int8_t`, `uint16_t`, `int16_t`, `uint32_t`, `int32_t`) you can add a\
+`P64::Enum` attribute to pick the value by name instead of entering a number.\
+It uses the same format as the bitmask, a comma-separated list of `value=name` entries:
+
+```cpp
+P64_DATA(
+  [[P64::Name("Spline Mode"), P64::Enum("0=Auto, 1=Loop, 2=Ping-Pong, 3=Once")]]
+  uint8_t splineMode = 0;
+  [[P64::Name("Spline Direction"), P64::Enum("0=Forward, 1=Reverse")]]
+  uint8_t splineReverse = 0;
+);
+```
+
+In the editor this shows up as a select-box with the names, selecting one stores its value.\
+If the current value has no name, the plain number is shown instead.\
+As with the bitmask, values can be decimal (negative ones too, for signed members) or `0x` hex (e.g. `0xFF=Default`),\
+entries without a `value=` part continue from the previous entry,\
+and an entry whose value can't be read or that the member can't hold (e.g. `300` for a `uint8_t`) is skipped with a warning in the log.
+
+At runtime the member is just a regular integer, so it is a good idea to keep the same values in an enum:
+
+```cpp
+enum SplineMode : uint8_t { AUTO = 0, LOOP = 1, PING_PONG = 2, ONCE = 3 };
+
+if(data->splineMode == SplineMode::ONCE) { /* stop at the end */ }
+```
+
+### RequireComponent Attribute
+
+The select-box of an `ObjectRef` member lists the objects of the scene, sorted by name.\
+You can type into it to filter the list, or drag an object from the {doc}`Graph <../editor/windows/sceneGraph>` onto it.\
+Objects that share a name get their id appended (e.g. `Spline Path (#1234567)`) to tell them apart.\
+Objects inside a prefab instance are not listed, as they are re-created with new ids whenever the scene loads.
+
+(objscript-objectref-prefabs)=
+```{admonition} Object references and prefabs
+:class: warning
+
+An `ObjectRef` is `0` inside prefabs and for spawned objects (`get()` returns `nullptr`).\
+It is resolved when a scene is built and can only point to an object placed directly in that scene:
+
+- objects inside a prefab instance can't be picked, they get new ids whenever the scene loads;
+- the prefab data that objects are spawned from at runtime has no scene, so every `ObjectRef` in it is `0`;
+- a reference set on an object inside a prefab only resolves where the prefab is placed in a scene that contains the referenced object.
+
+Scripts inside prefabs and on spawned objects have to find other objects another way,
+for a spline by its numeric **Path Id** (see {doc}`Spline <../editor/components/spline>`),
+e.g. with a **Patrol Path Id** member next to the **Patrol Spline** below.
+```
+
+With a `P64::RequireComponent` attribute, only objects that have a component of the given type are offered\
+(for a prefab instance, the components of its prefab count too).\
+The type is the component name exactly as listed under "Add Component", e.g. `"Spline"`, `"Light"` or `"Camera"`:
+
+```cpp
+P64_DATA(
+  [[P64::Name("Patrol Spline"), P64::RequireComponent("Spline")]]
+  ObjectRef patrolSpline;
+);
+```
+
+The name is case-sensitive. An unknown name (e.g. `"spline"`) can't filter anything: all objects are offered,\
+and a warning below the select-box says so (suggesting `"Spline"` when only the case differs), which is also written to the log once.
+
+Dropping an object without that component onto the select-box is rejected.\
+If the stored object no longer matches (e.g. its component was removed), it is shown as `(invalid)`,\
+and a reference to a deleted object is shown as `<missing ...>`, so you can see what to fix.
+
+The attribute only affects the editor, so still check the component at runtime:
+
+```cpp
+Object *splineObj = data->patrolSpline.get();
+auto *spline = splineObj ? splineObj->getComponent<Comp::Spline>() : nullptr;
+if(spline) { /* follow the path */ }
+```
+
+(objscript-instance-overrides)=
+### Prefab Instance Overrides
+
+On a prefab instance, each exposed value can be overridden for that instance alone (the lock button next to it in the inspector).\
+These overrides are stored under the member's C++ name (not its `P64::Name`),\
+in the same place as the overrides of the object's other properties.\
+So avoid member names the object already uses for something else:
+
+- A member named like a property of the object itself (`pos`, `rot`, `scale`) or of one of its other components\
+  (e.g. `mass` of a Rigid-Body, `volume` of an Audio (2D)) can't be overridden on an instance where that property is overridden:\
+  it keeps the value from the prefab, and the inspector refuses to override it and says why.\
+  Rename the member in the script to override it.
+- Members with the same name in two scripts on the same object share one override.
+
+### Global Memory
+
 Since a script is just a regular C++ file, it is also possible to have global memory.\
 This can be useful to share data global across all instances of a script.
 

@@ -89,6 +89,7 @@ namespace Project::Component
   MAKE_COMP(AnimModel)
   MAKE_COMP(CharBody)
   MAKE_COMP(Particle)
+  MAKE_COMP(Spline)
 
   namespace Camera
   {
@@ -285,7 +286,23 @@ namespace Project::Component
       .funcBuild = Particle::build,
       .funcGetAABB = nullptr
     },
+    CompInfo{
+      .id = 14,
+      .icon = ICON_MDI_VECTOR_CURVE " ",
+      .name = "Spline",
+      .docSlug = "/manual/editor/components/spline",
+      .funcInit = Spline::init,
+      .funcDraw = Spline::draw,
+      .funcDrawPost3D = Spline::draw3D, // post: keeps the default (pickable) object icon
+      .funcSerialize = Spline::serialize,
+      .funcDeserialize = Spline::deserialize,
+      .funcBuild = Spline::build,
+      .funcGetAABB = Spline::getAABB
+    },
   };
+
+  // TABLE is indexed by Entry::id everywhere (and ids are saved in scenes / match the engine)
+  static_assert([]{ for(size_t i = 0; i < TABLE.size(); ++i) if(TABLE[i].id != (int)i) return false; return true; }(), "Component TABLE must be ordered by id");
 
   extern std::array<CompInfo, TABLE.size()> TABLE_SORTED_BY_NAME;
 

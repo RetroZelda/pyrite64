@@ -22,6 +22,7 @@ namespace Editor::UndoRedo
 
     if (!snapshotScene) return false;
     snapshotScene->deserialize(prevCmd->state);
+    ++generation;
 
     uint32_t primarySel = prevCmd->selection.empty() ? 0 : prevCmd->selection.back();
     ctx.setObjectSelectionList(prevCmd->selection, primarySel);
@@ -41,6 +42,7 @@ namespace Editor::UndoRedo
 
     if (!snapshotScene) return false;
     snapshotScene->deserialize(cmd->state);
+    ++generation;
 
     uint32_t primarySel = cmd->selection.empty() ? 0 : cmd->selection.back();
     ctx.setObjectSelectionList(cmd->selection, primarySel);
@@ -59,6 +61,7 @@ namespace Editor::UndoRedo
     savedState.reset();
     snapshotScene = nullptr;
     snapshotSelUUIDs.clear();
+    ++generation; // called on scene load and project open / close
   }
 
   void History::begin() {

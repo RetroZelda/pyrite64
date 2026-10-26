@@ -76,6 +76,16 @@ void Editor::Preferences::load()
     culledLineColor.g = doc.value("culledLineColor_g", DEF.culledLineColor.g);
     culledLineColor.b = doc.value("culledLineColor_b", DEF.culledLineColor.b);
     culledLineColor.a = doc.value("culledLineColor_a", DEF.culledLineColor.a);
+
+    splineLineThickness = doc.value("splineLineThickness", DEF.splineLineThickness);
+    splineLineColor.r = doc.value("splineLineColor_r", DEF.splineLineColor.r);
+    splineLineColor.g = doc.value("splineLineColor_g", DEF.splineLineColor.g);
+    splineLineColor.b = doc.value("splineLineColor_b", DEF.splineLineColor.b);
+    splineLineColor.a = doc.value("splineLineColor_a", DEF.splineLineColor.a);
+    splineLineColorSelected.r = doc.value("splineLineColorSelected_r", DEF.splineLineColorSelected.r);
+    splineLineColorSelected.g = doc.value("splineLineColorSelected_g", DEF.splineLineColorSelected.g);
+    splineLineColorSelected.b = doc.value("splineLineColorSelected_b", DEF.splineLineColorSelected.b);
+    splineLineColorSelected.a = doc.value("splineLineColorSelected_a", DEF.splineLineColorSelected.a);
   } else {
     applyKeymapPreset();
   }
@@ -134,6 +144,16 @@ void Editor::Preferences::save()
     .set("culledLineColor_g", culledLineColor.g)
     .set("culledLineColor_b", culledLineColor.b)
     .set("culledLineColor_a", culledLineColor.a)
+
+    .set("splineLineThickness", splineLineThickness)
+    .set("splineLineColor_r", splineLineColor.r)
+    .set("splineLineColor_g", splineLineColor.g)
+    .set("splineLineColor_b", splineLineColor.b)
+    .set("splineLineColor_a", splineLineColor.a)
+    .set("splineLineColorSelected_r", splineLineColorSelected.r)
+    .set("splineLineColorSelected_g", splineLineColorSelected.g)
+    .set("splineLineColorSelected_b", splineLineColorSelected.b)
+    .set("splineLineColorSelected_a", splineLineColorSelected.a)
     .toString();
   auto prefPath = getPrefsPath();
   printf("Saving prefs to %s\n", prefPath.c_str());

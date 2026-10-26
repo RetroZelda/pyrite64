@@ -74,7 +74,12 @@ CLI::Result CLI::run(int argc, char** argv)
 
   if (cmd == "build") {
     printf("Building project: %s\n", argProgPath.c_str());
-    res = Build::buildProject(argProgPath);
+    try {
+      res = Build::buildProject(argProgPath);
+    } catch(const std::exception &e) {
+      fprintf(stderr, "Build failed: %s\n", e.what());
+      res = false;
+    }
   }
   else if (cmd == "clean")
   {
