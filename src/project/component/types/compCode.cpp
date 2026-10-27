@@ -10,6 +10,7 @@
 #include "../../../utils/jsonBuilder.h"
 #include "../../../utils/binaryFile.h"
 #include "../../../utils/logger.h"
+#include "../../../utils/proc.h"
 #include "../../../utils/string.h"
 #include <algorithm>
 #include <cctype>
@@ -31,19 +32,44 @@ namespace Project::Component::Code
 
   namespace
   {
-    // Instance overrides of args live in Object::propOverrides, keyed by crc64(field name) like every other
-    // property of the object (transform, other components). So a field named e.g. "scale" shares its key
-    // with the transform scale. Args only ever store string overrides: an entry of another type belongs
-    // to that other property, it is never used as the arg's value and never changed through the arg.
-    GenericValue* findArgOverride(Object &obj, const PropString &prop)
+    // Instance overrides of args live in an override map keyed like every other property. Nested prefab
+    // nodes use the path-salted key of the authoring layer (see PropScope / Object::addPropOverride); a
+    // plain object or instance root uses the bare key crc64(field name), which it shares with e.g. the
+    // transform scale. Args only ever store string overrides: an entry of another type belongs to that
+    // other property, it is never used as the arg's value and never changed through the arg.
+    GenericValue* findStringSlot(std::unordered_map<uint64_t, GenericValue> &map, uint64_t key)
     {
-      auto it = obj.propOverrides.find(prop.id);
-      if (it == obj.propOverrides.end() || it->second.type != GenericValue::typeToId<std::string>())return nullptr;
+      auto it = map.find(key);
+      if (it == map.end() || it->second.type != GenericValue::typeToId<std::string>())return nullptr;
       return &it->second;
     }
 
+    // Override that currently provides the arg's value: the scoped cascade first (outermost layer wins,
+    // like Property::resolve), then a bare key on the object itself (also overrides authored before
+    // keys were path-scoped).
+    GenericValue* findArgOverride(Object &obj, const PropString &prop)
+    {
+      for (const auto &layer : PropScope::stack) {
+        auto *map = const_cast<std::unordered_map<uint64_t, GenericValue>*>(layer.overrides);
+        if (auto *ovr = findStringSlot(*map, PropScope::combine(layer.pathHash, prop.id)))return ovr;
+      }
+      return findStringSlot(obj.propOverrides, prop.id);
+    }
+
+    // Whether the arg is overridden on the slot edits are authored into (drives the lock toggle).
+    bool hasArgOverride(Object &obj, const PropString &prop)
+    {
+      if (const auto *layer = PropScope::authorLayer()) {
+        auto *map = const_cast<std::unordered_map<uint64_t, GenericValue>*>(layer->overrides);
+        return findStringSlot(*map, PropScope::combine(layer->pathHash, prop.id)) != nullptr;
+      }
+      return findStringSlot(obj.propOverrides, prop.id) != nullptr;
+    }
+
+    // Only bare keys can collide with another property; a scoped key is unique to its nested slot.
     bool isArgKeyTaken(const Object &obj, const PropString &prop)
     {
+      if (PropScope::authorLayer())return false;
       auto it = obj.propOverrides.find(prop.id);
       return it != obj.propOverrides.end() && it->second.type != GenericValue::typeToId<std::string>();
     }
@@ -53,6 +79,15 @@ namespace Project::Component::Code
     {
       auto *ovr = findArgOverride(obj, prop);
       return ovr ? ovr->valString : prop.value;
+    }
+
+    // Enables the override on the authoring slot, starting from the value currently shown
+    // (which may come from an inner prefab's override rather than the component).
+    void enableArgOverride(Object &obj, PropString &prop)
+    {
+      std::string current = resolveArg(obj, prop);
+      obj.addPropOverride(prop);
+      if (auto *ovr = findArgOverride(obj, prop))ovr->valString = current;
     }
 
     std::string getKeyTakenTooltip(const Utils::CPP::Field &field)
@@ -136,6 +171,22 @@ namespace Project::Component::Code
   std::shared_ptr<void> init(Object &obj) {
     auto data = std::make_shared<Data>();
     return data;
+  }
+
+  /**
+   * Assigns a Script to a Code component.
+   * @param entry Code component entry to assign the Script to.
+   * @param scriptUUID UUID of the Script.
+   * @param openScriptComboBox true to auto-open the combo box.
+   */
+  void setScript(Entry &entry, uint64_t scriptUUID, bool openScriptComboBox)
+  {
+    // Reinterpret the generic component payload as Code-specific data
+    Data &data = *static_cast<Data*>(entry.data.get());
+    // Set the Script UUID to use
+    data.scriptUUID = scriptUUID;
+    // Preserve the requested combo-box behavior for the next draw call
+    data.openScriptComboBox = openScriptComboBox;
   }
 
   nlohmann::json serialize(const Entry &entry) {
@@ -226,9 +277,27 @@ namespace Project::Component::Code
 
     if (ImTable::start("Comp", &obj)) {
       ImTable::add("Name", entry.name);
-      ImTable::addAssetVecComboBox("Script", scriptList, data.scriptUUID, true);
+      ImTable::add("Script");
+
+      // Reserve space for the edit button so the Script combo box keeps its full row layout
+      const float editButtonWidth = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x * 2;
+      const float spacing = ImGui::GetStyle().ItemSpacing.x;
+      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - editButtonWidth - spacing);
+      ImTable::addAssetVecComboBox("", scriptList, data.scriptUUID, true);
 
       auto script = assets.getEntryByUUID(data.scriptUUID);
+      ImGui::SameLine();
+      if (!script) ImGui::BeginDisabled();
+
+      // Open the selected Script in an external application
+      if (ImGui::Button(ICON_MDI_PENCIL, {editButtonWidth, 0}) && script) {
+        if (!Utils::Proc::openFile(script->path)) {
+          Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File. This may be due to WSL path conversion failure.");
+        }
+      }
+      if (!script) ImGui::EndDisabled();
+      ImGui::SetItemTooltip("Edit Script");
+
       if (script) {
 
         ImTable::add("Arguments:");
@@ -271,7 +340,7 @@ namespace Project::Component::Code
             ImGui::PushID(static_cast<int>(prop.id & 0xFFFFFFFFULL));
             ImTable::add(name);
             
-            bool isOverridden = findArgOverride(obj, prop) != nullptr;
+            bool isOverridden = hasArgOverride(obj, prop);
             
             // Lock toggle button
             if (isInstanceMode)
@@ -281,7 +350,7 @@ namespace Project::Component::Code
                   isOverridden = false;
                   refuseArgOverride(obj, field, name);
                 } else if (isOverridden) {
-                  obj.addPropOverride(prop);
+                  enableArgOverride(obj, prop);
                 } else {
                   obj.removePropOverride(prop);
                 }
@@ -298,7 +367,7 @@ namespace Project::Component::Code
             std::string resolved = resolveArg(obj, prop);
             uint64_t uuid = resolved.empty() ? 0 : Utils::parseU64(resolved);
             auto validationFunc = [&](uint64_t newId) {
-                if (isInstanceMode && !findArgOverride(obj, prop)) {
+                if (isInstanceMode && !hasArgOverride(obj, prop)) {
                   // e.g. something dropped onto the locked select-box
                   if (isKeyTaken) {
                     refuseArgOverride(obj, field, name);
@@ -331,9 +400,6 @@ namespace Project::Component::Code
 
               if (scene) {
                 for (auto &[id, object] : scene->objectsMap) {
-                  // materialized prefab children get new uuids on every load, a reference would dangle
-                  if (scene->isPrefabSubobject(*object))continue;
-
                   if (requiredComp >= 0 && !hasRequiredComp(object->components)) {
                     // components of a prefab instance live on its prefab source node
                     auto srcNode = object->isPrefabInstance() ? assets.getPrefabSourceNode(*object) : nullptr;

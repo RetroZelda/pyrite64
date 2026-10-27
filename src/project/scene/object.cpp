@@ -17,7 +17,7 @@ using Builder = Utils::JSON::Builder;
 
 namespace
 {
-  nlohmann::json serializeObj(const Project::Object &obj, bool isTemplate)
+  nlohmann::json serializeObj(const Project::Object &obj)
   {
     Builder builder{};
     builder.set("name", obj.name);
@@ -26,7 +26,6 @@ namespace
     builder.set("proportionalScale", obj.proportionalScale);
     builder.set("selectable", obj.selectable);
     builder.set("enabled", obj.enabled);
-    builder.set("uuidPrefabNode", obj.uuidPrefabNode);
 
     builder
       .set(obj.uuidPrefab)
@@ -52,21 +51,9 @@ namespace
     }
     builder.doc["components"] = comps;
 
-    // Children handling depends on context:
-    //  - TEMPLATE tree: every child is authored content (plain children, nested-prefab
-    //    references, and ADDITIVE override children on a reference node). Reconcile never
-    //    stores derived children in a template, so serialize ALL of them.
-    //  - SCENE tree: children OF A PREFAB INSTANCE are reconcile-derived (recreated from the
-    //    prefab templates) and must NOT be serialized; reconcile rebuilds them on load. Plain
-    //    user/legacy children (uuidPrefabNode == 0) under an instance are kept. Children under
-    //    a plain (non-instance) node are always kept (incl. placed prefab instances).
     nlohmann::json children = nlohmann::json::array();
-    const bool objIsInstance = obj.uuidPrefab.value != 0;
     for (const auto &child : obj.children) {
-      bool derived = !isTemplate && objIsInstance && child->uuidPrefabNode != 0;
-      if (!derived) {
-        children.push_back(serializeObj(*child, isTemplate));
-      }
+      children.push_back(serializeObj(*child));
     }
     builder.set("children", children);
     return builder.doc;
@@ -162,8 +149,8 @@ void Project::Object::removeComponent(uint64_t uuid) {
   );
 }
 
-nlohmann::json Project::Object::serialize(bool isTemplate) const {
-  return serializeObj(*this, isTemplate);
+nlohmann::json Project::Object::serialize() const {
+  return serializeObj(*this);
 }
 
 void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
@@ -178,7 +165,6 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
   proportionalScale = doc.value("proportionalScale", false);
   selectable = doc.value("selectable", true);
   enabled = doc.value("enabled", true);
-  uuidPrefabNode = doc.value("uuidPrefabNode", 0u);
 
   Utils::JSON::readProp(doc, uuidPrefab);
   Utils::JSON::readProp(doc, pos);
@@ -226,12 +212,11 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
   for (size_t i=0; i<childCount; ++i) {
     auto childObj = std::make_shared<Object>(*this);
     childObj->deserialize(scene, chArray[i]);
-    // With a scene, register the child in the scene's object map. Without one
-    // (e.g. loading a prefab template) just attach it to the parent so the
-    // full subobject hierarchy is retained.
     if(scene) {
+      // In a scene, register in the scene's object map.
       scene->addObject(*this, childObj);
     } else {
+      // In a prefab there is no scene, so keep the child tree on the object directly.
       children.push_back(childObj);
     }
   }

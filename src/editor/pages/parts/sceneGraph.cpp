@@ -10,6 +10,7 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "../../../context.h"
 #include "../../imgui/helper.h"
+#include "../../imgui/notification.h"
 #include "IconsMaterialDesignIcons.h"
 #include "imgui_internal.h"
 #include "../../undoRedo.h"
@@ -26,6 +27,10 @@ namespace
   bool startingRename{false};
   glm::vec3 rootViewCenter{0.0f}; // SceneGraph::draw()'s viewCenter
 
+  // Set per-frame at the start of draw(). When non-null a prefab is being edited and
+  // selection is restricted to its own definition, with everything else dimmed and inert.
+  Project::Object* prefabEditObj{nullptr};
+
   struct DragDropTask {
     uint32_t sourceUUID{0};
     uint32_t targetUUID{0};
@@ -41,16 +46,6 @@ namespace
 
   PrefabDropTask prefabDropTask{};
 
-  // Deferred structural edits to a prefab template (add/remove subobject). These mutate the
-  // scene graph via reconcile, so they must run after the tree iteration, not during it.
-  struct PrefabEditTask {
-    enum class Type { NONE, ADD_CHILD, ADD_SPLINE_PATH, REMOVE_NODE };
-    Type type{Type::NONE};
-    uint32_t nodeUUID{0};
-  };
-
-  PrefabEditTask prefabEditTask{};
-
   /**
    * Builds the icon prefix shown before the node name in the scene tree.
    *
@@ -63,14 +58,9 @@ namespace
   {
     std::string prefix{};
 
-    // Only an actual prefab INSTANCE (placed instance or nested-prefab reference) gets the
-    // prefab icon — NOT a plain subobject that merely carries uuidPrefab=owner for reconcile.
-    // Mark with a pencil when THIS prefab is in edit mode so it's clear where edits land.
-    auto loadedScene = ctx.project->getScenes().getLoadedScene();
-    if(loadedScene && loadedScene->isPrefabInstanceRoot(obj)) {
+    // Is a prefab --> Add prefab icon
+    if(obj.uuidPrefab.value)
       prefix += ICON_MDI_PACKAGE_VARIANT_CLOSED " ";
-      if(obj.isPrefabEdit) prefix += ICON_MDI_PENCIL " ";
-    }
 
     bool gotComponentIcon = false;
     // The object has components
@@ -157,27 +147,16 @@ namespace
    * Turns a freshly added child of `parent` into a "Spline Path": its name, a Spline component (the
    * default loop) and a position at the parent (editor positions are world space) or, under the
    * scene root, at the centre of the active 3D viewport, so the path is in view right away.
-   * A prefab subobject gets them on its template node (the prefab definition, which reconcile
-   * copies to the instances); the instance node mirrors the name and position at once.
    *
-   * @param added  The new object (scene object or materialized prefab subobject).
+   * @param added  The new scene object.
    * @param parent The object it was added under.
    */
   void initSplinePath(Project::Object &added, Project::Object &parent)
   {
-    Project::Object *target = &added;
-    if (added.isPrefabInstance()) {
-      target = ctx.project->getAssets().getPrefabSourceNode(added);
-      if (!target) return;
-    }
-
     const glm::vec3 pos = parent.parent ? parent.pos.resolve(parent.propOverrides) : rootViewCenter;
-    added.name = target->name = "Spline Path";
-    added.pos.value = target->pos.value = pos;
-    target->addComponent(Project::Component::Spline::ID);
-
-    // after the component: markPrefabDirty diffs the prefab's current state against the saved one
-    if (target != &added) ctx.project->getAssets().markPrefabDirty(added.uuidPrefab.value);
+    added.name = "Spline Path";
+    added.pos.value = pos;
+    added.addComponent(Project::Component::Spline::ID);
   }
 
   bool DrawDropTarget(uint32_t& dragDropTarget, uint32_t uuid, float thickness = 2.0f, float hitHeight = 8.0f)
@@ -282,27 +261,57 @@ namespace
     } else if (finishRename) {
       // Given new name --> Apply to object
       if (!renameBuffer.empty() && obj.name != renameBuffer) {
-        auto sc = ctx.project->getScenes().getLoadedScene();
-        if (sc && sc->isPrefabSubobject(obj)) {
-          // A subobject's name is reconcile-driven (copied from its template), so a direct
-          // rename would revert. Route it to the template node in the active edit scope.
-          auto t = sc->resolveEditTarget(obj);
-          if (t.parent) {
-            t.parent->name = renameBuffer;
-            obj.name = renameBuffer; // immediate feedback; reconcile keeps it in sync
-            ctx.project->getAssets().markPrefabDirty(t.prefabUUID);
-            Editor::UndoRedo::getHistory().markChanged("Rename Prefab Subobject");
-          }
-          // else: locked in the current scope -> ignore the rename
-        } else {
-          obj.name = renameBuffer;
-          Editor::UndoRedo::getHistory().markChanged("Edit object name");
-        }
+        obj.name = renameBuffer;
+        Editor::UndoRedo::getHistory().markChanged("Edit object name");
       }
       clearRenaming();
     }
 
     ImGui::SetCursorPos(oldCursorPos);
+  }
+
+  // Display of a prefab instance's definition tree (nested prefab content). The nodes
+  // aren't scene objects, so they're shown dimmed and selecting one targets it as a
+  // nested override (rootUuid = instance, path = chain of definition-node uuids).
+  void drawPrefabDefNode(Project::Object &node, int depth, uint32_t rootUuid,
+                         std::vector<uint32_t> path, bool selectable)
+  {
+    if(depth > 64)return; // guard against self-referencing prefabs
+    path.push_back(node.uuid);
+
+    Project::Object* src = Editor::SelectionUtils::prefabDefOf(&node);
+
+    bool isSelected = (ctx.selObjectUUID == rootUuid && ctx.selSubPath == path);
+    bool dim = prefabEditObj ? !selectable : false;
+
+    ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow
+      | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_FramePadding
+      | ImGuiTreeNodeFlags_SpanAllColumns;
+    if(src->children.empty())flag |= ImGuiTreeNodeFlags_Leaf;
+    if(isSelected)flag |= ImGuiTreeNodeFlags_Selected;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.f, 3_px));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
+    std::string nameID = getNodeIcons(node) + node.name + "##pf"
+      + std::to_string(reinterpret_cast<uintptr_t>(&node));
+    if(dim)ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    bool isOpen = ImGui::TreeNodeEx(nameID.c_str(), flag);
+    if(dim)ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+
+    if(selectable && ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
+      ctx.setNestedSelection(rootUuid, path);
+    }
+
+    if(isOpen) {
+      // Outside edit mode the whole def tree is selectable.
+      // In edit mode we may descend through regular children but stop at nested prefab instances.
+      bool childSelectable = prefabEditObj ? (selectable && !node.isPrefabInstance()) : true;
+      for(auto &child : src->children) {
+        drawPrefabDefNode(*child, depth + 1, rootUuid, path, childSelectable);
+      }
+      ImGui::TreePop();
+    }
   }
 
   void drawObjectNode(
@@ -314,7 +323,15 @@ namespace
       | ImGuiTreeNodeFlags_OpenOnDoubleClick
       | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanAllColumns;
 
-    if (obj.children.empty()) {
+    // A prefab instance shows its definition tree (read-only) below, so it can expand
+    // even though the thin instance itself has no children.
+    Project::Object* prefabDef = nullptr;
+    if(obj.isPrefabInstance()) {
+      auto prefab = ctx.project->getAssets().getPrefabByUUID(obj.uuidPrefab.value);
+      if(prefab && !prefab->obj.children.empty())prefabDef = &prefab->obj;
+    }
+
+    if (obj.children.empty() && !prefabDef) {
       flag |= ImGuiTreeNodeFlags_Leaf;
     }
 
@@ -327,6 +344,10 @@ namespace
       deleteSelection = true;
     }
 
+    // While editing a prefab, only that instance may be selected here. Its own definition
+    // is handled by drawPrefabDefNode. All other scene objects are dimmed and inert.
+    bool canSelect = !prefabEditObj || (&obj == prefabEditObj);
+
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.f, 3_px));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, 0.f));
 
@@ -334,27 +355,19 @@ namespace
     if (obj.parent) nameID += " (" + std::to_string(obj.runtimeId) + ")";
     nameID += "##" + std::to_string(obj.uuid);
 
-    // Dim prefab-managed subobjects that are outside the active edit scope (cannot be edited
-    // until the owning prefab is put in edit mode), so it's clear where edits will land.
-    const bool dimmed = scene.isPrefabSubobject(obj)
-      && !scene.resolveEditTarget(obj).parent
-      && !scene.resolveAddTarget(obj).parent;
-    if (dimmed) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
-
+    if(!canSelect)ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     bool isOpen = ImGui::TreeNodeEx(nameID.c_str(), flag);
-
-    if (dimmed) ImGui::PopStyleColor();
-
-    // Tooltip: which prefab owns this node (and whether it's locked in the current scope).
-    if (obj.uuidPrefab.value && ImGui::IsItemHovered()) {
-      auto *passet = ctx.project->getAssets().getEntryByUUID(obj.uuidPrefab.value);
-      ImGui::SetTooltip("Prefab: %s%s",
-        passet ? passet->name.c_str() : "?",
-        dimmed ? "  (locked - edit its prefab to change)" : "");
-    }
-
+    if(!canSelect)ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
     ImVec2 nodeRectMin = ImGui::GetItemRectMin();
+
+    // Mark object being edited in prefab-edit mode
+    if(ctx.isPrefabEditing(obj.uuid)) {
+      ImVec2 bgMax = ImGui::GetItemRectMax();
+      bgMax.x = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+      ImU32 editCol = ImGui::Theme::getColorU32("prefabEditBg", IM_COL32(190, 55, 55, 60));
+      ImGui::GetWindowDrawList()->AddRectFilled(nodeRectMin, bgMax, editCol);
+    }
 
     bool nodeIsClicked = ImGui::IsItemHovered()
       && ImGui::IsMouseReleased(ImGuiMouseButton_Left)
@@ -439,7 +452,7 @@ namespace
       }
     }
 
-    if (nodeIsClicked) {
+    if (nodeIsClicked && canSelect) {
       bool isCtrlDown = ImGui::GetIO().KeyCtrl;
       if (isCtrlDown) {
         ctx.toggleObjectSelection(obj.uuid);
@@ -454,68 +467,61 @@ namespace
     {
       if (ImGui::BeginPopupContextItem("NodePopup"))
       {
-        // Structural edits inside a prefab instance only apply while editing the prefab.
-        const bool isPrefab = obj.isPrefabInstance();
-        const bool isSubobject = scene.isPrefabSubobject(obj);
-        const bool editingPrefab = isPrefab && scene.isEditingPrefabOf(obj);
-
-        const bool addDisabled = isPrefab && !editingPrefab;
-        if (addDisabled) ImGui::BeginDisabled();
         if (ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Add Object")) {
-          if (isPrefab) {
-            // Defer: prefabAddChild reconciles (mutates the tree we're iterating).
-            prefabEditTask = {PrefabEditTask::Type::ADD_CHILD, obj.uuid};
-          } else {
-            auto added = scene.addObject(obj);
-            if (added) {
-              ctx.setObjectSelection(added->uuid);
-              startRenaming(added->uuid);
-            }
-            Editor::UndoRedo::getHistory().markChanged("Add Object");
+          auto added = scene.addObject(obj);
+          if (added) {
+            ctx.setObjectSelection(added->uuid);
+            startRenaming(added->uuid);
           }
+          Editor::UndoRedo::getHistory().markChanged("Add Object");
         }
-        if (addDisabled) ImGui::EndDisabled();
 
         // New object with a Spline component (AI patrol path etc.), ready for point editing.
-        // Inside a prefab only while editing it, like Add Object (hidden while it is locked).
-        if (!addDisabled && ImGui::MenuItem(ICON_MDI_VECTOR_CURVE " Add Spline Path")) {
-          if (isPrefab) {
-            // Defer: prefabAddChild reconciles (mutates the tree we're iterating).
-            prefabEditTask = {PrefabEditTask::Type::ADD_SPLINE_PATH, obj.uuid};
-          } else {
-            auto added = scene.addObject(obj);
-            if (added) {
-              initSplinePath(*added, obj);
-              ctx.setObjectSelection(added->uuid);
-              startRenaming(added->uuid);
-            }
-            Editor::UndoRedo::getHistory().markChanged("Add Spline Path");
+        if (ImGui::MenuItem(ICON_MDI_VECTOR_CURVE " Add Spline Path")) {
+          auto added = scene.addObject(obj);
+          if (added) {
+            initSplinePath(*added, obj);
+            ctx.setObjectSelection(added->uuid);
+            startRenaming(added->uuid);
           }
+          Editor::UndoRedo::getHistory().markChanged("Add Spline Path");
         }
 
         if (obj.parent) {
           if (!obj.isPrefabInstance() && ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED_PLUS " To Prefab")) {
-            scene.createPrefabFromObject(obj.uuid);
+            // Defer: createPrefabFromObject reloads assets (frees GPU textures), which is
+            // unsafe mid-frame while ImGui draw data still references them.
+            auto *scenePtr = &scene;
+            uint32_t uuid = obj.uuid;
+            ctx.deferAction([scenePtr, uuid]() { scenePtr->createPrefabFromObject(uuid); });
           }
 
-          // Subobjects can only be deleted while editing the prefab; instance roots
-          // (and plain objects) delete normally as scene objects.
-          const bool delDisabled = isSubobject && !editingPrefab;
-          if (delDisabled) ImGui::BeginDisabled();
-          if (ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete")) {
-            if (isSubobject) {
-              prefabEditTask = {PrefabEditTask::Type::REMOVE_NODE, obj.uuid};
-            } else {
-              deleteObj = &obj;
-            }
+          if (obj.isPrefabInstance() && ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT " Unpack Prefab")) {
+            // Defer: modifies the scene tree (adds objects) - unsafe mid-iteration.
+            auto *scenePtr = &scene;
+            uint32_t uuid = obj.uuid;
+            ctx.deferAction([scenePtr, uuid]() {
+              Editor::UndoRedo::getHistory().markChanged("Unpack Prefab");
+              scenePtr->unpackPrefabInstance(uuid);
+            });
           }
-          if (delDisabled) ImGui::EndDisabled();
+
+          if (ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete"))deleteObj = &obj;
         }
         ImGui::EndPopup();
       }
 
       for(auto &child : obj.children) {
         drawObjectNode(scene, *child, keyDelete, parentEnabled && obj.enabled);
+      }
+
+      // Prefab definition tree showing nested prefab content under the instance. Nodes are
+      // selectable for nested override editing, keyed relative to the prefab root. While
+      // editing a prefab, only the edited instance's own definition is selectable.
+      if(prefabDef) {
+        for(auto &child : prefabDef->children) {
+          drawPrefabDefNode(*child, 0, obj.uuid, {}, canSelect);
+        }
       }
 
       ImGui::TreePop();
@@ -529,37 +535,11 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
   if (!scene)return;
   rootViewCenter = viewCenter;
 
-  // Breadcrumb: which prefab(s) are currently in edit mode (the active edit scope). Makes it
-  // explicit which prefab a drop/edit will modify.
-  {
-    std::vector<std::string> editScopes;
-    std::vector<Project::Object*> stack{ &scene->getRootObject() };
-    while (!stack.empty()) {
-      Project::Object *o = stack.back();
-      stack.pop_back();
-      if (o->isPrefabEdit && scene->isPrefabInstanceRoot(*o)) {
-        uint64_t pf = ctx.project->getAssets().resolveInstance(*o).prefabUUID;
-        auto *a = ctx.project->getAssets().getEntryByUUID(pf);
-        editScopes.push_back(a ? a->name : std::string{"?"});
-      }
-      for (auto &c : o->children) stack.push_back(c.get());
-    }
-    if (!editScopes.empty()) {
-      std::string bc = ICON_MDI_PENCIL " Editing prefab: ";
-      for (size_t i = 0; i < editScopes.size(); ++i) {
-        bc += editScopes[i];
-        if (i + 1 < editScopes.size()) bc += "  >  ";
-      }
-      ImGui::TextDisabled("%s", bc.c_str());
-      ImGui::Separator();
-    }
-  }
-
   dragDropTask = {};
   prefabDropTask = {};
-  prefabEditTask = {};
   deleteObj = nullptr;
   deleteSelection = false;
+  prefabEditObj = Editor::SelectionUtils::getPrefabEditObject(*scene);
   bool isFocus = ImGui::IsWindowFocused();
   // While rename is active, shortcuts stay disabled, so the text field can own the keyboard input
   bool isRenaming = renameObjectUUID != 0;
@@ -596,49 +576,15 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
 
   if(dragDropTask.sourceUUID && dragDropTask.targetUUID) {
     //printf("dragDropTarget %08X -> %08X (%d)\n", dragDropTask.sourceUUID, dragDropTask.targetUUID, dragDropTask.isInsert);
-    auto src = scene->getObjectByUUID(dragDropTask.sourceUUID);
-    auto tgt = scene->getObjectByUUID(dragDropTask.targetUUID);
+    bool moved = scene->moveObject(
+      dragDropTask.sourceUUID,
+      dragDropTask.targetUUID,
+      dragDropTask.isInsert
+    );
 
-    // Prefab-aware handling first (reparent within / drag in / drag out of a prefab being edited).
-    int prefabResult = scene->prefabMove(src.get(), tgt.get(), dragDropTask.isInsert);
-    if (prefabResult == 1) {
+    // Could move --> Add to history
+    if (moved)
       UndoRedo::getHistory().markChanged("Move Object");
-    } else if (prefabResult == 0) {
-      // Not a prefab move --> normal scene reparent
-      bool moved = scene->moveObject(
-        dragDropTask.sourceUUID,
-        dragDropTask.targetUUID,
-        dragDropTask.isInsert
-      );
-      if (moved)
-        UndoRedo::getHistory().markChanged("Move Object");
-    }
-    // prefabResult == 2: intentionally ignored (locked subobject) --> no-op
-  }
-
-  if (prefabEditTask.type != PrefabEditTask::Type::NONE) {
-    auto node = scene->getObjectByUUID(prefabEditTask.nodeUUID);
-    if (node) {
-      if (prefabEditTask.type == PrefabEditTask::Type::ADD_CHILD) {
-        auto added = scene->prefabAddChild(*node);
-        if (added) {
-          ctx.setObjectSelection(added->uuid);
-          startRenaming(added->uuid);
-        }
-        UndoRedo::getHistory().markChanged("Add Prefab Subobject");
-      } else if (prefabEditTask.type == PrefabEditTask::Type::ADD_SPLINE_PATH) {
-        auto added = scene->prefabAddChild(*node);
-        if (added) {
-          initSplinePath(*added, *node);
-          ctx.setObjectSelection(added->uuid);
-          startRenaming(added->uuid);
-          UndoRedo::getHistory().markChanged("Add Spline Path");
-        }
-      } else if (prefabEditTask.type == PrefabEditTask::Type::REMOVE_NODE) {
-        scene->prefabRemoveNode(*node);
-        UndoRedo::getHistory().markChanged("Remove Prefab Subobject");
-      }
-    }
   }
 
   if (prefabDropTask.prefabUUID && prefabDropTask.targetNodeUUID) {
@@ -646,14 +592,10 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
     Project::Object* parent = targetObj ? targetObj.get() : &scene->getRootObject();
 
     std::shared_ptr<Project::Object> newObj;
-    if (parent->isPrefabInstance()) {
-      // Dropping a prefab onto a prefab instance embeds it INTO the prefab being edited
-      // (routed to the innermost edited prefab, or an additive override on an outer one).
-      // If nothing in that instance is being edited, the drop is locked (ignored).
-      if (scene->isEditingPrefabOf(*parent)) {
-        UndoRedo::getHistory().markChanged("Add Prefab to Prefab");
-        newObj = scene->addPrefabReferenceToPrefab(*parent, prefabDropTask.prefabUUID);
-      }
+    if (parent->isPrefabInstance() && ctx.isPrefabEditing(parent->uuid)) {
+      // Nesting a prefab into the definition being edited is not supported yet; outside of
+      // edit mode the drop adds a regular scene child under the instance.
+      Editor::Noti::add(Editor::Noti::INFO, "Drop the prefab outside of prefab-edit mode to place it in the scene");
     } else {
       UndoRedo::getHistory().markChanged("Add Prefab");
       newObj = scene->addPrefabInstance(prefabDropTask.prefabUUID, *parent);

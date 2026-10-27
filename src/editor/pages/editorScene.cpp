@@ -11,6 +11,7 @@
 #include "../actions.h"
 #include "../undoRedo.h"
 #include "../canvasHistory.h"
+#include "../selectionUtils.h"
 #include "../splineEdit.h"
 #include "../../context.h"
 #include "../../project/assets/emitter.h"
@@ -220,17 +221,8 @@ void Editor::Scene::draw()
     pendingRestoreCanvasUUID = 0;
   }
 
-  // Keep prefab instance subobjects in sync with their prefab definitions so edits
-  // to a prefab (structure + transform) propagate live to all placed instances.
-  // Done once at the top of the frame, before any scene-graph/viewport iteration.
-  if(ctx.project && !ctx.isBuildOrRunning()) {
-    if(auto loadedScene = ctx.project->getScenes().getLoadedScene()) {
-      loadedScene->reconcilePrefabInstances();
-    }
-  }
-
-  // Spline point editor: end the session / clamp its point selection after undo, reloads,
-  // reconcile or selection changes (no-op during builds), before anything draws it.
+  // Spline point editor: end the session / clamp its point selection after undo, reloads
+  // or selection changes (no-op during builds), before anything draws it.
   SplineEdit::validate(ctx.project ? ctx.project->getScenes().getLoadedScene() : nullptr);
 
   // Safe point to destroy viewports closed last frame: their render has completed.
@@ -734,6 +726,25 @@ void Editor::Scene::draw()
         }
         if(ImGui::MenuItem("Reset Layout"))wantResetLayout = true;
         ImGui::EndMenu();
+      }
+
+      // Centered button to leave prefab-edit mode
+      if(auto scene = ctx.project->getScenes().getLoadedScene()) {
+        if(auto *editObj = Editor::SelectionUtils::getPrefabEditObject(*scene)) {
+          std::string label = ICON_MDI_PENCIL_OFF " Exit Prefab Edit";
+          float w = ImGui::CalcTextSize(label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+          ImGui::SetCursorPosX((ImGui::GetWindowWidth() - w) * 0.5f);
+          ImVec4 red = ImGui::Theme::getColor("prefabEditBg", ImVec4{0.745f, 0.216f, 0.216f, 1.0f});
+          red.w = 1.0f;
+          ImGui::PushStyleColor(ImGuiCol_Button, red);
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{red.x * 1.25f, red.y * 1.25f, red.z * 1.25f, 1.0f});
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4{red.x * 0.85f, red.y * 0.85f, red.z * 0.85f, 1.0f});
+          if(ImGui::Button(label.c_str())) {
+            ctx.project->getAssets().markPrefabDirty(editObj->uuidPrefab.value);
+            ctx.prefabEditUUID = 0;
+          }
+          ImGui::PopStyleColor(3);
+        }
       }
 
       ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 40_px);

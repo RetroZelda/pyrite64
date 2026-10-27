@@ -41,9 +41,12 @@ namespace Editor
       bool pickAdditive{false};
       bool selectionPending{false};
       bool selectionDragging{false};
+      bool cameraDragActive{false};
+      bool cameraDragFlush{false};
 
       float moveSpeedModifier{1.0f};
       float vpOffsetY{};
+      glm::vec2 cursorLockPos{};
       glm::vec2 mousePos{};
       glm::vec2 mousePosStart{};
       glm::vec2 mousePosClick{};
@@ -114,6 +117,9 @@ namespace Editor
       // simulate emitters + build/upload billboard verts (copy pass), then bind+draw (render pass)
       void buildParticles(SDL_GPUCopyPass* copyPass);
       void drawParticles(SDL_GPUCommandBuffer* cmdBuff, SDL_GPURenderPass* pass, Renderer::Scene& renderScene);
+
+      // Toggles dragging which hides the cursor for infinite movement
+      void setCameraDrag(bool active);
 
     public:
       uint32_t winId{0};

@@ -12,23 +12,6 @@
 
 namespace fs = std::filesystem;
 
-namespace
-{
-  // Assign pre-order runtime ids (root=1, then children) to the prefab tree so the
-  // serialized parent links (group = parent's runtimeId) are consistent, and the runtime
-  // can remap them when spawning the prefab. Returns the total object count.
-  uint32_t assignPrefabRuntimeIds(Project::Object &obj, Project::Object *parent, uint32_t &nextId)
-  {
-    obj.parent = parent;
-    obj.runtimeId = static_cast<uint16_t>(nextId++);
-    uint32_t count = 1;
-    for (auto &child : obj.children) {
-      count += assignPrefabRuntimeIds(*child, &obj, nextId);
-    }
-    return count;
-  }
-}
-
 bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
 {
   auto &assets = sceneCtx.project->getAssets().getTypeEntries(Project::FileType::PREFAB);
@@ -46,21 +29,22 @@ bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
     // @TODO: lazy-build again after refactoring the asset table building
     //if(!assetBuildNeeded(asset, outPath))continue;
 
+    // A prefab asset is spawned at runtime, which has no prefab resolution or transform
+    // hierarchy. So bake the whole tree flat and world-relative to the root, expanding any
+    // nested prefabs, and prefix the object count so the runtime knows how many to load.
     sceneCtx.fileObj = {};
-    // Header: number of objects in this prefab, so the runtime can instantiate the full
-    // hierarchy (root + all children), not just the root. Ids are assigned pre-order to
-    // keep parent/group links resolvable and remappable at spawn time.
-    uint32_t idCounter = 1;
-    uint32_t prefabObjCount = assignPrefabRuntimeIds(asset.prefab->obj, nullptr, idCounter);
-    sceneCtx.fileObj.write<uint32_t>(prefabObjCount);
+    sceneCtx.nextRuntimeId = 1; // the root is 0, expanded children continue from here
+    sceneCtx.fileObj.write<uint32_t>(0); // object count, patched below
+    uint32_t count = 0;
     try {
-      writeObject(sceneCtx, asset.prefab->obj, true);
+      count = writeObject(sceneCtx, asset.prefab->obj, false, 0, 0, true, {}, true);
     } catch(const std::exception &e) {
       // e.g. an oversized component record: never write a corrupt .pf, fail the build
       Utils::Logger::log("Prefab build failed (" + asset.name + "): " + e.what(), Utils::Logger::LEVEL_ERROR);
       sceneCtx.fileObj = {};
       return false;
     }
+    sceneCtx.fileObj.atPos(0, [&]{ sceneCtx.fileObj.write<uint32_t>(count); });
     sceneCtx.fileObj.writeToFile(outPath);
     sceneCtx.fileObj = {};
   }

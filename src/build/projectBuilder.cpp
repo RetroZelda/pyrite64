@@ -62,8 +62,8 @@ bool Build::buildProject(const std::string &configPath)
   auto path = project.getPath();
   Utils::Logger::log("Building project...");
 
-  // Prefab-instance resolution (Scene::reconcilePrefabInstances / resolveInstance and
-  // sceneBuilder) looks prefabs up through the GLOBAL ctx.project. The editor sets that
+  // Prefab-instance resolution (sceneBuilder, prefab-aware components) looks prefabs up
+  // through the GLOBAL ctx.project. The editor sets that
   // when a project is opened, but a headless/CLI build does not, which would null-deref.
   // Point the global at the project being built for the duration of the build, restoring
   // any prior value on exit (e.g. when the editor itself triggers a build).

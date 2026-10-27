@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
@@ -18,6 +19,126 @@
 #include "../../../project/component/components.h"
 #include "../../selectionUtils.h"
 #include "../../undoRedo.h"
+
+namespace
+{
+  constexpr int COMP_ID_CODE = 0;
+
+  /**
+   * Returns whether the current drag payload is an object-script asset.
+   * @param scriptUUID Optional output for the dragged script UUID.
+   * @return true when the active payload is a CODE_OBJ asset.
+   */
+  bool isDraggedObjectScript(uint64_t *scriptUUID = nullptr)
+  {
+    // Access ImGui's drag-drop state
+    ImGuiContext &g = *GImGui;
+    // There is no drag operation or no project assets to inspect --> Do nothing
+    if (!g.DragDropActive || !ctx.project) return false;
+
+    // Only asset payloads with UUIDs can create Code components here
+    const ImGuiPayload *payload = ImGui::GetDragDropPayload();
+    if (!payload || !payload->IsDataType("ASSET") || payload->DataSize != sizeof(uint64_t))
+      return false;
+
+    // Resolve the dragged UUID back to an asset entry and verify that it is an object script
+    const uint64_t uuid = *static_cast<const uint64_t*>(payload->Data);
+    auto *script = ctx.project->getAssets().getEntryByUUID(uuid);
+    if (!script || script->type != Project::FileType::CODE_OBJ)
+      return false;
+
+    // Requeted to output the UUID --> Assign it
+    if (scriptUUID)
+      *scriptUUID = uuid;
+
+    return true;
+  }
+
+  /**
+   * Creates a Code component using dropped Script.
+   * @param targetObj Object receiving the new component.
+   * @param scriptUUID UUID of the dragged script.
+   * @return true when the component was added successfully.
+   */
+  bool createCodeComponentFromScript(Project::Object *targetObj, uint64_t scriptUUID)
+  {
+    // There is no target object --> Do nothing
+    if (!targetObj) return false;
+
+    // Track the component count to detect whether addComponent actually appended one
+    const auto oldSize = targetObj->components.size();
+    // Record undo history before modifying the component list
+    Editor::UndoRedo::getHistory().markChanged("Add Code Component");
+    // Create a Code component
+    targetObj->addComponent(COMP_ID_CODE);
+    if (targetObj->components.size() <= oldSize) return false;
+
+    // Set the Script field for the created Code component
+    auto &comp = targetObj->components.back();
+    Project::Component::Code::setScript(comp, scriptUUID, false);
+    return true;
+  }
+
+  /**
+   * Handles dropping an object script onto the inspector panel.
+   * @param targetObj Object that should receive a new Code component.
+   * @param dropRect Custom panel-space drop rectangle.
+   * @param highlightWindow True to draw the inspector-wide highlight border.
+   * @return True when a valid script is hovering or was delivered to this target.
+   */
+  bool handleScriptComponentDropTarget(Project::Object *targetObj, const ImRect &dropRect, bool highlightWindow)
+  {
+    // Register the inspector panel as a custom drop target covering the requested rectangle
+    if (!ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##ScriptComponentDropTarget"))) return false;
+
+    // Peek the asset payload while it hovers so the panel can highlight before delivery
+    const ImGuiPayload *payload = ImGui::AcceptDragDropPayload(
+      "ASSET",
+      ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+    );
+    // There is no compatible payload --> Skip the target
+    if (!payload || payload->DataSize != sizeof(uint64_t)) {
+      ImGui::EndDragDropTarget();
+      return false;
+    }
+
+    // Resolve the hovered asset UUID and reject anything that is not an object Script
+    const uint64_t scriptUUID = *static_cast<const uint64_t*>(payload->Data);
+    auto *script = ctx.project->getAssets().getEntryByUUID(scriptUUID);
+    // Is not a Code component --> Skip the target
+    if (!script || script->type != Project::FileType::CODE_OBJ) {
+      ImGui::EndDragDropTarget();
+      return false;
+    }
+
+    if (highlightWindow) {
+      // Use the window's inner rectangle so the border matches the visible inspector panel
+      ImGuiWindow *window = ImGui::GetCurrentWindowRead();
+      auto col = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
+      ImRect borderRect = window->InnerRect;
+      // Fix the rect size not to write outside of the panel
+      borderRect.Min.y += 1.0f;
+      borderRect.Min.x += 2.0f;
+      borderRect.Max.x -= 2.0f;
+      borderRect.Max.y -= 2.0f;
+      // Draw an outline to highlight the object inspector panel
+      ImGui::GetWindowDrawList()->AddRect(borderRect.Min, borderRect.Max, col, 0.0f, 0, 2.0f);
+    }
+
+    bool accepted = false;
+    // Released the mouse --> Commit drop, create Code component
+    if (payload->Delivery) {
+      accepted = createCodeComponentFromScript(targetObj, scriptUUID);
+    // Hovering valid script --> Mark the panel as active drop target
+    } else {
+      accepted = true;
+    }
+
+    // Close the custom target scope opened above
+    ImGui::EndDragDropTarget();
+    return accepted;
+  }
+}
 
 Editor::ObjectInspector::ObjectInspector() {
 }
@@ -139,8 +260,8 @@ void Editor::ObjectInspector::draw() {
             bool createdOverride = false;
             glm::vec3 resolvedBefore = (selObj->*prop).resolve(selObj->propOverrides);
             if (selObj->isPrefabInstance()
-                && !selObj->isPrefabEdit
-                && selObj->propOverrides.find((selObj->*prop).id) == selObj->propOverrides.end()) {
+                && !ctx.isPrefabEditing(selObj->uuid)
+                && !selObj->hasPropOverride(selObj->*prop)) {
               selObj->addPropOverride(selObj->*prop);
               createdOverride = true;
             }
@@ -160,8 +281,8 @@ void Editor::ObjectInspector::draw() {
             bool createdOverride = false;
             glm::quat resolvedBefore = (selObj->*prop).resolve(selObj->propOverrides);
             if (selObj->isPrefabInstance()
-                && !selObj->isPrefabEdit
-                && selObj->propOverrides.find((selObj->*prop).id) == selObj->propOverrides.end()) {
+                && !ctx.isPrefabEditing(selObj->uuid)
+                && !selObj->hasPropOverride(selObj->*prop)) {
               selObj->addPropOverride(selObj->*prop);
               createdOverride = true;
             }
@@ -282,48 +403,56 @@ void Editor::ObjectInspector::draw() {
   if(obj->uuidPrefab.value)
   {
     prefab = ctx.project->getAssets().getPrefabByUUID(obj->uuidPrefab.value);
-    auto *node = ctx.project->getAssets().getPrefabSourceNode(*obj);
-    if(node)srcObj = node;
+    if(prefab)srcObj = &prefab->obj;
     isPrefabInst = true;
   }
 
-  // True when this object's prefab is being edited (the edit flag may sit on an ancestor).
-  const bool editingPrefab = isPrefabInst && scene->isEditingPrefabOf(*obj);
+  // When a nested prefab object is selected (selSubPath), the inspector shows that node
+  // instead of the root instance, rendered through the same path below. The guards stay
+  // alive in 'nested' so its edits keep authoring to the right override owner.
+  Editor::SelectionUtils::NestedTarget nested;
+  if(isPrefabInst) Editor::SelectionUtils::resolveNestedTarget(nested, obj.get(), prefab.get());
 
-  // While editing a prefab, edits/overrides target a TEMPLATE node (not the materialized
-  // instance, which reconcile overwrites and never serializes), routed per-level via
-  // resolveEditTarget: the node's own prefab definition if that prefab is in edit mode, else
-  // an override on the owner prefab's copy. Displayed property values still come from srcObj.
-  Project::Object* editTarget = obj.get();
-  uint64_t editPrefabUUID = 0;
-  if (isPrefabInst) {
-    auto t = scene->resolveEditTarget(*obj);
-    if (t.parent) { editTarget = t.parent; editPrefabUUID = t.prefabUUID; }
-  }
+  // The inspected target: the nested node when one is selected, else the root object.
+  Project::Object* tableObj = nested.isNested ? nested.node : obj.get();    // backs the override map
+  Project::Object* xfSrc    = nested.isNested ? nested.node : srcObj;       // transform property source
+  Project::Object* compSrc  = nested.isNested ? nested.nodeSrc : srcObj;    // component source
+  // A nested override authors via the active cascade (Path), the root and a direct
+  // definition edit author via a fresh component layer (Dispatch).
+  bool compViaPath = nested.isNested && !nested.directDefEdit;
 
 
-  //if (ImGui::CollapsingHeader("General", ImGuiTreeNodeFlags_DefaultOpen))
   {
-    if (ImTable::start("General", obj.get())) {
-      ImTable::add("Name", obj->name);
+    if (ImTable::start("General", tableObj)) {
+      if(nested.isNested) {
+        // A nested node's name belongs to the prefab definition, so it is read-only here.
+        ImTable::add("Name");
+        ImGui::TextUnformatted(nested.node->name.c_str());
+      } else {
+        // The name belongs to the object itself, not the prefab, so it stays editable even
+        // on a locked prefab instance.
+        ImTable::add("Name");
+        ImGui::PushID("Name");
+        if(ImGui::InputText("##Name", &obj->name)) {
+          Editor::UndoRedo::getHistory().markChanged("Edit Name");
+        }
+        ImGui::PopID();
 
-      //ImTable::add("UUID");
-      //ImGui::Text("0x%16lX", obj->uuid);
+        if(isPrefabInst) {
+          ImTable::add("Prefab");
 
-      // Only an actual prefab INSTANCE (placed instance or nested-prefab reference) offers the
-      // "Edit prefab" toggle. Plain subobjects carry uuidPrefab=owner for reconcile but are not
-      // prefabs the user edits as a unit.
-      if(isPrefabInst && scene->isPrefabInstanceRoot(*obj)) {
-        ImTable::add("Prefab");
+          bool editing = ctx.isPrefabEditing(obj->uuid);
+          auto name = std::string{ICON_MDI_PENCIL " "};
+          name += editing ? ("Back to Instance") : ("Edit '" + srcObj->name + "'");
 
-        auto name = std::string{ICON_MDI_PENCIL " "};
-        name += obj->isPrefabEdit ? ("Back to Instance") : ("Edit '" + srcObj->name + "'");
-
-        if(ImGui::Button(name.c_str())) {
-          if (obj->isPrefabEdit) {
-            ctx.project->getAssets().markPrefabDirty(prefab->uuid.value);
+          if(ImGui::Button(name.c_str())) {
+            if (editing) {
+              ctx.project->getAssets().markPrefabDirty(prefab->uuid.value);
+              ctx.prefabEditUUID = 0;
+            } else {
+              ctx.prefabEditUUID = obj->uuid;
+            }
           }
-          obj->isPrefabEdit = !obj->isPrefabEdit;
         }
       }
 
@@ -333,11 +462,11 @@ void Editor::ObjectInspector::draw() {
 
   if(ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
   {
-    if(ImTable::start("Transform", editTarget))
+    if(ImTable::start("Transform", tableObj))
     {
-      ImTable::addObjProp("Pos", srcObj->pos);
+      ImTable::addObjProp("Pos", xfSrc->pos);
 
-      if(srcObj->proportionalScale)
+      if(xfSrc->proportionalScale)
       {
         std::function<bool(glm::vec3*)> cb = [](glm::vec3 *val) -> bool {
           glm::vec3 scale = *val;
@@ -362,24 +491,24 @@ void Editor::ObjectInspector::draw() {
           *val = scale * ratio;
           return ratio != 1.0f;
         };
-        ImTable::addObjProp("Scale", srcObj->scale, cb, nullptr);
+        ImTable::addObjProp("Scale", xfSrc->scale, cb, nullptr);
       } else {
-        ImTable::addObjProp("Scale", srcObj->scale);
+        ImTable::addObjProp("Scale", xfSrc->scale);
       }
 
       // icon to toggle between proportional and independent scale
       ImGui::SameLine();
       ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 32_px);
-      if(ImGui::IconButton(srcObj->proportionalScale ? ICON_MDI_LINK_VARIANT : ICON_MDI_LINK_VARIANT_OFF, {24_px, 24_px})) {
+      if(ImGui::IconButton(xfSrc->proportionalScale ? ICON_MDI_LINK_VARIANT : ICON_MDI_LINK_VARIANT_OFF, {24_px, 24_px})) {
         ImGui::ClearActiveID();
-        srcObj->proportionalScale = !srcObj->proportionalScale;
+        xfSrc->proportionalScale = !xfSrc->proportionalScale;
       }
-      ImGui::SetItemTooltip(srcObj->proportionalScale
+      ImGui::SetItemTooltip(xfSrc->proportionalScale
         ? "Change to Independent Scale"
         : "Change to Proportional Scale"
       );
 
-      ImTable::addObjProp("Rot", srcObj->rot);
+      ImTable::addObjProp("Rot", xfSrc->rot);
 
       // icon to toggle between quaternion and euler
       ImGui::SameLine();
@@ -401,7 +530,9 @@ void Editor::ObjectInspector::draw() {
   uint64_t compDelUUID = 0;
   Project::Component::Entry *compCopy = nullptr;
 
-  auto drawComp = [&](Project::Object* obj, Project::Component::Entry &comp, bool isInstance)
+  // viaPath: resolve component props through the active nested cascade (Path) rather than
+  // a fresh component layer (Dispatch). True only for a nested override target.
+  auto drawComp = [&](Project::Object* obj, Project::Component::Entry &comp, bool isInstance, bool viaPath)
   {
     ImTable::PrefabEditScope prefabScope(isInstance);
     ImGui::PushID(&comp);
@@ -441,33 +572,29 @@ void Editor::ObjectInspector::draw() {
         }
       }
 
+      std::optional<PropScope::Dispatch> dispatch;
+      std::optional<PropScope::Path> compPath;
+      if(viaPath) compPath.emplace(comp.uuid);
+      else        dispatch.emplace(obj->propOverrides, comp.uuid);
       def.funcDraw(*obj, comp);
     }
     ImGui::PopID();
   };
 
-  for (auto &comp : srcObj->components) {
-    drawComp(editTarget, comp, false);
+  for (auto &comp : compSrc->components) {
+    drawComp(tableObj, comp, false, compViaPath);
   }
 
-  if(isPrefabInst && !editingPrefab) {
+  // Components added directly to a scene instance (not nested, not in edit mode).
+  if(!nested.isNested && isPrefabInst && !ctx.isPrefabEditing(obj->uuid)) {
     for (auto &comp : obj->components) {
-      drawComp(obj.get(), comp, true);
+      drawComp(obj.get(), comp, true, false);
     }
     srcObj = obj.get();
   }
 
-  if (isPrefabInst && editPrefabUUID) {
-    auto &assets = ctx.project->getAssets();
-    // Attribute overrides land in editPrefabUUID (resolveEditTarget). Edits written straight to
-    // srcObj (component add/remove/duplicate, the proportionalScale toggle) belong to the prefab
-    // srcObj lives in (the resolved/inner prefab). Mark both; markPrefabDirty diffs vs saved
-    // state, so an unchanged prefab is a no-op.
-    assets.markPrefabDirty(editPrefabUUID);
-    uint64_t srcPrefabUUID = assets.resolveInstance(*obj).prefabUUID;
-    if (srcPrefabUUID && srcPrefabUUID != editPrefabUUID) {
-      assets.markPrefabDirty(srcPrefabUUID);
-    }
+  if (isPrefabInst && ctx.isPrefabEditing(obj->uuid) && prefab) {
+    ctx.project->getAssets().markPrefabDirty(prefab->uuid.value);
   }
 
   if (compCopy) {
@@ -486,22 +613,32 @@ void Editor::ObjectInspector::draw() {
     srcObj->removeComponent(compDelUUID);
   }
 
-  const char* addLabel = ICON_MDI_PLUS_BOX_OUTLINE " Add Component";
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4_px);
-  ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(addLabel).x) * 0.5f - 4_px);
-  if (ImGui::Button(addLabel)) {
-    ImGui::OpenPopup("CompSelect");
-  }
-
-  if (ImGui::BeginPopupContextItem("CompSelect"))
+  // Adding components targets the root object, not a nested def node.
+  if(!nested.isNested)
   {
-    for (auto &comp : Project::Component::TABLE_SORTED_BY_NAME) {
-      auto name = std::string{comp.icon} + " " + comp.name;
-      if(ImGui::MenuItem(name.c_str())) {
-        UndoRedo::getHistory().markChanged("Add Component");
-        srcObj->addComponent(comp.id);
-      }
+    const char* addLabel = ICON_MDI_PLUS_BOX_OUTLINE " Add Component";
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4_px);
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(addLabel).x) * 0.5f - 4_px);
+    if (ImGui::Button(addLabel)) {
+      ImGui::OpenPopup("CompSelect");
     }
-    ImGui::EndPopup();
+
+    const ImVec2 contentMin = ImGui::GetWindowPos() + ImGui::GetWindowContentRegionMin();
+    const ImVec2 contentMax = ImGui::GetWindowPos() + ImGui::GetWindowContentRegionMax();
+
+    ImRect panelDropRect{contentMin, contentMax};
+    handleScriptComponentDropTarget(srcObj, panelDropRect, true);
+
+    if (ImGui::BeginPopupContextItem("CompSelect"))
+    {
+      for (auto &comp : Project::Component::TABLE_SORTED_BY_NAME) {
+        auto name = std::string{comp.icon} + " " + comp.name;
+        if(ImGui::MenuItem(name.c_str())) {
+          UndoRedo::getHistory().markChanged("Add Component");
+          srcObj->addComponent(comp.id);
+        }
+      }
+      ImGui::EndPopup();
+    }
   }
 }

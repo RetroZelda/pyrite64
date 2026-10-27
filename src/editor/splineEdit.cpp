@@ -134,9 +134,9 @@ namespace
     t.entry = found.entry;
     t.data = &Spline::getData(*found.entry);
     t.templateOwned = found.templateOwned;
-    // same predicate the viewport gizmo uses for prefab subobjects: template data is editable while
-    // its prefab is in edit mode (ImTable::isPrefabLocked would also block instance-additive splines)
-    t.editable = !found.templateOwned || scene->resolveEditTarget(*obj).parent != nullptr;
+    // a spline of the prefab definition is editable while that instance is in prefab-edit mode
+    // (ImTable::isPrefabLocked would also block instance-additive splines)
+    t.editable = !found.templateOwned || ctx.isPrefabEditing(obj->uuid);
     t.xf = Spline::getWorldTransform(*obj, assets);
     return true;
   }
@@ -165,12 +165,8 @@ namespace
     Editor::UndoRedo::getHistory().markChanged(reason);
     if(!t.templateOwned || !ctx.project)return;
 
-    // template data is not part of the scene snapshot (not undoable): flag the prefab(s) for saving
-    auto &assets = ctx.project->getAssets();
-    uint64_t ownerUUID = assets.resolveInstance(*t.obj).prefabUUID;
-    if(ownerUUID)assets.markPrefabDirty(ownerUUID);
-    auto editTarget = t.scene->resolveEditTarget(*t.obj);
-    if(editTarget.prefabUUID && editTarget.prefabUUID != ownerUUID)assets.markPrefabDirty(editTarget.prefabUUID);
+    // template data is not part of the scene snapshot (not undoable): flag the prefab for saving
+    ctx.project->getAssets().markPrefabDirty(t.obj->uuidPrefab.value);
   }
 
   bool isSessionTarget(uint32_t objUUID, uint64_t compUUID)
