@@ -30,6 +30,9 @@ namespace
   // instance of their prefab, so the row is identified by its instance and path, not its uuid.
   uint32_t renameDefRoot{0};
   std::vector<uint32_t> renameDefPath{};
+  // The row of the edited prefab being dragged (identified like renameDefPath)
+  uint32_t dragDefRoot{0};
+  std::vector<uint32_t> dragDefPath{};
   glm::vec3 rootViewCenter{0.0f}; // SceneGraph::draw()'s viewCenter
 
   // Range selection is based on the rows actually drawn in the scene graph, so collapsed
@@ -109,6 +112,35 @@ namespace
       assetDropTask.targetUUID = targetUUID;
       assetDropTask.asChild = asChild;
       assetDropTask.insertBefore = insertBefore;
+    }
+  }
+
+  /**
+   * Prefab edit mode: accepts a drop onto a row of the edited prefab (an empty path is its root).
+   * A prefab asset is nested there, a dragged row of the same prefab moves there.
+   */
+  void acceptPrefabEditDrop(uint32_t rootUuid, const std::vector<uint32_t> &path)
+  {
+    auto *scene = ctx.project->getScenes().getLoadedScene();
+    const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+    if (!scene || !payload) return;
+
+    if (payload->IsDataType("ASSET")) {
+      uint64_t assetUUID = *static_cast<const uint64_t*>(payload->Data);
+      auto asset = ctx.project->getAssets().getEntryByUUID(assetUUID);
+      if (!asset || asset->type != Project::FileType::PREFAB) return;
+      if (ImGui::AcceptDragDropPayload("ASSET")) {
+        ctx.deferAction([scene, rootUuid, path, assetUUID]() {
+          Editor::SelectionUtils::nestPrefabInstance(*scene, rootUuid, path, assetUUID);
+        });
+      }
+    } else if (payload->IsDataType("PREFAB_NODE") && dragDefRoot == rootUuid) {
+      if (ImGui::AcceptDragDropPayload("PREFAB_NODE")) {
+        auto from = dragDefPath;
+        ctx.deferAction([scene, rootUuid, from, path]() {
+          Editor::SelectionUtils::movePrefabObject(*scene, rootUuid, from, path);
+        });
+      }
     }
   }
 
@@ -559,11 +591,24 @@ namespace
       rangeSelectionAnchorUUID = 0;
     }
 
-    // Prefab edit mode: rows of the edited prefab's own file can be renamed, added to and deleted
+    // Prefab edit mode: rows of the edited prefab's own file can be renamed, added to, deleted,
+    // moved within it and have prefabs nested on them
     if(prefabEditObj && selectable) {
       const ImVec2 rowMin = ImGui::GetItemRectMin();
       if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         startDefRenaming(rootUuid, path, node.name);
+      }
+
+      if(ImGui::BeginDragDropSource()) {
+        dragDefRoot = rootUuid;
+        dragDefPath = path;
+        ImGui::SetDragDropPayload("PREFAB_NODE", &rootUuid, sizeof(rootUuid));
+        ImGui::TextUnformatted(node.name.c_str());
+        ImGui::EndDragDropSource();
+      }
+      if(ImGui::BeginDragDropTarget()) {
+        acceptPrefabEditDrop(rootUuid, path);
+        ImGui::EndDragDropTarget();
       }
 
       uint64_t rowHash = rootUuid;
@@ -932,6 +977,17 @@ namespace
         dragDropTask.isInsert = true;
       }
       ImGui::EndDragDropTarget();
+    }
+
+    // The edited instance's row: prefabs dropped on it are nested into the prefab's root, rows of
+    // the prefab dragged onto it move to the root
+    if (prefabEditObj == &obj) {
+      ImGui::PushID(obj.uuid);
+      if (ImGui::BeginDragDropTargetCustom(ImRect{nodeRectMin, nodeRectMax}, ImGui::GetID("PrefabEditDrop"))) {
+        acceptPrefabEditDrop(obj.uuid, {});
+        ImGui::EndDragDropTarget();
+      }
+      ImGui::PopID();
     }
 
     // Keep asset child drops in the centre of the row, away from insertion lines

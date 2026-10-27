@@ -111,6 +111,23 @@ namespace Editor::SelectionUtils
   // Removes the node at path from the edited prefab and selects its parent.
   bool removePrefabObject(Project::Scene &scene, uint32_t rootUuid, std::vector<uint32_t> path);
 
+  // Nests an instance of prefab prefabUUID under the node at path (as an object added to it when
+  // the node is a nested instance), selects it and returns its path. Refused (empty) when the
+  // edited prefab would end up containing itself.
+  std::vector<uint32_t> nestPrefabInstance(Project::Scene &scene, uint32_t rootUuid,
+                                           std::vector<uint32_t> path, uint64_t prefabUUID);
+
+  // Adds an object showing the given 3D model under the node at path, like a model dropped into
+  // a scene (Scene::addModelObject), selects it and returns its path.
+  std::vector<uint32_t> addPrefabModelObject(Project::Scene &scene, uint32_t rootUuid,
+                                             const std::vector<uint32_t> &path, uint64_t modelUUID);
+
+  // Moves the node at path under the node at newParentPath, keeping its placement within the
+  // prefab, selects it and returns its new path. Refused (empty) for a target inside the node.
+  std::vector<uint32_t> movePrefabObject(Project::Scene &scene, uint32_t rootUuid,
+                                         std::vector<uint32_t> path,
+                                         const std::vector<uint32_t> &newParentPath);
+
   // Decides where a nested node's edits are written and sets up the matching scope guards.
   // In normal mode that is the scene instance with the full path. In prefab-edit mode it is
   // the first contained prefab-instance along the path, whose overrides belong to the prefab

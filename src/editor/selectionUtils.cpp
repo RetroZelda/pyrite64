@@ -5,6 +5,7 @@
 #include "selectionUtils.h"
 
 #include <algorithm>
+#include <filesystem>
 
 #include "../context.h"
 #include "../project/scene/scene.h"
@@ -12,6 +13,8 @@
 #include "../project/component/components.h"
 #include "../project/component/types/compSpline.h"
 #include "../utils/hash.h"
+#include "../utils/logger.h"
+#include "imgui/notification.h"
 
 namespace
 {
@@ -245,6 +248,124 @@ namespace Editor::SelectionUtils
     if (path.empty()) ctx.setObjectSelection(rootUuid);
     else ctx.setNestedSelection(rootUuid, path);
     return true;
+  }
+
+  std::vector<uint32_t> nestPrefabInstance(Project::Scene &scene, uint32_t rootUuid,
+                                           std::vector<uint32_t> path, uint64_t prefabUUID)
+  {
+    uint64_t editedUUID = 0;
+    auto *parent = findEditedPrefabNode(scene, rootUuid, path, editedUUID);
+    if (!parent) return {};
+    auto &assets = ctx.project->getAssets();
+    auto prefab = assets.getPrefabByUUID(prefabUUID);
+    if (!prefab) return {};
+
+    if (assets.prefabContains(prefabUUID, editedUUID)) {
+      auto msg = "'" + prefab->obj.name + "' can't be nested here: it is or contains the prefab being edited";
+      Utils::Logger::log(msg, Utils::Logger::LEVEL_WARN);
+      Editor::Noti::add(Editor::Noti::Type::ERROR, msg);
+      return {};
+    }
+
+    // Set up like a scene instance (Scene::addPrefabInstance), placed at the parent's origin
+    auto child = std::make_shared<Project::Object>(*parent);
+    do { child->uuid = static_cast<uint32_t>(Utils::Hash::randomU64()); } while (child->uuid == 0);
+    child->name = prefab->obj.name;
+    child->pos.value = {0,0,0};
+    child->rot.value = {0,0,0,1};
+    child->scale = prefab->obj.scale;
+    child->uuidPrefab.value = prefabUUID;
+    child->addPropOverride(child->pos); // the instance's placement
+    child->addPropOverride(child->rot);
+    child->addPropOverride(child->scale);
+    parent->children.push_back(child);
+
+    assets.markPrefabDirty(editedUUID);
+    path.push_back(child->uuid);
+    ctx.setNestedSelection(rootUuid, path);
+    return path;
+  }
+
+  std::vector<uint32_t> addPrefabModelObject(Project::Scene &scene, uint32_t rootUuid,
+                                             const std::vector<uint32_t> &path, uint64_t modelUUID)
+  {
+    constexpr int COMP_ID_MODEL_STATIC = 1;    // see Scene::addModelObject
+    constexpr int COMP_ID_MODEL_ANIMATED = 10;
+
+    auto *asset = ctx.project->getAssets().getEntryByUUID(modelUUID);
+    if (!asset || asset->type != Project::FileType::MODEL_3D) return {};
+    auto added = addPrefabObject(scene, rootUuid, path, false);
+    uint64_t prefabUUID = 0;
+    auto *node = added.empty() ? nullptr : findEditedPrefabNode(scene, rootUuid, added, prefabUUID);
+    if (!node) return {};
+
+    node->name = std::filesystem::path{asset->name}.stem().string();
+    // Models containing animation clips use the animated component automatically
+    bool isAnimated = !asset->model.t3dm.animations.empty();
+    node->addComponent(isAnimated ? COMP_ID_MODEL_ANIMATED : COMP_ID_MODEL_STATIC);
+    auto &component = node->components.back();
+    if (isAnimated) Project::Component::AnimModel::setModel(component, modelUUID);
+    else            Project::Component::Model::setModel(component, modelUUID);
+
+    ctx.project->getAssets().markPrefabDirty(prefabUUID);
+    return added;
+  }
+
+  std::vector<uint32_t> movePrefabObject(Project::Scene &scene, uint32_t rootUuid,
+                                         std::vector<uint32_t> path,
+                                         const std::vector<uint32_t> &newParentPath)
+  {
+    if (path.empty()) return {};
+    // not into itself or anything below it
+    if (newParentPath.size() >= path.size()
+        && std::equal(path.begin(), path.end(), newParentPath.begin())) return {};
+
+    uint64_t editedUUID = 0;
+    auto *node = findEditedPrefabNode(scene, rootUuid, path, editedUUID);
+    auto oldParentPath = path;
+    oldParentPath.pop_back();
+    auto *oldParent = findEditedPrefabNode(scene, rootUuid, oldParentPath, editedUUID);
+    auto *newParent = findEditedPrefabNode(scene, rootUuid, newParentPath, editedUUID);
+    if (!node || !oldParent || !newParent || newParent == oldParent) return {};
+
+    auto prefab = ctx.project->getAssets().getPrefabByUUID(editedUUID);
+    if (!prefab) return {};
+
+    // Placement within the prefab: compose the local transforms below its root down a path
+    struct Trans { glm::vec3 pos{0.0f}; glm::quat rot{1,0,0,0}; glm::vec3 scale{1.0f}; };
+    auto placementOf = [&](const std::vector<uint32_t> &p) {
+      Trans t{};
+      for (auto &step : walkNested(&prefab->obj, p)) {
+        auto *n = step.node;
+        glm::vec3 lpos = n->pos.resolve(n->propOverrides);
+        glm::quat lrot = n->rot.resolve(n->propOverrides);
+        glm::vec3 lscale = n->scale.resolve(n->propOverrides);
+        t = Trans{t.pos + t.rot * (t.scale * lpos), t.rot * lrot, t.scale * lscale};
+      }
+      return t;
+    };
+    Trans nodeT = placementOf(path);
+    Trans parentT = placementOf(newParentPath);
+    for (int i = 0; i < 3; i++) if (glm::abs(parentT.scale[i]) < 0.0001f) parentT.scale[i] = 0.0001f;
+
+    glm::quat pInv = glm::inverse(parentT.rot);
+    node->pos.resolve(node->propOverrides) = (pInv * (nodeT.pos - parentT.pos)) / parentT.scale;
+    node->rot.resolve(node->propOverrides) = pInv * nodeT.rot;
+    node->scale.resolve(node->propOverrides) = nodeT.scale / parentT.scale;
+
+    auto &siblings = oldParent->children;
+    auto it = std::find_if(siblings.begin(), siblings.end(), [node](const auto &c) { return c.get() == node; });
+    if (it == siblings.end()) return {};
+    auto moved = *it;
+    siblings.erase(it);
+    moved->parent = newParent;
+    newParent->children.push_back(moved);
+
+    ctx.project->getAssets().markPrefabDirty(editedUUID);
+    auto newPath = newParentPath;
+    newPath.push_back(moved->uuid);
+    ctx.setNestedSelection(rootUuid, newPath);
+    return newPath;
   }
 
   void resolveNestedTarget(NestedTarget &out, Project::Object* obj, Project::Prefab* prefab)

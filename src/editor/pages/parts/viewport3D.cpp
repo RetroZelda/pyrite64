@@ -1495,17 +1495,41 @@ void Editor::Viewport3D::draw()
           spawnPos = camera.pos + camForward * 1.5f;
         }
 
-        // Create the appropriate scene object and keep the drop as one undoable action
         bool isPrefab = asset->type == Project::FileType::PREFAB;
-        UndoRedo::getHistory().markChanged(isPrefab ? "Add Prefab" : "Add Model");
-        auto newObj = isPrefab
-          ? scene->addPrefabInstance(assetUUID)
-          : scene->addModelObject(assetUUID);
-        if (newObj) {
-          newObj->pos.resolve(newObj->propOverrides) = spawnPos;
+        if (auto *editObj = Editor::SelectionUtils::getPrefabEditObject(*scene)) {
+          // While editing a prefab the dropped object goes into it, placed at the drop point
+          // relative to the edited instance (deferred: it changes the prefab's tree).
+          glm::vec3 ip = editObj->pos.resolve(editObj->propOverrides);
+          glm::quat ir = editObj->rot.resolve(editObj->propOverrides);
+          glm::vec3 is = editObj->scale.resolve(editObj->propOverrides);
+          for (int i = 0; i < 3; i++) if (glm::abs(is[i]) < 0.0001f) is[i] = 0.0001f;
+          glm::vec3 localPos = (glm::inverse(ir) * (spawnPos - ip)) / is;
+          auto *scenePtr = &*scene;
+          uint32_t rootUuid = editObj->uuid;
+          ctx.deferAction([scenePtr, rootUuid, assetUUID, isPrefab, localPos]() {
+            auto path = isPrefab
+              ? Editor::SelectionUtils::nestPrefabInstance(*scenePtr, rootUuid, {}, assetUUID)
+              : Editor::SelectionUtils::addPrefabModelObject(*scenePtr, rootUuid, {}, assetUUID);
+            uint64_t prefabUUID = 0;
+            auto *node = path.empty() ? nullptr
+              : Editor::SelectionUtils::findEditedPrefabNode(*scenePtr, rootUuid, path, prefabUUID);
+            if (node) {
+              node->pos.resolve(node->propOverrides) = localPos;
+              ctx.project->getAssets().markPrefabDirty(prefabUUID);
+            }
+          });
+        } else {
+          // Create the appropriate scene object and keep the drop as one undoable action
+          UndoRedo::getHistory().markChanged(isPrefab ? "Add Prefab" : "Add Model");
+          auto newObj = isPrefab
+            ? scene->addPrefabInstance(assetUUID)
+            : scene->addModelObject(assetUUID);
+          if (newObj) {
+            newObj->pos.resolve(newObj->propOverrides) = spawnPos;
 
-          // Focus the newly created object in the editor
-          ctx.setObjectSelection(newObj->uuid);
+            // Focus the newly created object in the editor
+            ctx.setObjectSelection(newObj->uuid);
+          }
         }
       }
     }
