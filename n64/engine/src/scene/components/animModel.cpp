@@ -11,6 +11,7 @@
 
 #include "../../renderer/bigtex/bigtex.h"
 #include "renderer/material.h"
+#include "renderer/renderScale.h"
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
 
@@ -105,6 +106,7 @@ namespace P64::Comp
     assetIdx = newAssetIdx;
     model = (T3DModel*)AssetManager::acquire(newAssetIdx);
     assert(model != nullptr);
+    vertexScale = AssetManager::getVertexScale(newAssetIdx);
 
     animIdxMain       = -1;
     animIdxBlend      = -1;
@@ -174,6 +176,7 @@ namespace P64::Comp
     data->assetIdx = initData->assetIdx;
     data->model = (T3DModel*)AssetManager::acquire(initData->assetIdx);
     assert(data->model != nullptr);
+    data->vertexScale = AssetManager::getVertexScale(initData->assetIdx);
     data->layerIdx = initData->layer;
     data->flags = initData->flags;
 
@@ -298,7 +301,7 @@ namespace P64::Comp
       return;
     }
     auto mat = data->matFP.getNext();
-    t3d_mat4fp_from_srt(mat, obj.scale, obj.rot, obj.pos);
+    Renderer::fillModelMatrixFP(mat, obj.scale, obj.rot, obj.pos, data->vertexScale);
 
     if(data->layerIdx)DrawLayer::use3D(data->layerIdx);
 

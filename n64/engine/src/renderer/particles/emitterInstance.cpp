@@ -4,6 +4,7 @@
 */
 #include "renderer/particles/emitterInstance.h"
 #include "assets/assetManager.h"
+#include "renderer/renderScale.h"
 
 #include <libdragon.h>
 #include <cstdlib>
@@ -251,15 +252,17 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
 
   // write alive particles into the uncached tpx buffer (write-only), farthest first
   auto buff = system->getBufferS16();
+  const float renderScale = Renderer::getRenderScale();
   for(uint32_t i = 0; i < system->count; ++i) {
     auto &p = parts[doSort ? drawOrder[i] : i];
     float t = ParticleSim::lifeT(p);
 
-    // tpx s16 positions: world-space particles further than +/-32767 units from the origin wrap
+    // tpx s16 positions in render units (the sim runs in meters): world-space particles further
+    // than +/-32767 render units from the origin wrap
     int16_t* pp = tpx_buffer_s16_get_pos(buff, i);
-    pp[0] = (int16_t)p.pos.x;
-    pp[1] = (int16_t)p.pos.y;
-    pp[2] = (int16_t)p.pos.z;
+    pp[0] = (int16_t)(p.pos.x * renderScale);
+    pp[1] = (int16_t)(p.pos.y * renderScale);
+    pp[2] = (int16_t)(p.pos.z * renderScale);
 
     *tpx_buffer_s16_get_size(buff, i) = (int8_t)ParticleSim::hwSizeByte(cfg, t);
 
@@ -284,8 +287,8 @@ void P64::PTX::EmitterInstance::update(float dt, const fm_vec3_t &camPos, bool h
     if(cfg.simSpace == ParticleSim::SPACE_WORLD) {
       t3d_mat4fp_identity(mat);
     } else {
-      t3d_mat4fp_from_srt_euler(mat,
-        (float[]){1.0f, 1.0f, 1.0f}, (float[]){0, 0, 0}, (float[]){follow.x, follow.y, follow.z});
+      t3d_mat4fp_from_srt_euler(mat, (float[]){1.0f, 1.0f, 1.0f}, (float[]){0, 0, 0},
+        (float[]){follow.x * renderScale, follow.y * renderScale, follow.z * renderScale});
     }
   }
 }

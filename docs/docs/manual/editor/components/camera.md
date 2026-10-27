@@ -16,9 +16,9 @@ Multiple cameras can be active at once (e.g. for split-screen).
 | **Offset** | The viewport's top-left offset on screen, in pixels. |
 | **Size** | The viewport's size on screen, in pixels. |
 | **FOV** | Vertical field of view, in degrees. Only used in perspective mode. |
-| **Ortho Size** | Vertical half-size of the visible area, in world units. The horizontal size is derived from it via the aspect ratio. Only used in orthographic mode. |
-| **Near** | Near clip plane distance. |
-| **Far** | Far clip plane distance. |
+| **Ortho Size** | Vertical half-size of the visible area, in meters. The horizontal size is derived from it via the aspect ratio. Only used in orthographic mode. |
+| **Near** | Near clip plane distance, in meters. |
+| **Far** | Far clip plane distance, in meters. |
 | **Aspect** | Aspect ratio used for the projection. |
 | **Target** | Where the camera renders to:<br>• **Framebuffer**: the screen, as usual.<br>• **Surface**: offscreen into a {doc}`Surface <surface>` component. |
 | **Surface Object** | Only in **Surface** mode: the object whose (first) Surface component is rendered into. With **\<None\>** selected the camera renders nothing. |
@@ -58,7 +58,7 @@ The projection can be changed while the game is running:
 ```cpp
 auto* cam = obj.getComponent<P64::Comp::Camera>();
 
-cam->setOrthographic(300.0f);                 // switch to ortho with a given size
+cam->setOrthographic(3.0f);                   // switch to ortho with a given size (meters)
 cam->setPerspective(T3D_DEG_TO_RAD(65.0f));   // switch to perspective with a given fov
 
 // or toggle without touching the fov / ortho-size:

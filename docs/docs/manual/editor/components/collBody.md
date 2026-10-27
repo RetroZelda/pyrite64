@@ -14,8 +14,8 @@ Pair it with a {doc}`Rigid-Body <rigidBody>` for full physics simulation.
 | Option | Description |
 |--------|-------------|
 | **Type** | The collider shape:<br>• **Box**<br>• **Sphere**<br>• **Cylinder**<br>• **Capsule**<br>• **Cone**<br>• **Pyramid** |
-| **Shape size** | The dimensions for the chosen shape, e.g. *Half Size* for a box, *Radius* for a sphere, or *Radius* plus *Half Height* for cylinders/capsules/cones. |
-| **Offset** | Offset of the shape's center relative to the object's origin. |
+| **Shape size** | The dimensions for the chosen shape in meters, e.g. *Half Size* for a box, *Radius* for a sphere, or *Radius* plus *Half Height* for cylinders/capsules/cones. Scaled by the object's scale. |
+| **Offset** | Offset of the shape's center relative to the object's origin, in meters. Scaled by the object's scale. |
 | **Trigger** | When enabled, the collider reports overlaps as events but produces no physical (push-back) response. |
 | **Reacts to** | The collision layers this body reads (which layers it collides with). |
 | **Is Affecting** | The collision layers this body writes (which layers see it). |

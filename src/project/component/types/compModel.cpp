@@ -237,14 +237,7 @@ namespace Project::Component::Model
 
     data.obj3D.setObjectID(obj.uuid);
 
-    // @TODO: tidy-up
-    glm::vec3 skew{0,0,0};
-    glm::vec4 persp{0,0,0,1};
-    data.obj3D.uniform.modelMat = glm::recompose(
-      obj.scale.resolve(obj.propOverrides),
-      obj.rot.resolve(obj.propOverrides),
-      obj.pos.resolve(obj.propOverrides),
-      skew, persp);
+    data.obj3D.uniform.modelMat = makeModelMatrix(obj, asset ? 1.0f / asset->model.autoBaseScale : 1.0f);
 
     // get draw layer
     auto &layers = loadedScene->conf.layers3D;
@@ -284,8 +277,8 @@ namespace Project::Component::Model
       }
 
 
-      auto center = obj.pos.resolve(obj.propOverrides) + (aabb.getCenter() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF);
-      auto halfExt = aabb.getHalfExtend() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF;
+      auto center = obj.pos.resolve(obj.propOverrides) + (aabb.getCenter() * obj.scale.resolve(obj.propOverrides));
+      auto halfExt = aabb.getHalfExtend() * obj.scale.resolve(obj.propOverrides);
 
       glm::u8vec4 aabbCol = ctx.prefs.meshLineColor;
       if (isSelected) {
@@ -304,15 +297,20 @@ namespace Project::Component::Model
     auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
     if (!asset) return aabb;
 
-    // Imported positions already use the local units expected by scene components
+    // Imported positions are quantized vertex units, scale them back to meters.
     // Reading them directly also works before the renderer has created the GPU mesh
+    float vertexScale = 1.0f / asset->model.autoBaseScale;
     for (const auto &model : asset->model.t3dm.models) {
       for (const auto &triangle : model.triangles) {
         for (const auto &vert : triangle.vert) {
-          aabb.addPoint({vert.pos[0], vert.pos[1], vert.pos[2]});
+          aabb.addPoint(glm::vec3{vert.pos[0], vert.pos[1], vert.pos[2]} * vertexScale);
         }
       }
     }
     return aabb;
   }
+  uint64_t getModelUUID(const Entry &entry) {
+    return static_cast<const Data*>(entry.data.get())->model.value;
+  }
+
 }

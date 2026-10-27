@@ -9,6 +9,7 @@
 #include "../../utils/json.h"
 #include "../../utils/jsonBuilder.h"
 #include "../../build/sceneContext.h"
+#include "../scene/migration.h"
 
 namespace J = Utils::JSON;
 
@@ -105,6 +106,7 @@ nlohmann::json Project::Assets::Emitter::serialize() const
     .set(mirrorAnim)
     .doc;
 
+  doc["version"] = Migration::FILE_VERSION; // lengths and sizes are in meters, see Migration
   doc["uuid"] = uuid;
   doc["name"] = name;
   doc["material"] = material.serialize();

@@ -128,6 +128,9 @@ namespace P64::ParticleSim
   // tpx base-size is raised by the same factor at draw time (EmitterInstance::draw), so any
   // authored size range renders instead of clamping at ~2.0.
   constexpr float SIZE_TO_INT8 = 64.0f;
+  // World size in meters of a particle with a sim-size of 1. The runtime derives the tpx base
+  // size from it (DrawLayer::drawPtx) and the editor preview draws with it, so both match.
+  constexpr float SIZE_TO_METERS = 1.0f;
   // The per-particle tex offset is a u8 in 1/4px units of 8px sections -> 8 addressable
   // sections. Mirrored playback spends its logical frames in the same budget.
   constexpr uint32_t MAX_FRAME_SECTIONS = 8;

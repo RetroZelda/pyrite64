@@ -22,6 +22,8 @@ The transform section edits the object's **Position**, **Rotation** and **Scale*
 relative to the parent object. Editing a value here is equivalent to using the viewport gizmo,
 and is recorded in the undo history.
 
+**Position** is in meters, **Scale** is a multiplier of the model's authored size.
+
 ## Components
 
 Below the transform, each attached component is drawn in its own collapsible section with all of

@@ -66,5 +66,5 @@ namespace Build
     uint64_t newUUID
   );
 
-  Utils::BinaryFile buildCollision(const std::string &gltfPath, float baseScale, const std::unordered_set<std::string> &meshes = {});
+  Utils::BinaryFile buildCollision(const std::string &gltfPath, const std::unordered_set<std::string> &meshes = {});
 }

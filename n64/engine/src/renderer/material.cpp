@@ -5,11 +5,24 @@
 #include <renderer/material.h>
 
 #include "lib/logger.h"
+#include "renderer/renderScale.h"
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
 
 namespace
 {
+  // Nudges the light off the eye so a vertex right at the camera still has a defined direction. Offset is in meters
+  constexpr fm_vec3_t FRESNEL_EYE_OFFSET = {0.02f, 0.02f, 0.02f};
+
+  /**
+   * t3d_light_set_point() caps the size at 0x2000 * 0.5 render units, 
+   * so asking for exactly that keeps the effect the same at any render scale.
+   * Radius is in meters.
+   */
+  float fresnelLightRadius() {
+    return 4096.0f * P64::Renderer::getInvRenderScale();
+  }
+
   struct DynamicData
   {
     char* data{};
@@ -114,8 +127,8 @@ void P64::Renderer::MaterialInstance::begin(Object &obj)
     for(int i=0; i<fresnel; ++i) {
       light.addPointLight(
         colorFresnel,
-        cam.getPos() + fm_vec3_t{2.0f, 2.0f, 2.0f},
-        10000.0f
+        cam.getPos() + FRESNEL_EYE_OFFSET,
+        fresnelLightRadius()
       );
     }
 

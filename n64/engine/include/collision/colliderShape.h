@@ -10,7 +10,6 @@
 #include "shapes.h"
 #include "matrix3x3.h"
 #include "aabbTree.h"
-#include "gfxScale.h"
 
 namespace P64
 {
@@ -56,7 +55,7 @@ namespace P64::Coll {
     }
     P64::Object *ownerObject() const { return owner_; }
 
-    void setParentOffset(const fm_vec3_t &newParentOffset) { parentOffset_ = newParentOffset * getInvGfxScale(); }
+    void setParentOffset(const fm_vec3_t &newParentOffset) { parentOffset_ = newParentOffset; }
     const fm_vec3_t &parentOffset() const { return parentOffset_; }
 
     void setBounce(float newBounce) { bounce_ = newBounce; }

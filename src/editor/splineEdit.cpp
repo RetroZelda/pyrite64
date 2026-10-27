@@ -38,11 +38,11 @@ namespace
   constexpr float PICK_RADIUS    = 8.0f;      // px, times the UI zoom: handles and Shift+Click on the curve
   constexpr float HANDLE_DRAG_PX = 3.0f;      // a handle press turns into a drag after this many px
   constexpr float BOX_DRAG_PX    = 4.0f;      // an empty-space press turns into a box (as the viewport's)
-  constexpr float DEFAULT_STEP   = 100.0f;    // local units for points added without a direction
-  constexpr float SNAP_GRID      = 10.0f;     // Ctrl drag and Shift+S, same grid as the object gizmo
+  constexpr float DEFAULT_STEP   = 1.0f;      // meters (local) for points added without a direction
+  constexpr float SNAP_GRID      = 0.1f;      // Ctrl drag and Shift+S, same grid as the object gizmo
   constexpr float STEEP_RAY_Y    = 0.2f;      // flatter mouse rays drag on a camera-facing plane instead
-  constexpr float DROP_LIFT      = 100.0f;    // Drop to Floor lifts a point inside geometry by at most this much
-  constexpr float DROP_ON_EPS    = 1.0f;      // ... and a point this close above (or inside) a surface lies on it
+  constexpr float DROP_LIFT      = 1.0f;      // meters: Drop to Floor lifts a point inside geometry by at most this much
+  constexpr float DROP_ON_EPS    = 0.01f;     // ... and a point this close above (or inside) a surface lies on it
   constexpr float PICK_TIE_PX    = 0.5f;      // curve picks closer than this count as a tie (nearest depth wins)
 
   constexpr ImU32 COL_PASSIVE    = IM_COL32(180, 180, 180, 255);
@@ -244,7 +244,7 @@ namespace
   glm::vec3 extrudeFrom(const glm::vec3 &end, const glm::vec3 &prev)
   {
     glm::vec3 step = end - prev;
-    if(glm::length(step) < 1.0f)step = {DEFAULT_STEP, 0.0f, 0.0f};
+    if(glm::length(step) < 0.01f)step = {DEFAULT_STEP, 0.0f, 0.0f};
     return end + step;
   }
 

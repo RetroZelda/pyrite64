@@ -54,7 +54,10 @@ namespace Project
   {
     uint64_t uuid{0};
     int format{0};
+    // legacy import scale for models (kept for scene migration), point size for fonts
     int baseScale{0};
+    // optional manual override of the auto-computed model import scale (0 = auto)
+    int baseScaleOverride{0};
     bool gltfBVH{0};
 
     ComprTypes compression{ComprTypes::DEFAULT};

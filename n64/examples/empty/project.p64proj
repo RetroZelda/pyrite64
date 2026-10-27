@@ -7,7 +7,8 @@
   "collLayer5": "Layer 5",
   "collLayer6": "Layer 6",
   "collLayer7": "Layer 7",
-  "editorVersion": "0.8.0-Full-Frontal-20260705-160326",
+  "debugMenu": true,
+  "editorVersion": "0.9.0",
   "metadata": {
     "enabled": false,
     "langs": [
@@ -52,5 +53,13 @@
   "romName": "p64_project",
   "sceneIdLastOpened": 1,
   "sceneIdOnBoot": 1,
-  "sceneIdOnReset": 1
+  "sceneIdOnReset": 1,
+  "visLayer0": "Default",
+  "visLayer1": "",
+  "visLayer2": "",
+  "visLayer3": "",
+  "visLayer4": "",
+  "visLayer5": "",
+  "visLayer6": "",
+  "visLayer7": ""
 }

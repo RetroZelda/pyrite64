@@ -3,6 +3,7 @@
 * @license MIT
 */
 #include "camera.h"
+#include "../context.h"
 
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
@@ -14,7 +15,7 @@ namespace
   constexpr glm::vec3 WORLD_FORWARD{0,0,-1};
   // Framing for the "focus selection" action
   constexpr float AABB_FOCUS_MARGIN = 1.25f;     // extra space around a real bounding box
-  constexpr float NO_VOLUME_FOCUS_DIST = 220.0f; // overview distance for volume-less objects
+  constexpr float NO_VOLUME_FOCUS_DIST = 2.2f; // meters, overview distance for volume-less objects
 }
 
 Renderer::Camera::Camera() {
@@ -23,7 +24,7 @@ Renderer::Camera::Camera() {
     glm::radians(-180.0f),
     glm::vec3(1,0,0)
   );
-  focus(glm::vec3(0,220,0), 220);
+  focus(glm::vec3(0, 2.2f, 0), 2.2f);
 }
 
 void Renderer::Camera::update() {
@@ -51,13 +52,14 @@ void Renderer::Camera::update() {
 void Renderer::Camera::apply(UniformGlobal &uniGlobal)
 {
   float aspect = screenSize.x / screenSize.y;
-  float near = 10.0f;
-  float far = 90'000.0f;
+  // editor clip planes in meters, see Preferences (the fork extended them for large levels)
+  float near = ctx.prefs.viewportNear;
+  float far = ctx.prefs.viewportFar;
   float fovRad = glm::radians(fov);
 
   if(isOrtho)
   {
-    uniGlobal.spriteSize = {10, 10};
+    uniGlobal.spriteSize = {0.1f, 0.1f};
     uniGlobal.projMat = glm::ortho(
       -orthoSize * aspect,
       orthoSize * aspect,
@@ -67,7 +69,7 @@ void Renderer::Camera::apply(UniformGlobal &uniGlobal)
     );
   } else
   {
-    uniGlobal.spriteSize = {7000, 7000};
+    uniGlobal.spriteSize = {70, 70};
     uniGlobal.projMat = glm::perspective(fovRad, aspect, near, far);
   }
   uniGlobal.spriteSize *= ctx.prefs.renderFactorAA;

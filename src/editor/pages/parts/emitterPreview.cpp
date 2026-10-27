@@ -84,7 +84,7 @@ void Editor::EmitterPreview::onCopyPass(SDL_GPUCommandBuffer*, SDL_GPUCopyPass* 
   bool skinned = !asset->model.t3dm.skeletons.empty();
   if(skinned) {
     if(refSkelAsset != refModelUUID || !refSkel) {
-      refSkel = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model, asset->conf.baseScale);
+      refSkel = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model, asset->model.autoBaseScale);
       refSkelAsset = refModelUUID;
     }
     refSkel->update(*copyPass);
@@ -421,7 +421,7 @@ void Editor::EmitterPreview::draw(Project::Assets::Emitter &em, uint64_t assetUU
   {
     const ImU32 gridCol = IM_COL32(60, 64, 76, 255);
     const ImU32 axisCol = IM_COL32(90, 96, 112, 255);
-    const float ext = 200.0f, stepG = 40.0f;
+    const float ext = 10.0f, stepG = 1.0f; // meters
     for(float x = -ext; x <= ext + 0.5f; x += stepG)
       drawWorldLine(dl, uniGlobal, vp, rectMin, {x, 0, -ext}, {x, 0, ext}, x == 0.0f ? axisCol : gridCol);
     for(float z = -ext; z <= ext + 0.5f; z += stepG)

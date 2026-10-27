@@ -67,6 +67,8 @@ namespace Project
     uint32_t sceneIdOnReset{1};
     uint32_t sceneIdLastOpened{1};
     bool debugMenu{true};
+    // fork: units per meter the meters migration assumes for prefabs and emitters (0 = derive from the scenes)
+    float legacyUnitsPerMeter{0.0f};
 
     std::array<std::string, 8> collLayerNames{};
     std::array<std::string, 8> visLayerNames{};

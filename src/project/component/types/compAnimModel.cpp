@@ -201,7 +201,7 @@ namespace Project::Component::AnimModel
         }
         data.aabb = asset->mesh3D->getAABB();
         data.obj3D.setMesh(asset->mesh3D);
-        data.skeleton = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model, asset->conf.baseScale);
+        data.skeleton = std::make_shared<Renderer::Skeleton>(ctx.gpu, asset->model, asset->model.autoBaseScale);
       }
     }
 
@@ -213,19 +213,12 @@ namespace Project::Component::AnimModel
 
     data.obj3D.setObjectID(obj.uuid);
 
-    // @TODO: tidy-up
-    glm::vec3 skew{0,0,0};
-    glm::vec4 persp{0,0,0,1};
-    data.obj3D.uniform.modelMat = glm::recompose(
-      obj.scale.resolve(obj.propOverrides),
-      obj.rot.resolve(obj.propOverrides),
-      obj.pos.resolve(obj.propOverrides),
-      skew, persp);
-
     auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
     if (!asset || !asset->mesh3D) {
       return;
     }
+
+    data.obj3D.uniform.modelMat = makeModelMatrix(obj, 1.0f / asset->model.autoBaseScale);
 
     for(auto &anim : asset->model.t3dm.animations)
     {
@@ -248,8 +241,8 @@ namespace Project::Component::AnimModel
     if (isSelected)
     {
       Utils::AABB aabb = data.aabb;
-      auto center = obj.pos.resolve(obj.propOverrides) + (aabb.getCenter() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF);
-      auto halfExt = aabb.getHalfExtend() * obj.scale.resolve(obj.propOverrides) * (float)0xFFFF;
+      auto center = obj.pos.resolve(obj.propOverrides) + (aabb.getCenter() * obj.scale.resolve(obj.propOverrides));
+      auto halfExt = aabb.getHalfExtend() * obj.scale.resolve(obj.propOverrides);
 
       glm::u8vec4 aabbCol = ctx.prefs.meshLineColor;
       if (isSelected) {
@@ -268,14 +261,20 @@ namespace Project::Component::AnimModel
     auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
     if (!asset) return aabb;
 
-    // Use the imported bind-pose geometry so bounds are available before first render
+    // Use the imported bind-pose geometry so bounds are available before first render.
+    // Positions are quantized vertex units, scale them back to meters.
+    float vertexScale = 1.0f / asset->model.autoBaseScale;
     for (const auto &model : asset->model.t3dm.models) {
       for (const auto &triangle : model.triangles) {
         for (const auto &vert : triangle.vert) {
-          aabb.addPoint({vert.pos[0], vert.pos[1], vert.pos[2]});
+          aabb.addPoint(glm::vec3{vert.pos[0], vert.pos[1], vert.pos[2]} * vertexScale);
         }
       }
     }
     return aabb;
   }
+  uint64_t getModelUUID(const Entry &entry) {
+    return static_cast<const Data*>(entry.data.get())->model.value;
+  }
+
 }

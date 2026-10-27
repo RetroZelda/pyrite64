@@ -35,8 +35,9 @@ void Editor::Preferences::load()
         recentProjects.push_back({e.value("path", ""), e.value("name", ""), e.value("cardImage", "")});
       }
     }
-    zoomSpeed = doc.value("zoomSpeed", DEF.zoomSpeed);
-    moveSpeed = doc.value("moveSpeed", DEF.moveSpeed);
+    // keys renamed with the switch to meters, so pre-meter values are dropped
+    zoomSpeed = doc.value("zoomSpeedMeters", DEF.zoomSpeed);
+    moveSpeed = doc.value("moveSpeedMeters", DEF.moveSpeed);
     panSpeed = doc.value("panSpeed", DEF.panSpeed);
     lookSpeed = doc.value("lookSpeed", DEF.lookSpeed);
     invertWheelY = doc.value("invertWheelY", DEF.invertWheelY);
@@ -46,11 +47,12 @@ void Editor::Preferences::load()
     showRotAsEuler = doc.value("showRotAsEuler", DEF.showRotAsEuler);
     mouseWheelModifiesSpeed = doc.value("mouseWheelModifiesSpeed", DEF.mouseWheelModifiesSpeed);
     gridLineThickness = doc.value("gridLineThickness", DEF.gridLineThickness);
-    colliderLineThickness = doc.value("colliderLineThickness", DEF.colliderLineThickness);
-    meshLineThickness = doc.value("meshLineThickness", DEF.meshLineThickness);
-    cameraLineThickness = doc.value("cameraLineThickness", DEF.cameraLineThickness);
-    culledLineThickness = doc.value("culledLineThickness", DEF.culledLineThickness);
-    lightLineThickness = doc.value("lightLineThickness", DEF.lightLineThickness);
+    aabbLineThickness = doc.value("aabbLineThicknessM", DEF.aabbLineThickness);
+    colliderLineThickness = doc.value("colliderLineThicknessM", DEF.colliderLineThickness);
+    meshLineThickness = doc.value("meshLineThicknessM", DEF.meshLineThickness);
+    cameraLineThickness = doc.value("cameraLineThicknessM", DEF.cameraLineThickness);
+    culledLineThickness = doc.value("culledLineThicknessM", DEF.culledLineThickness);
+    lightLineThickness = doc.value("lightLineThicknessM", DEF.lightLineThickness);
 
     colliderLineColor.r = doc.value("colliderLineColor_r", DEF.colliderLineColor.r);
     colliderLineColor.g = doc.value("colliderLineColor_g", DEF.colliderLineColor.g);
@@ -77,7 +79,7 @@ void Editor::Preferences::load()
     culledLineColor.b = doc.value("culledLineColor_b", DEF.culledLineColor.b);
     culledLineColor.a = doc.value("culledLineColor_a", DEF.culledLineColor.a);
 
-    splineLineThickness = doc.value("splineLineThickness", DEF.splineLineThickness);
+    splineLineThickness = doc.value("splineLineThicknessM", DEF.splineLineThickness);
     splineLineColor.r = doc.value("splineLineColor_r", DEF.splineLineColor.r);
     splineLineColor.g = doc.value("splineLineColor_g", DEF.splineLineColor.g);
     splineLineColor.b = doc.value("splineLineColor_b", DEF.splineLineColor.b);
@@ -88,6 +90,8 @@ void Editor::Preferences::load()
     splineLineColorSelected.a = doc.value("splineLineColorSelected_a", DEF.splineLineColorSelected.a);
 
     viewportLockMode = doc.value("viewportLockMode", DEF.viewportLockMode);
+    viewportNear = doc.value("viewportNear", DEF.viewportNear);
+    viewportFar = doc.value("viewportFar", DEF.viewportFar);
   } else {
     applyKeymapPreset();
   }
@@ -105,8 +109,8 @@ void Editor::Preferences::save()
     .set("keymap", keymap.serialize(keymapPreset))
     .set("themeName", themeName)
     .set("recentProjects", recents)
-    .set("zoomSpeed", zoomSpeed)
-    .set("moveSpeed", moveSpeed)
+    .set("zoomSpeedMeters", zoomSpeed)
+    .set("moveSpeedMeters", moveSpeed)
     .set("panSpeed", panSpeed)
     .set("lookSpeed", lookSpeed)
     .set("invertWheelY", invertWheelY)
@@ -116,11 +120,12 @@ void Editor::Preferences::save()
     .set("showRotAsEuler", showRotAsEuler)
     .set("mouseWheelModifiesSpeed", mouseWheelModifiesSpeed)
     .set("gridLineThickness", gridLineThickness)
-    .set("colliderLineThickness", colliderLineThickness)
-    .set("meshLineThickness", meshLineThickness)
-    .set("cameraLineThickness", cameraLineThickness)
-    .set("culledLineThickness", culledLineThickness)
-    .set("lightLineThickness", lightLineThickness)
+    .set("aabbLineThicknessM", aabbLineThickness)
+    .set("colliderLineThicknessM", colliderLineThickness)
+    .set("meshLineThicknessM", meshLineThickness)
+    .set("cameraLineThicknessM", cameraLineThickness)
+    .set("culledLineThicknessM", culledLineThickness)
+    .set("lightLineThicknessM", lightLineThickness)
 
     .set("colliderLineColor_r", colliderLineColor.r)
     .set("colliderLineColor_g", colliderLineColor.g)
@@ -147,7 +152,7 @@ void Editor::Preferences::save()
     .set("culledLineColor_b", culledLineColor.b)
     .set("culledLineColor_a", culledLineColor.a)
 
-    .set("splineLineThickness", splineLineThickness)
+    .set("splineLineThicknessM", splineLineThickness)
     .set("splineLineColor_r", splineLineColor.r)
     .set("splineLineColor_g", splineLineColor.g)
     .set("splineLineColor_b", splineLineColor.b)
@@ -158,6 +163,8 @@ void Editor::Preferences::save()
     .set("splineLineColorSelected_a", splineLineColorSelected.a)
 
     .set("viewportLockMode", viewportLockMode)
+    .set("viewportNear", viewportNear)
+    .set("viewportFar", viewportFar)
     .toString();
   auto prefPath = getPrefsPath();
   printf("Saving prefs to %s\n", prefPath.c_str());

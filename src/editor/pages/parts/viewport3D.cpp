@@ -417,7 +417,7 @@ Editor::Viewport3D::Viewport3D(uint32_t winId_)
   Utils::Mesh::generateGrid(*meshGrid, 20, ctx.prefs.gridLineThickness);
   meshGrid->recreate(*ctx.scene);
   objGrid.setMesh(meshGrid);
-  objGrid.setScale(50);
+  objGrid.setScale(1.0f); // 1m grid cells
 
   meshLines = std::make_shared<Renderer::Mesh>();
   objLines.setMesh(meshLines);
@@ -478,7 +478,7 @@ glm::vec3 Editor::Viewport3D::getViewCenter() const
 
   // Bound to a scene camera: pos/rot mirror that camera and the pivot is left where it was, so take
   // the point ahead of it at the pivot distance, kept past the near plane and within sight.
-  float dist = glm::clamp(glm::length(camera.pivot - camera.pos), 100.0f, 2000.0f);
+  float dist = glm::clamp(glm::length(camera.pivot - camera.pos), 1.0f, 20.0f); // meters
   return camera.pos + glm::normalize(camera.rot * glm::vec3{0.0f, 0.0f, -1.0f}) * dist;
 }
 
@@ -549,6 +549,8 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
 
   camera.apply(uniGlobal);
   uniGlobal.screenSize = glm::vec2{(float)fb.getWidth(), (float)fb.getHeight()};
+  // lets the shader reproduce the console's fixed-point matrix rounding
+  uniGlobal.renderScale = std::max(scene->conf.renderScale.value, 0.001f);
   SDL_PushGPUVertexUniformData(cmdBuff, 0, &uniGlobal, sizeof(uniGlobal));
   auto &rootObj = scene->getRootObject();
 
@@ -605,9 +607,9 @@ void Editor::Viewport3D::onRenderPass(SDL_GPUCommandBuffer* cmdBuff, Renderer::S
   // Only shown in rotate mode (gizmoOp == 1), where the facing cue is actually needed.
   // Hidden while editing spline points: the object gizmo is replaced by the point gizmo then.
   if (gizmoOp == 1 && !SplineEdit::isEditing()) {
-    constexpr float AXIS_LEN = 70.0f;
-    constexpr float UP_THICKNESS = 4.0f;
-    constexpr float FWD_THICKNESS = 2.5f;
+    constexpr float AXIS_LEN = 0.7f; // meters
+    constexpr float UP_THICKNESS = 0.04f;
+    constexpr float FWD_THICKNESS = 0.025f;
     const glm::vec4 COLOR_UP {0.0f, 1.0f, 0.0f, 1.0f};
     const glm::vec4 COLOR_FWD{0.1f, 0.45f, 1.0f, 1.0f};
 
@@ -1407,7 +1409,7 @@ void Editor::Viewport3D::draw()
         glm::vec3 spawnPos{};
         if (!SceneRaycast::raycastStaticMeshes(*scene, ray, spawnPos)) {
           glm::vec3 camForward = camera.rot * glm::vec3{0, 0, -1};
-          spawnPos = camera.pos + camForward * 150.0f;
+          spawnPos = camera.pos + camForward * 1.5f;
         }
 
         // Create the appropriate scene object and keep the drop as one undoable action
@@ -1467,7 +1469,7 @@ void Editor::Viewport3D::draw()
   // Snap settings (per gizmo mode, Ctrl to enable) plus the Manipulate call, shared by both
   // selection paths below. Returns true while the gizmo is being dragged.
   auto manipulateGizmo = [&](glm::mat4 &mat) -> bool {
-    glm::vec3 snap(10.0f);
+    glm::vec3 snap(0.1f); // 10cm
     if (gizmoOp == 1) snap = glm::vec3(90.0f / 4.0f);
     else if (gizmoOp == 2) snap = glm::vec3(0.125f);
     bool isSnap = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl);
@@ -1564,7 +1566,7 @@ void Editor::Viewport3D::draw()
       glm::mat4 oldGizmoMat = gizmoMat;
 
       // Grid snap for the absolute-snap shortcut below (the gizmo's own snap is in the helper).
-      glm::vec3 snap(10.0f);
+      glm::vec3 snap(0.1f); // 10cm
       if (gizmoOp == 1) snap = glm::vec3(90.0f / 4.0f);
       else if (gizmoOp == 2) snap = glm::vec3(0.125f);
       bool isOnlySelf = ImGui::IsKeyDown(ImGuiKey_LeftShift);

@@ -81,10 +81,10 @@ namespace Project::Component::Camera
     Utils::JSON::readProp(doc, data->vpOffset);
     Utils::JSON::readProp(doc, data->vpSize);
     Utils::JSON::readProp(doc, data->fov, 65.0f);
-    Utils::JSON::readProp(doc, data->near, 100.0f);
-    Utils::JSON::readProp(doc, data->far, 4000.0f);
+    Utils::JSON::readProp(doc, data->near, 1.0f);
+    Utils::JSON::readProp(doc, data->far, 40.0f);
     Utils::JSON::readProp(doc, data->aspect, 0.0f);
-    Utils::JSON::readProp(doc, data->orthoSize, 300.0f);
+    Utils::JSON::readProp(doc, data->orthoSize, 3.0f);
     Utils::JSON::readProp(doc, data->mode, 0);
     Utils::JSON::readProp(doc, data->projection, PROJ_PERSPECTIVE);
     Utils::JSON::readProp(doc, data->targetMode, TARGET_FRAMEBUFFER);
@@ -214,7 +214,7 @@ namespace Project::Component::Camera
     float fovY = glm::radians(data.fov.resolve(obj));
     float aspect = data.aspect.resolve(obj);
     float nearDist = data.near.resolve(obj);
-    float farDist = nearDist + 85;//data.far.resolve(obj);
+    float farDist = nearDist + 0.85f;//data.far.resolve(obj);
     if (aspect <= 0.0f) {
       aspect = (float)data.vpSize.resolve(obj).x / (float)data.vpSize.resolve(obj).y;
     }
@@ -278,10 +278,10 @@ namespace Project::Component::Camera
     // little triangle marker on top of the upper edge of the far plane
     glm::vec3 lineDist = ftr - ftl;
     glm::vec3 triCenter = ftl + (lineDist * 0.5f);
-    triCenter += up * 10.0f;
-    glm::vec3 triLeft = triCenter - (right * 30.0f);
-    glm::vec3 triRight = triCenter + (right * 30.0f);
-    triCenter += up * 30.0f;
+    triCenter += up * 0.1f;
+    glm::vec3 triLeft = triCenter - (right * 0.3f);
+    glm::vec3 triRight = triCenter + (right * 0.3f);
+    triCenter += up * 0.3f;
     Utils::Mesh::addLine(*vp.getLines(), triCenter, triLeft, col, ctx.prefs.cameraLineThickness);
     Utils::Mesh::addLine(*vp.getLines(), triCenter, triRight, col, ctx.prefs.cameraLineThickness);
     Utils::Mesh::addLine(*vp.getLines(), triLeft, triRight, col, ctx.prefs.cameraLineThickness);

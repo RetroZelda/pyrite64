@@ -29,6 +29,7 @@ void Renderer::N64Mesh::fromT3DM(const Project::Assets::Model3D &model3d, Projec
   parts.clear();
 
   auto &t3dmData = model3d.t3dm;
+  mesh.vertexScale = model3d.autoBaseScale > 0.0f ? 1.0f / model3d.autoBaseScale : 1.0f;
   parts.resize(t3dmData.models.size());
   auto part = parts.begin();
 

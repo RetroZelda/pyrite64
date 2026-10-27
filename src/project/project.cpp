@@ -128,7 +128,8 @@ namespace
 }
 
 std::string Project::ProjectConf::serialize() const {
-  return Utils::JSON::Builder{}
+  auto builder = Utils::JSON::Builder{};
+  builder
     .set("name", name)
     .set("romName", romName)
     .set("pathEmu", pathEmu)
@@ -155,8 +156,10 @@ std::string Project::ProjectConf::serialize() const {
     .set("visLayer4", visLayerNames[4])
     .set("visLayer5", visLayerNames[5])
     .set("visLayer6", visLayerNames[6])
-    .set("visLayer7", visLayerNames[7])
-    .toString();
+    .set("visLayer7", visLayerNames[7]);
+  // only projects that went through a fork migration with a chosen value carry it
+  if(legacyUnitsPerMeter > 0.0f)builder.set("legacyUnitsPerMeter", legacyUnitsPerMeter);
+  return builder.toString();
 }
 
 void Project::Project::deserialize(const nlohmann::json &doc) {
@@ -171,6 +174,7 @@ void Project::Project::deserialize(const nlohmann::json &doc) {
   conf.sceneIdOnReset = doc.value("sceneIdOnReset", 1);
   conf.sceneIdLastOpened = doc.value("sceneIdLastOpened", 1);
   conf.debugMenu = doc.value("debugMenu", true);
+  conf.legacyUnitsPerMeter = doc.value("legacyUnitsPerMeter", 0.0f);
 
   for(int i=0; i<8; ++i) {
     conf.collLayerNames[i] = doc.value("collLayer" + std::to_string(i), "Layer " + std::to_string(i));

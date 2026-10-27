@@ -14,6 +14,7 @@
 #include "../utils/textureFormats.h"
 #include "../context.h"
 #include "romMetaBuilder.h"
+#include "../project/scene/migration.h"
 #include "../editor/imgui/notification.h"
 
 namespace fs = std::filesystem;
@@ -53,7 +54,13 @@ void Build::SceneCtx::addAsset(const Project::AssetManagerEntry &entry)
     flags |= 0x01; // KEEP_LOADED
   }
 
-  assetList.push_back({entry.romPath, stringOffset, (uint32_t)entry.type, flags});
+  // the t3dm format stores no scale, so the runtime gets it from the asset table
+  float vertexScale = 0.0f;
+  if(entry.type == AT::MODEL_3D && entry.model.autoBaseScale > 0.0f) {
+    vertexScale = 1.0f / entry.model.autoBaseScale;
+  }
+
+  assetList.push_back({entry.romPath, stringOffset, (uint32_t)entry.type, flags, vertexScale});
   stringOffset += entry.romPath.size() + 1;
 }
 
@@ -61,6 +68,20 @@ bool Build::buildProject(const std::string &configPath)
 {
   Project::Project project{configPath};
   auto path = project.getPath();
+
+  // To build, all relevant project documents have to be at the current format.
+  // Converting them rewrites project files, which only happens with the user's consent when the project is opened in the editor.
+  // CLI Build fails with message prompting the user to open and migrate first.
+  auto pending = Project::Migration::scanProject(project);
+  if(!pending.empty())
+  {
+    auto msg = "Project contains " + Project::Migration::describe(pending) + " in an older format.\n"
+      "Open the project in the Pyrite64 editor once to update them, then build again.";
+    Utils::Logger::log(msg, Utils::Logger::LEVEL_ERROR);
+    Editor::Noti::add(Editor::Noti::Type::ERROR, msg);
+    return false;
+  }
+
   Utils::Logger::log("Building project...");
 
   // Prefab-instance resolution (sceneBuilder, prefab-aware components) looks prefabs up
@@ -232,12 +253,13 @@ bool Build::buildProject(const std::string &configPath)
   // Asset table
   Utils::BinaryFile fileList{};
   fileList.write<uint32_t>(sceneCtx.assetList.size());
-  uint32_t baseOffset = (sceneCtx.assetList.size() * sizeof(uint32_t)*2) + sizeof(uint32_t);
+  uint32_t baseOffset = (sceneCtx.assetList.size() * sizeof(uint32_t)*3) + sizeof(uint32_t);
   for (auto &entry : sceneCtx.assetList) {
     fileList.write(baseOffset + entry.stringOffset);
     uint32_t ptr = entry.type << (32-4);
     ptr |= entry.flags << (32-8);
     fileList.write(ptr);
+    fileList.write(entry.vertexScale);
   }
   for (auto &entry : sceneCtx.assetList) {
     fileList.writeChars(entry.path.c_str(), entry.path.size()+1);

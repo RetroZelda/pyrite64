@@ -4,7 +4,6 @@
  * @brief Defines the Basic (non-mesh) Colliders (see colliderShape.h)
  */
 #include "collision/colliderShape.h"
-#include "collision/gfxScale.h"
 #include "collision/meshCollider.h"
 #include "scene/object.h"
 
@@ -66,7 +65,7 @@ bool Collider::hasOwnerTransformChanged() const {
   if(!owner_) return false;
   if(!hasCachedOwnerTransform_) return true;
 
-  fm_vec3_t ownerPhysicsPos = owner_->pos * getInvGfxScale();
+  fm_vec3_t ownerPhysicsPos = owner_->pos;
   if(fm_vec3_distance2(&ownerPhysicsPos, &lastOwnerPosition_) > FM_EPSILON * FM_EPSILON ) return true;
   if(fm_vec3_distance2(&owner_->scale, &lastOwnerScale_) > FM_EPSILON * FM_EPSILON ) return true;
 
@@ -80,7 +79,7 @@ void Collider::syncOwnerTransform() {
     lastOwnerRotation_ = QUAT_IDENTITY;
     lastOwnerScale_ = fm_vec3_t{{1.0f, 1.0f, 1.0f}};
   } else {
-    lastOwnerPosition_ = owner_->pos * getInvGfxScale();
+    lastOwnerPosition_ = owner_->pos;
     lastOwnerRotation_ = owner_->rot;
     lastOwnerScale_ = owner_->scale;
   }

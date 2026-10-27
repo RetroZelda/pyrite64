@@ -41,7 +41,8 @@ namespace Project
     PROP_S32(audioFreq);
     PROP_S32(physicsTickRate);
     PROP_VEC3(gravity);
-    PROP_FLOAT(visualUnitsPerMeter);
+    // RSP fixed-point world units per meter. Affects render precision only, gameplay is in meters.
+    PROP_FLOAT(renderScale);
     PROP_S32(velocitySolverIterations);
     PROP_S32(positionSolverIterations);
     PROP_BOOL(interpolatePhysicsTransforms);

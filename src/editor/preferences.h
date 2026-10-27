@@ -23,9 +23,10 @@ namespace Editor
     Input::Keymap keymap{};
     std::string themeName{"dark"};
     std::vector<RecentProject> recentProjects{};
-    float zoomSpeed = 1.0f;
-    float moveSpeed = 120.0f;
-    float panSpeed = 30.0f;
+    // meters, the viewport works in real-world units
+    float zoomSpeed = 0.01f;
+    float moveSpeed = 1.2f;
+    float panSpeed = 30.0f; // unitless, scaled by the view distance
     float lookSpeed = -10.0f;
     bool invertWheelY = false;
     float renderFactorAA = 1.0f;
@@ -34,14 +35,16 @@ namespace Editor
     bool showRotAsEuler = false;
     bool mouseWheelModifiesSpeed = false;
     bool viewportLockMode = false;
+    float viewportNear = 0.1f;   // editor camera clip planes in meters
+    float viewportFar = 1000.0f;
 
     float gridLineThickness = 0.05f;
-    float aabbLineThickness = 2.5f;
-    float colliderLineThickness = 2.5f;
-    float meshLineThickness = 2.5f;
-    float cameraLineThickness = 2.5f;
-    float culledLineThickness = 2.5f;
-    float lightLineThickness = 2.5f;
+    float aabbLineThickness = 0.025f; // meters (world-space line)
+    float colliderLineThickness = 0.025f; // meters (world-space line)
+    float meshLineThickness = 0.025f; // meters (world-space line)
+    float cameraLineThickness = 0.025f; // meters (world-space line)
+    float culledLineThickness = 0.025f; // meters (world-space line)
+    float lightLineThickness = 0.025f; // meters (world-space line)
     glm::vec4 aabbLineColor         = {0.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 colliderLineColor     = {0.0f, 0.88f, 0.88f, 1.0f};
     glm::vec4 meshLineColor         = {0.66f, 0.66f, 0.66f, 1.0f};
@@ -49,7 +52,7 @@ namespace Editor
     glm::vec4 cameraLineColor       = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 cameraLineColorSelected = {1.0f, 0.7, 0.18f, 1.0f};
     glm::vec4 culledLineColor       = {1.0f, 0.0f, 0.0f, 1.0f};
-    float splineLineThickness = 2.5f;
+    float splineLineThickness = 0.025f; // meters (world-space line)
     glm::vec4 splineLineColor         = {0.15f, 0.75f, 0.85f, 1.0f};
     glm::vec4 splineLineColorSelected = {1.0f, 0.75f, 0.2f, 1.0f};
 

@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "SHA256.h"
+#include "../build/autoScale.h"
 #include "../utils/codeParser.h"
 #include "../utils/fs.h"
 #include "../utils/hash.h"
@@ -90,6 +91,7 @@ namespace
       conf.uuid = doc.value<uint64_t>("uuid", 0);
       conf.format = doc["format"];
       conf.baseScale = doc["baseScale"];
+      conf.baseScaleOverride = doc.value<int>("baseScaleOverride", 0);
       conf.compression = (Project::ComprTypes)doc.value<int>("compression", 0);
       conf.gltfBVH = doc["gltfBVH"];
       Utils::JSON::readProp(doc, conf.wavForceMono);
@@ -248,6 +250,7 @@ std::string Project::AssetConf::serialize() const {
     .set("uuid", uuid)
     .set("format", format)
     .set("baseScale", baseScale)
+    .set("baseScaleOverride", baseScaleOverride)
     .set("compression", static_cast<int>(compression))
     .set("gltfBVH", gltfBVH)
     .set(wavForceMono)
@@ -333,9 +336,13 @@ void Project::AssetManager::reloadEntry(AssetManagerEntry &entry, const std::str
         }
         auto &savedMats = entry.conf.data["materials"];
 
+        float baseScale = entry.conf.baseScaleOverride > 0
+          ? (float)entry.conf.baseScaleOverride
+          : Build::computeAutoBaseScale(path);
+
         entry.model = {
           .t3dm = T3DM::parseGLTF(path.c_str(), {
-            .globalScale = (float)entry.conf.baseScale,
+            .globalScale = baseScale,
             .animSampleRate = 60,
             .createBVH = entry.conf.gltfBVH,
             .verbose = false,
@@ -353,6 +360,7 @@ void Project::AssetManager::reloadEntry(AssetManagerEntry &entry, const std::str
             },
           }), .materials = {},
         };
+        entry.model.autoBaseScale = baseScale;
 
         for(const auto &t3dMat : entry.model.t3dm.materials) {
           auto &mat = entry.model.materials[t3dMat.first];

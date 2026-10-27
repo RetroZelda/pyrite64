@@ -9,8 +9,10 @@
 #include <t3d/tpx.h>
 
 #include "lib/logger.h"
+#include "renderer/renderScale.h"
 #include "scene/scene.h"
 #include "renderer/particles/emitterManager.h"
+#include "renderer/particles/particleSim.h"
 
 namespace
 {
@@ -86,7 +88,8 @@ void P64::DrawLayer::draw(uint32_t layerIdx)
   if(setup.fogMode != Conf::FogMode::NONE)
   {
     t3d_fog_set_enabled(true);
-    t3d_fog_set_range(setup.fogMin, setup.fogMax);
+    // fog distances are in meters, view space is in render units
+    t3d_fog_set_range(setup.fogMin * Renderer::getRenderScale(), setup.fogMax * Renderer::getRenderScale());
 
     if(setup.fogMode == Conf::FogMode::CLEAR_COLOR) {
       rdpq_set_fog_color(SceneManager::getCurrent().getConf().clearColor);
@@ -137,16 +140,18 @@ void P64::DrawLayer::drawPtx()
   }
 
   // Live particle emitters: base_size MUST track the camera's far plane (matches jam25), else
-  // on-screen size is wrong-by-far and a fixed 128 makes particles hugely oversized (e.g. ~16x
-  // at the default far=4000). base_size = 64 * 500 / far cancels the far term in tpx's
-  // perspective math, so particle size becomes camera-correct & far-independent like the editor
-  // preview. Each emitter then multiplies this by its own size-normalization factor and sets
-  // the final base itself (EmitterInstance::draw). The baked PTX layers above keep their 128.
-  float emitFar = 500.0f;
+  // on-screen size is wrong-by-far and a fixed 128 makes particles hugely oversized.
+  // base_size = 64 * 500 / far (far in render units, like the projection) cancels the far term in
+  // tpx's perspective math and makes a sim-size of 1 about 8 render units, camera-correct and
+  // far-independent. Particles are written in render units, so to show a sim-size of 1 as
+  // SIZE_TO_METERS meters in any render scale, that base is scaled by SIZE_TO_METERS * renderScale / 8,
+  // which leaves 64 * 500 * SIZE_TO_METERS / (8 * far in meters). Each emitter then multiplies this
+  // by its own size-normalization factor (EmitterInstance::draw). The baked PTX layers keep their 128.
+  float emitFar = 50.0f; // meters
   if(Camera* cam = SceneManager::getCurrent().getActiveCameraPtr()) {
-    if(cam->far >= 1.0f) emitFar = cam->far;
+    if(cam->far > 0.01f) emitFar = cam->far;
   }
-  EmitterManager::draw(64.0f * 500.0f / emitFar);
+  EmitterManager::draw(64.0f * 500.0f * ParticleSim::SIZE_TO_METERS / (8.0f * emitFar));
 }
 
 void P64::DrawLayer::draw2D()

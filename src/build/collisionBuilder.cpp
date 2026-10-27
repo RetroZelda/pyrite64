@@ -56,7 +56,7 @@ namespace
   }
 
   void convert(
-    const char* gltfPath, Utils::BinaryFile &file, float baseScale,
+    const char* gltfPath, Utils::BinaryFile &file,
     const std::unordered_set<std::string> &meshes
   )
   {
@@ -127,15 +127,12 @@ namespace
               auto vert = Gltf::readAsVec3(basePtr, attr->data->type, acc->component_type);
               vert = nodeMat * vert;
 
-              verticesFloat.push_back({
-                vert[0] * baseScale,
-                vert[1] * baseScale,
-                vert[2] * baseScale
-              });
+              // collision geometry is exported in meters
+              verticesFloat.push_back({vert[0], vert[1], vert[2]});
               vertices.push_back({
-                (int16_t)(vert[0] * baseScale),
-                (int16_t)(vert[1] * baseScale),
-                (int16_t)(vert[2] * baseScale)
+                (int16_t)vert[0],
+                (int16_t)vert[1],
+                (int16_t)vert[2]
               });
               basePtr += Gltf::getDataSize(acc->component_type) * 3;
             }
@@ -176,7 +173,7 @@ namespace
 
     file.write<uint32_t>(indices.size() / 3);
     file.write<uint32_t>(vertices.size());
-    file.write<float>(1.0f);// / baseScale);
+    file.write<float>(1.0f);
     file.write<uint32_t>(0); // vertex pointer
     file.write<uint32_t>(0); // normals pointer
     file.write<uint32_t>(0); // BVH pointer (unused for now)
@@ -202,12 +199,11 @@ namespace Build
 {
   Utils::BinaryFile buildCollision(
     const std::string &gltfPath,
-    float baseScale,
     const std::unordered_set<std::string> &meshes
   )
   {
     Utils::BinaryFile f{};
-    convert(gltfPath.c_str(), f, baseScale, meshes);
+    convert(gltfPath.c_str(), f, meshes);
     return f;
   }
 }

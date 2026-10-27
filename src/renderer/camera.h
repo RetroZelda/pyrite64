@@ -17,7 +17,7 @@ namespace Renderer
     private:
 
     public:
-      static constexpr float DEFAULT_ORTHO_SIZE = 310.0f;
+      static constexpr float DEFAULT_ORTHO_SIZE = 3.1f;
 
       glm::vec3 pos{};
       glm::vec3 pivot{};

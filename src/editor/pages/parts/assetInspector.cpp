@@ -150,9 +150,41 @@ void Editor::AssetInspector::draw() {
     }
     else if (asset->type == FileType::MODEL_3D)
     {
-      if (ImTable::add("Base-Scale", asset->conf.baseScale)) {
+      // Vertex positions are quantized to int16 at import. The scale is picked from the
+      // model's bounds so it uses the full range, the override only exists for models
+      // whose animation reaches well outside the rest pose.
+      bool autoScale = asset->conf.baseScaleOverride <= 0;
+
+      ImTable::add("Vertex-Precision");
+      ImGui::Text("%.2f mm  (1/%d m)",
+        1000.0f / asset->model.autoBaseScale, (int)asset->model.autoBaseScale);
+
+      bool overrideChanged = false;
+      {
+        bool manual = !autoScale;
+        ImTable::add("Manual Precision");
+        if(ImGui::Checkbox("##manualPrecision", &manual)) {
+          asset->conf.baseScaleOverride = manual ? (int)asset->model.autoBaseScale : 0;
+          overrideChanged = true;
+        }
+        ImGui::SetItemTooltip(
+          "Overrides the automatic vertex precision.\n"
+          "Only needed when animation moves vertices outside the model's rest-pose bounds,\n"
+          "which would otherwise clip them to the int16 range."
+        );
+      }
+
+      if(!autoScale) {
+        if(ImTable::add("Units Per Meter", asset->conf.baseScaleOverride)) {
+          asset->conf.baseScaleOverride = std::max(asset->conf.baseScaleOverride, 1);
+          overrideChanged = true;
+        }
+      }
+
+      if(overrideChanged) {
         ctx.project->getAssets().reloadAssetByUUID(asset->getUUID());
       }
+
       ImTable::addCheckBox("Create BVH", asset->conf.gltfBVH);
     } else if (asset->type == FileType::FONT)
     {

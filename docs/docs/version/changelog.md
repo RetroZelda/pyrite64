@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.9.0
+
+### Meters everywhere
+
+* The editor, scene files and engine now use meters for every length. By @Byterset in https://github.com/HailToDodongo/pyrite64/pull/315
+* Positions, component sizes and distances are no longer in "visual units", and the
+  `Visual Units Per Meter` scene setting became **Render Scale** under *Advanced*, affecting
+  render precision only.
+* 3D models render at the size they were modeled at. The **Base-Scale** import setting was
+  replaced by an automatic vertex precision computed from the model bounds, with an optional
+  manual override in the asset inspector.
+* Scenes and prefabs are versioned and get converted automatically. Opening an older project asks
+  before rewriting anything, attempting to build one that was not updated fails with an error.
+
+```{admonition} This version introduced breaking changes!
+:class: warning
+
+Checkout [Breaking Changes](./breakingChanges) for more information.
+```
+
 ## v0.8.0
 
 ### Node-Graph

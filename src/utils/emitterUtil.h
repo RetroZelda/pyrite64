@@ -18,7 +18,7 @@ namespace Utils::Emitter
 {
   // Scales the emitter's abstract "size" units into world units so particles are visible at the
   // same scale as velocity/gravity (which are in world units). Must match across preview + scene.
-  constexpr float SIZE_TO_WORLD = 8.0f;
+  constexpr float SIZE_TO_WORLD = P64::ParticleSim::SIZE_TO_METERS; // the editor world is in meters
 
   inline P64::ParticleSim::Config toConfig(const Project::Assets::Emitter &em)
   {

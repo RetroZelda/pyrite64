@@ -83,7 +83,7 @@ namespace P64::Coll {
     void addMeshCollider(MeshCollider *mesh);
     void removeMeshCollider(MeshCollider *mesh);
 
-    void configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations, float gfxScale);
+    void configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations);
     void wakeRigidBodyIsland(RigidBody *rigidBody);
 
     void step();

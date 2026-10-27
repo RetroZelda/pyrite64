@@ -180,6 +180,10 @@ add_executable(pyrite64 src/main.cpp
         src/project/scene/sceneManager.cpp
         src/project/scene/scene.h
         src/project/scene/scene.cpp
+        src/project/scene/migration.h
+        src/project/scene/migration.cpp
+        src/editor/pages/parts/migrationOverlay.h
+        src/editor/pages/parts/migrationOverlay.cpp
         src/editor/pages/parts/sceneInspector.cpp
         src/build/projectBuilder.h
         src/build/projectBuilder.cpp
@@ -249,6 +253,8 @@ add_executable(pyrite64 src/main.cpp
         src/project/assets/collision.cpp
         src/build/t3dmBuilder.cpp
         src/build/collisionBuilder.cpp
+        src/build/autoScale.h
+        src/build/autoScale.cpp
         src/project/component/types/compCollBody.cpp
         src/project/component/types/compRigidBody.cpp
         src/project/component/types/compCharBody.cpp

@@ -190,7 +190,7 @@ bool Build::buildT3DCollision(
   printf("Building T3DM Collision: %s\n", outPath.string().c_str());
   //printf(" asset: %d | %d\n", sceneCtx.files.size(), sceneCtx.assetUUIDToIdx.size());
 
-  auto collData = Build::buildCollision(model->path, model->conf.baseScale, meshes);
+  auto collData = Build::buildCollision(model->path, meshes);
   collData.writeToFile(outPath.string());
 
   fs::path mkAsset = fs::path{project.conf.pathN64Inst} / "bin" / "mkasset";
@@ -225,7 +225,7 @@ bool Build::buildT3DMAssets(Project::Project &project, SceneCtx &sceneCtx)
       fs::create_directories(t3dmDir);
 
       T3DM::Config config{
-        .globalScale = (float)model.conf.baseScale,
+        .globalScale = model.model.autoBaseScale,
         .createBVH = model.conf.gltfBVH,
         .verbose = false,
         .assetPath = "assets/",

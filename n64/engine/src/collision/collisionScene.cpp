@@ -6,7 +6,6 @@
 #include "collision/collisionScene.h"
 #include "collision/collide.h"
 #include "collision/contactUtils.h"
-#include "collision/gfxScale.h"
 #include "collision/gjk.h"
 #include "scene/scene.h"
 
@@ -449,9 +448,8 @@ namespace P64::Coll {
     }
   }
 
-  void CollisionScene::configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations, float gfxScale) {
+  void CollisionScene::configureSimulation(float fixedDt, const fm_vec3_t &gravity, uint8_t velocityIterations, uint8_t positionIterations) {
     fixedDt_ = fixedDt > 0.0f ? fixedDt : DEFAULT_FIXED_DT;
-    setGfxScale(gfxScale);
     gravity_ = gravity;
     velocitySolverIterations_ = std::max<uint8_t>(1, velocityIterations);
     positionSolverIterations_ = std::max<uint8_t>(1, positionIterations);
@@ -737,7 +735,7 @@ namespace P64::Coll {
 
       bool applied = false;
       if(owner->pos != body->syncedOwnerPos_) {
-        const fm_vec3_t delta = (owner->pos - body->syncedOwnerPos_) * getInvGfxScale();
+        const fm_vec3_t delta = (owner->pos - body->syncedOwnerPos_);
         body->position_ += delta;
         body->previousStepPosition_ += delta;
         body->syncedOwnerPos_ = owner->pos;
@@ -1650,14 +1648,14 @@ namespace P64::Coll {
       mesh->transformChanged_ = mesh->hasOwnerTransformChanged();
       if(!mesh->transformChanged_ && mesh->hasCachedOwnerTransform_) continue;
 
-      fm_vec3_t prevOwnerPhysicsPos = mesh->owner_ ? mesh->owner_->pos * getInvGfxScale() : VEC3_ZERO;
+      fm_vec3_t prevOwnerPhysicsPos = mesh->owner_ ? mesh->owner_->pos : VEC3_ZERO;
 
       mesh->recalculateWorldAabb();
       mesh->syncOwnerTransform();
 
       if (mesh->aabbTreeNodeId_ != NULL_NODE) {
         if (mesh->owner_) {
-          fm_vec3_t ownerPhysicsPos = mesh->owner_->pos * getInvGfxScale();
+          fm_vec3_t ownerPhysicsPos = mesh->owner_->pos;
           const fm_vec3_t disp = ownerPhysicsPos - prevOwnerPhysicsPos;
           meshColliderAABBTree.moveNode(mesh->aabbTreeNodeId_, mesh->worldAabb_, disp);
         } else {
@@ -2263,7 +2261,7 @@ namespace P64::Coll {
       }
 
       // Sync visual object with physics position and save snapshot, so external changes to the owner can be detected next step
-      body->owner_->pos = body->position_ * getGfxScale();
+      body->owner_->pos = body->position_;
       body->owner_->rot = body->rotation_;
       body->syncedOwnerPos_ = body->owner_->pos;
       body->syncedOwnerRot_ = body->owner_->rot;
@@ -2313,9 +2311,9 @@ namespace P64::Coll {
           int idxB = meshCollider->triangles_[t].indices[1];
           int idxC = meshCollider->triangles_[t].indices[2];
 
-          fm_vec3_t v0 = meshCollider->toWorldSpace(meshCollider->vertices_[idxA]) * getGfxScale();
-          fm_vec3_t v1 = meshCollider->toWorldSpace(meshCollider->vertices_[idxB]) * getGfxScale();
-          fm_vec3_t v2 = meshCollider->toWorldSpace(meshCollider->vertices_[idxC]) * getGfxScale();
+          fm_vec3_t v0 = meshCollider->toWorldSpace(meshCollider->vertices_[idxA]);
+          fm_vec3_t v1 = meshCollider->toWorldSpace(meshCollider->vertices_[idxB]);
+          fm_vec3_t v2 = meshCollider->toWorldSpace(meshCollider->vertices_[idxC]);
 
           Debug::drawLine(v0, v1, color);
           Debug::drawLine(v1, v2, color);
@@ -2347,46 +2345,46 @@ namespace P64::Coll {
           {
           case ShapeType::Sphere:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x00, 0x00, 0xFF};
-            Debug::drawSphere(collider->worldCenter_ * getGfxScale(), collider->sphere_.radius * getGfxScale(), col);
+            Debug::drawSphere(collider->worldCenter_, collider->sphere_.radius, col);
             break;
           case ShapeType::Box:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0x00, 0xFF, 0xFF, 0xFF};
-            Debug::drawOBB(collider->worldCenter_ * getGfxScale(), collider->box_.halfSize * getGfxScale(), collider->owner_->rot, col);
+            Debug::drawOBB(collider->worldCenter_, collider->box_.halfSize, collider->owner_->rot, col);
             break;
           case ShapeType::Capsule:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0x00, 0x80, 0xFF, 0xFF};
             Debug::drawCapsule(
-                collider->worldCenter_ * getGfxScale(),
-                collider->capsule_.radius * getGfxScale(),
-                collider->capsule_.innerHalfHeight * getGfxScale(),
+                collider->worldCenter_,
+                collider->capsule_.radius,
+                collider->capsule_.innerHalfHeight,
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Cylinder:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x80, 0x00, 0xFF};
             Debug::drawCylinder(
-                collider->worldCenter_ * getGfxScale(),
-                collider->cylinder_.radius * getGfxScale(),
-                collider->cylinder_.halfHeight * getGfxScale(),
+                collider->worldCenter_,
+                collider->cylinder_.radius,
+                collider->cylinder_.halfHeight,
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Cone:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xFF, 0x40, 0xA0, 0xFF};
             Debug::drawCone(
-                collider->worldCenter_ * getGfxScale(),
-                collider->cone_.radius * getGfxScale(),
-                collider->cone_.halfHeight * getGfxScale(),
+                collider->worldCenter_,
+                collider->cone_.radius,
+                collider->cone_.halfHeight,
                 collider->owner_->rot,
                 col);
             break;
           case ShapeType::Pyramid:
             if (!isSleepingBody) col = hasCustomColor ? customCol : color_t{0xB0, 0xFF, 0x40, 0xFF};
             Debug::drawPyramid(
-                collider->worldCenter_ * getGfxScale(),
-                collider->pyramid_.baseHalfWidthX * getGfxScale(),
-                collider->pyramid_.baseHalfWidthZ * getGfxScale(),
-                collider->pyramid_.halfHeight * getGfxScale(),
+                collider->worldCenter_,
+                collider->pyramid_.baseHalfWidthX,
+                collider->pyramid_.baseHalfWidthZ,
+                collider->pyramid_.halfHeight,
                 collider->owner_->rot,
                 col);
             break;

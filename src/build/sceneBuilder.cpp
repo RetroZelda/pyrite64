@@ -68,8 +68,10 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
   glm::quat lrot   = srcObj->rot.resolve(obj.propOverrides);
 
   if(isPrefabRoot) {
+    // The spawn places the root, so its position and rotation are dropped. Its scale is kept:
+    // since the meters migration a model-bearing root carries the model's size in it, and the
+    // children below are baked with it. The runtime composes it with the spawn scale.
     lpos = {0,0,0};
-    lscale = {1,1,1};
     lrot = glm::quat(glm::vec3(0.0f));
   }
 
@@ -250,7 +252,7 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
   ctx.fileScene.write<float>(gravity.x);
   ctx.fileScene.write<float>(gravity.y);
   ctx.fileScene.write<float>(gravity.z);
-  ctx.fileScene.write<float>(std::max(sc->conf.visualUnitsPerMeter.value, 0.001f));
+  ctx.fileScene.write<float>(std::max(sc->conf.renderScale.value, 0.001f));
 
   ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.velocitySolverIterations.value, 1, 32));
   ctx.fileScene.write<uint8_t>(std::clamp(sc->conf.positionSolverIterations.value, 1, 32));

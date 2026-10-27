@@ -24,6 +24,10 @@ bool Editor::PreferenceOverlay::draw()
     ImTable::add("Look Speed", ctx.prefs.lookSpeed);
     ImTable::add("Invert Wheel Y", ctx.prefs.invertWheelY);
     ImTable::add("Lock Viewport Navigation", ctx.prefs.viewportLockMode);
+    ImTable::add("Near Clip (m)", ctx.prefs.viewportNear);
+    ImTable::add("Far Clip (m)", ctx.prefs.viewportFar);
+    ctx.prefs.viewportNear = std::max(0.001f, ctx.prefs.viewportNear);
+    ctx.prefs.viewportFar = std::max(ctx.prefs.viewportNear * 2.0f, ctx.prefs.viewportFar);
     ImTable::end();
   }
 

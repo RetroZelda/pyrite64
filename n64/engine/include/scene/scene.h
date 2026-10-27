@@ -62,7 +62,7 @@ namespace P64
     uint16_t physicsTickRate{};
 
     fm_vec3_t gravity{};
-    float visualUnitsPerMeter{};
+    float renderScale{}; // RSP fixed-point world units per meter, render-side precision only
 
     uint8_t velocitySolverIterations{};
     uint8_t positionSolverIterations{};

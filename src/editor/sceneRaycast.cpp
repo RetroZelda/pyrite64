@@ -92,13 +92,8 @@ namespace
         auto *asset = assets.getEntryByUUID(modelUUID);
         if(!asset || asset->type != Project::FileType::MODEL_3D)continue;
 
-        glm::vec3 skew{};
-        glm::vec4 persp{0, 0, 0, 1};
-        glm::mat4 modelMat = glm::recompose(
-          child->scale.resolve(child->propOverrides),
-          child->rot.resolve(child->propOverrides),
-          child->pos.resolve(child->propOverrides),
-          skew, persp);
+        // same matrix the model draws with: quantized vertex units -> meters (see compModel's draw3D)
+        glm::mat4 modelMat = Project::Component::makeModelMatrix(*child, 1.0f / asset->model.autoBaseScale);
 
         // only the parts compModel's draw3D draws: its mesh filter resolved on the drawn object. No filter (or
         // no match) gives no indices, which N64Mesh::draw takes as every part.

@@ -3,7 +3,6 @@
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Mesh Collider definitions and functions (see meshCollider.h)
  */
-#include "collision/gfxScale.h"
 #include "collision/meshCollider.h"
 #include "collision/colliderShape.h"
 #include "scene/object.h"
@@ -104,7 +103,7 @@ namespace P64::Coll {
   // ── MeshCollider transform ────────────────────────────────────────
 
   fm_vec3_t MeshCollider::toWorldSpace(const fm_vec3_t &localPoint) const {
-    fm_vec3_t position = owner_ ? owner_->pos * getInvGfxScale() : VEC3_ZERO;
+    fm_vec3_t position = owner_ ? owner_->pos : VEC3_ZERO;
     fm_quat_t rotation = owner_ ? owner_->rot : QUAT_IDENTITY;
     fm_vec3_t scale = owner_ ? owner_->scale : fm_vec3_t{{1.0f, 1.0f, 1.0f}};
     fm_vec3_t scaled = localPoint * scale;
@@ -121,7 +120,7 @@ namespace P64::Coll {
     fm_vec3_t p = worldPoint;
     fm_vec3_t scale = owner_ ? owner_->scale : fm_vec3_t{{1.0f, 1.0f, 1.0f}};
     if(hasPosition()) {
-      p = p - owner_->pos * getInvGfxScale();
+      p = p - owner_->pos;
     }
     if(hasRotation()) {
       p = quatConjugate(owner_->rot) * p;
@@ -164,7 +163,7 @@ namespace P64::Coll {
 
   bool MeshCollider::hasPosition() const {
     if(!owner_) return false;
-    fm_vec3_t ownerPhysicsPos = owner_->pos * getInvGfxScale();
+    fm_vec3_t ownerPhysicsPos = owner_->pos;
     return fm_vec3_len2(&ownerPhysicsPos) > FM_EPSILON * FM_EPSILON;
   }
 
@@ -185,7 +184,7 @@ namespace P64::Coll {
     if(!owner_) return false;
     if(!hasCachedOwnerTransform_) return true;
 
-  fm_vec3_t ownerPhysicsPos = owner_->pos * getInvGfxScale();
+  fm_vec3_t ownerPhysicsPos = owner_->pos;
     if(fm_vec3_distance2(&ownerPhysicsPos, &lastOwnerPosition_) > FM_EPSILON * FM_EPSILON) return true;
     if(fm_vec3_distance2(&owner_->scale, &lastOwnerScale_) > FM_EPSILON * FM_EPSILON) return true;
 
@@ -199,7 +198,7 @@ namespace P64::Coll {
       lastOwnerRotation_ = QUAT_IDENTITY;
       lastOwnerScale_ = fm_vec3_t{{1.0f, 1.0f, 1.0f}};
     } else {
-      lastOwnerPosition_ = owner_->pos * getInvGfxScale();
+      lastOwnerPosition_ = owner_->pos;
       lastOwnerRotation_ = owner_->rot;
       lastOwnerScale_ = owner_->scale;
     }
@@ -303,7 +302,7 @@ namespace P64::Coll {
     // Copy vertex data
     collider->vertices_ = new fm_vec3_t[header->vertCount];
     for(uint32_t i = 0; i < header->vertCount; ++i) {
-      collider->vertices_[i] = vertexData[i] * getInvGfxScale();
+      collider->vertices_[i] = vertexData[i];
     }
 
     // Copy triangle indices

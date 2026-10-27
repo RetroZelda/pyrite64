@@ -3,7 +3,6 @@
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Contains the rigidBody definition, constants and related functions (see rigidBody.h)
  */
-#include "collision/gfxScale.h"
 #include "collision/rigidBody.h"
 #include "collision/collisionScene.h"
 #include <cassert>
@@ -140,7 +139,7 @@ namespace P64::Coll {
     assertf(object, "RigidBody must be initialized with a valid owner object");
 
     owner_ = object;
-    position_ = object->pos * getInvGfxScale();
+    position_ = object->pos;
     rotation_ = object->rot;
     constraints_ = Constraint::None;
     sleepCounter_ = 0;

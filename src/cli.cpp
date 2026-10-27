@@ -6,6 +6,9 @@
 #include "cli.h"
 #include "argparse/argparse.hpp"
 #include "build/projectBuilder.h"
+#include "context.h"
+#include "project/project.h"
+#include "project/scene/migration.h"
 #include "utils/logger.h"
 
 namespace
@@ -34,7 +37,7 @@ CLI::Result CLI::run(int argc, char** argv)
 
   prog.add_argument("--cmd")
     .help("Command to run")
-    .choices("build", "clean");
+    .choices("build", "clean", "migrate");
 
   prog.add_argument("--experimental")
     .help("Enable experimental features (may cause instability / break projects)")
@@ -80,6 +83,29 @@ CLI::Result CLI::run(int argc, char** argv)
       fprintf(stderr, "Build failed: %s\n", e.what());
       res = false;
     }
+  }
+  else if (cmd == "migrate")
+  {
+    // Fork: headless version of the editor's project-update dialog (builds refuse outdated projects)
+    printf("Migrating project: %s\n", argProgPath.c_str());
+    Project::Project project{argProgPath};
+    // prefab instances are resolved through the global project, like in a build
+    Project::Project *prevProject = ctx.project;
+    ctx.project = &project;
+    auto scan = Project::Migration::scanProject(project);
+    if (scan.empty()) {
+      printf("Project is up to date\n");
+    } else {
+      printf("Updating %s (prefab/emitter units per meter: %g)\n",
+        Project::Migration::describe(scan).c_str(), (double)scan.legacyUnitsPerMeter);
+      if (scan.countOf(Project::Migration::DocType::PREFAB) > 0 || scan.countOf(Project::Migration::DocType::EMITTER) > 0) {
+        project.conf.legacyUnitsPerMeter = scan.legacyUnitsPerMeter;
+        project.saveConfig();
+      }
+      Project::Migration::apply(project, scan);
+    }
+    ctx.project = prevProject;
+    res = true;
   }
   else if (cmd == "clean")
   {

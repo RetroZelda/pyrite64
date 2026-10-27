@@ -34,6 +34,7 @@ namespace P64::Comp
       int16_t animIdxBlend{-1};
 
       RingMat4FP matFP{};
+      float vertexScale{1.0f};
       uint8_t layerIdx{0};
       uint8_t flags{0};
 
@@ -55,6 +56,8 @@ namespace P64::Comp
       void setMainAnim(int16_t idx);
       void setBlendAnim(int16_t idx);
       void swapModel(uint16_t newAssetIdx);
+      // meters per vertex unit of the current model (bone and vertex data are in vertex units)
+      float getVertexScale() const { return vertexScale; }
 
       bool shouldUpdate(uint64_t globalFrame, uint8_t &framesSince) {
         if (staggerRate == 0) { framesSince = 0; return false; }
