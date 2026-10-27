@@ -55,6 +55,8 @@ namespace P64::Comp
     void *rawData = AssetManager::acquire(initData->assetIdx);
     data->meshCollider = Coll::MeshCollider::createFromRawData(rawData, &obj);
 
+    assertf(data->meshCollider, "Invalid collision asset; rebuild the ROM with the current editor version to ensure the collision asset is up to date.");
+    if(!data->meshCollider) return;
     data->meshCollider->setCollisionMask(initData->maskRead, initData->maskWrite);
   }
 

@@ -145,8 +145,8 @@ namespace P64::Coll {
     if(!a || !b) return false;
     if(a->shapeType() != ShapeType::Sphere || b->shapeType() != ShapeType::Sphere) return false;
 
-    float rA = a->sphereShape().radius;
-    float rB = b->sphereShape().radius;
+    float rA = a->worldSphereShape().radius;
+    float rB = b->worldSphereShape().radius;
     float combinedRadius = rA + rB;
 
     fm_vec3_t diff = a->worldCenter() - b->worldCenter();
@@ -180,8 +180,8 @@ namespace P64::Coll {
     if(!sphere || !box) return false;
     if(sphere->shapeType() != ShapeType::Sphere || box->shapeType() != ShapeType::Box) return false;
 
-    float radius = sphere->sphereShape().radius;
-    fm_vec3_t halfSize = box->boxShape().halfSize;
+    float radius = sphere->worldSphereShape().radius;
+    fm_vec3_t halfSize = box->worldBoxShape().halfSize;
 
     // Transform sphere center to box local space
     const Matrix3x3 &boxRot = box->rotationMatrix();
@@ -240,9 +240,9 @@ namespace P64::Coll {
     if(!sphere || !capsule) return false;
     if(sphere->shapeType() != ShapeType::Sphere || capsule->shapeType() != ShapeType::Capsule) return false;
 
-    float rS = sphere->sphereShape().radius;
-    float rC = capsule->capsuleShape().radius;
-    float hh = capsule->capsuleShape().innerHalfHeight;
+    float rS = sphere->worldSphereShape().radius;
+    float rC = capsule->worldCapsuleShape().radius;
+    float hh = capsule->worldCapsuleShape().innerHalfHeight;
 
     // Capsule axis endpoints in world space
     fm_vec3_t localUp = fm_vec3_t{{0.0f, hh, 0.0f}};
@@ -292,10 +292,10 @@ namespace P64::Coll {
     if(!capsuleA || !capsuleB) return false;
     if(capsuleA->shapeType() != ShapeType::Capsule || capsuleB->shapeType() != ShapeType::Capsule) return false;
 
-    float rA = capsuleA->capsuleShape().radius;
-    float rB = capsuleB->capsuleShape().radius;
-    float hhA = capsuleA->capsuleShape().innerHalfHeight;
-    float hhB = capsuleB->capsuleShape().innerHalfHeight;
+    float rA = capsuleA->worldCapsuleShape().radius;
+    float rB = capsuleB->worldCapsuleShape().radius;
+    float hhA = capsuleA->worldCapsuleShape().innerHalfHeight;
+    float hhB = capsuleB->worldCapsuleShape().innerHalfHeight;
 
     // Capsule A axis endpoints in world space
     fm_vec3_t localUpA = fm_vec3_t{{0.0f, hhA, 0.0f}};
@@ -1256,8 +1256,8 @@ namespace P64::Coll {
       std::swap(aReadsB, bReadsA);
     }
 
-    const SatObb obbA{colliderA->worldCenter(), colliderA->rotationMatrix(), colliderA->boxShape().halfSize};
-    const SatObb obbB{colliderB->worldCenter(), colliderB->rotationMatrix(), colliderB->boxShape().halfSize};
+    const SatObb obbA{colliderA->worldCenter(), colliderA->rotationMatrix(), colliderA->worldBoxShape().halfSize};
+    const SatObb obbB{colliderB->worldCenter(), colliderB->rotationMatrix(), colliderB->worldBoxShape().halfSize};
 
     // Trigger pairs and probe queries (CCD substeps) only need a boolean overlap answer
     const bool isTriggerContact = colliderA->isTrigger() || colliderB->isTrigger();
@@ -1340,7 +1340,7 @@ namespace P64::Coll {
 
     // --- Analytical Box-Triangle fast path (SAT) ---
     if(colliderProxyMeshSpace->collider->shapeType() == ShapeType::Box && !isTriggerContact) {
-      const BoxShape &box = colliderProxyMeshSpace->collider->boxShape();
+      const BoxShape &box = colliderProxyMeshSpace->collider->worldBoxShape();
       const fm_vec3_t v0 = tri.localVertex(0);
       const fm_vec3_t v1 = tri.localVertex(1);
       const fm_vec3_t v2 = tri.localVertex(2);
@@ -1365,7 +1365,7 @@ namespace P64::Coll {
 
     // --- Analytical Sphere-Triangle fast path (closest-point distance test) ---
     if(colliderProxyMeshSpace->collider->shapeType() == ShapeType::Sphere && !isTriggerContact) {
-      const SphereShape &sphere = colliderProxyMeshSpace->collider->sphereShape();
+      const SphereShape &sphere = colliderProxyMeshSpace->collider->worldSphereShape();
       const fm_vec3_t v0 = tri.localVertex(0);
       const fm_vec3_t v1 = tri.localVertex(1);
       const fm_vec3_t v2 = tri.localVertex(2);
@@ -1462,8 +1462,8 @@ namespace P64::Coll {
 
     // Query local-space mesh AABB tree for candidate triangles
     constexpr int MAX_CANDIDATES = 20; // arbitrary limit to avoid extreme cases
-    NodeProxy candidates[MAX_CANDIDATES];
-    int count = mesh.queryTriangleNodes(queryAABB, candidates, MAX_CANDIDATES);
+    uint16_t candidates[MAX_CANDIDATES];
+    int count = mesh.queryTriangles(queryAABB, candidates, MAX_CANDIDATES);
 
     if(count <= 0) return false;
 
@@ -1481,10 +1481,10 @@ namespace P64::Coll {
       if(mesh.hasScale()) {
         fm_vec3_t inverseScaleVec = vec3ReciprocalScaleComponents(mesh.ownerObject()->scale);
         Matrix3x3 inverseScale = diagonalMatrix(inverseScaleVec);
-        colliderInMeshSpace.effectiveRadius = max(inverseScaleVec.x, max(inverseScaleVec.y, inverseScaleVec.z)) * collider->sphereShape().radius;
+        colliderInMeshSpace.effectiveRadius = max(inverseScaleVec.x, max(inverseScaleVec.y, inverseScaleVec.z)) * collider->worldSphereShape().radius;
         colliderInMeshSpace.shapeToSpace = matrix3Mul(inverseScale, relativeRotation);
       } else {
-        colliderInMeshSpace.effectiveRadius = collider->sphereShape().radius;
+        colliderInMeshSpace.effectiveRadius = collider->worldSphereShape().radius;
         colliderInMeshSpace.shapeToSpace = relativeRotation;
       }
 
@@ -1493,7 +1493,7 @@ namespace P64::Coll {
       colliderInMeshSpace.normalToSpace = matrix3Transpose(colliderInMeshSpace.spaceToShape);
     } else {
       colliderInMeshSpace.worldCenter = collider->worldCenter();
-      colliderInMeshSpace.effectiveRadius = collider->sphereShape().radius;
+      colliderInMeshSpace.effectiveRadius = collider->worldSphereShape().radius;
       colliderInMeshSpace.shapeToSpace = collider->rotationMatrix();
       colliderInMeshSpace.shapeToSpaceTranspose = matrix3Transpose(colliderInMeshSpace.shapeToSpace);
       colliderInMeshSpace.spaceToShape = collider->inverseRotationMatrix();
@@ -1503,8 +1503,7 @@ namespace P64::Coll {
 
     // For every candidate triangle perform precise collision test
     for(int i = 0; i < count; ++i) {
-      int triIndex = mesh.triangleIndexForNode(candidates[i]);
-      if(triIndex < 0) continue;
+      const int triIndex = candidates[i];
 
       // If there is a collision between the collider and the current triangle and the collider is a Trigger
       // we can skip the rest of the candidates since triggers just need to report that a collision happened

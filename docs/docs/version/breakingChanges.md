@@ -164,6 +164,61 @@ The viewport fly and zoom speeds are stored in meters now. Their preference keys
 existing settings fall back to the new defaults. Re-adjust them under *Preferences* if you had
 them customized.
 
+### Changing colliders in C++
+
+`Coll::Collider` now owns the geometry of a collider and is the only place that changes it.
+Dimensions and the offset are in the object's local space (the same values the editor shows), the
+object-scaled result the collision runs on is derived, read-only and named `world...`.
+
+Writing to a shape used to leave the broadphase with the old size, so the non-const shape
+accessors were replaced by setters that keep the world AABB, the mass properties of an attached
+rigid body and the sleep state in sync:
+
+```cpp
+// Before:
+auto &coll = obj.getComponent<Comp::CollBody>()->collider;
+coll.cylinderShape().halfHeight = 2.0f;             // object-scaled, silently stale broadphase
+
+// Now:
+auto halfExtend = coll.halfExtend();                // local, like the editor
+halfExtend.y = 2.0f;
+coll.setHalfExtend(halfExtend);
+// or, size and type in one call:
+coll.setCylinderShape(coll.halfExtend().x, 2.0f);
+```
+
+Note that `set{SHAPE}Shape()` will also change the shape type if the collider was not of this
+shape before.
+
+Reading the object-scaled dimensions, e.g. inside a collision callback, gained a `world` prefix:
+`sphereShape()` became `worldSphereShape()`, `boxShape()` became `worldBoxShape()`, and so on.
+
+`Comp::CollBody` is a plain holder now, it creates the collider from the editor values and
+registers it with the collision scene. `orgScale` and its half extend / shape / scale helpers are
+gone, use the `collider` member for all of it. `Collider::setShapeType()` no longer resets the
+dimensions to zero, it keeps the size and folds it into the new shape.
+
+### Bugfix in Ray, Capsule & SphereCasts
+
+Previously Ray and Shapecasts would not take into consideration if the Cast-Readmask and a mesh colliders write mask would match,
+thus all mesh colliders were always matched if they were hit, regardless of what the mask said.
+This can affect existing projects if you are using Raycasts or Shapecasts or using the CharacterBody Component which uses those under the hood.
+If e.g. your Level geometry does not set the write mask bits that the CharacterBody reads your character might fall through the geometry.
+The fix here is to set the masks accordingly.<br>
+
+Note that it is strongly recommended to only use the mask bits you actually need per collider to avoid unnecessary collision tests.
+
+### Mesh Collision Assets
+
+Mesh Collision BVHs are now statically built during ROM build instead of dynamically during Scene load. This change reduces memory usage a little and marginally improves performance and scene loading speed (depending on the usage of mesh colliders).<br>
+This means that projects using mesh colliders need to be rebuilt so the assets contain the necessary information.
+
+Collision assets also store normals as three floats. Mesh colliders now share the asset's vertices, triangle indices,
+normals and BVH instead of allocating geometry copies for each instance.<br>
+Assets using packed normals must be rebuilt.
+Manually created mesh colliders still take ownership of their supplied arrays and generate their own normals and BVH;
+`destroyData()` frees owned data and only detaches borrowed asset data.
+
 ## v0.7.0
 
 This version completely reworked the material system as well as the collision/physics system.<br>

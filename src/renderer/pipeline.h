@@ -26,12 +26,13 @@ namespace Renderer
       {
         const Renderer::Shader &shader;
         SDL_GPUPrimitiveType prim{};
-        bool useDepth{};
+        bool depthTest{true};
+        bool depthWrite{true}; // write to the depth buffer (set false for alpha-blended particles)
+        SDL_GPUCompareOp depthCompare{SDL_GPU_COMPAREOP_LESS};
         bool drawsObjID{};
         bool translucent{};
         bool additive{};       // with translucent: additive blend (src*alpha + dst) instead of alpha
         bool noAlphaWrite{};   // mask the alpha channel (keeps an FB's alpha at 1 for compositing)
-        bool depthWrite{true}; // write to the depth buffer (set false for alpha-blended particles)
         bool hasDepthTarget{true}; // false: render pass binds NO depth target (e.g. fullscreen composite)
         // color target 0 format (target 1, the objID buffer, is always R32_UINT).
         // Non-UNORM float formats don't clamp when blending (used by the additive-wrap accum pass).

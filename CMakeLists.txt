@@ -18,6 +18,22 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
         "Run: cmake --preset <name>")
 endif()
 
+# A checkout without git-lfs leaves ~130 byte text pointers instead of the real assets
+set(P64_LFS_PROBE "${CMAKE_SOURCE_DIR}/data/GoogleSansCode.ttf")
+if(EXISTS "${P64_LFS_PROBE}")
+    file(SIZE "${P64_LFS_PROBE}" P64_LFS_PROBE_SIZE)
+else()
+    set(P64_LFS_PROBE_SIZE 0)
+endif()
+
+if(P64_LFS_PROBE_SIZE LESS 1024)
+    message(FATAL_ERROR
+        "Git LFS assets were not fetched (data/GoogleSansCode.ttf is only ${P64_LFS_PROBE_SIZE} bytes).\n\n"
+        "Install git-lfs (https://git-lfs.com), then run:\n"
+        "  git lfs install\n"
+        "  git lfs pull\n")
+endif()
+
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
 

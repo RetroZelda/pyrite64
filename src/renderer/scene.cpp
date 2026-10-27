@@ -37,10 +37,14 @@ Renderer::Scene::Scene()
     .fragTexCount = 1,
   });
 
-  pipelineN64 = std::make_unique<Pipeline>(Pipeline::Info{
+  for(int i = 0; i < (int)pipelineN64.size(); ++i)
+  {
+  pipelineN64[i] = std::make_unique<Pipeline>(Pipeline::Info{
     .shader = *shaderN64,
     .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-    .useDepth = true,
+    .depthTest = (i & 0b11) != 0,
+    .depthWrite = (i & 0b10) != 0,
+    .depthCompare = (i & 0b01) ? SDL_GPU_COMPAREOP_LESS : SDL_GPU_COMPAREOP_ALWAYS,
     .drawsObjID = true,
     .translucent = true,
     .vertPitch = sizeof(Vertex),
@@ -51,11 +55,11 @@ Renderer::Scene::Scene()
       {SDL_GPU_VERTEXELEMENTFORMAT_SHORT2    ,  offsetof(Renderer::Vertex, boneIdx)},
     }
   });
+  }
 
   pipelineLines = std::make_unique<Pipeline>(Pipeline::Info{
     .shader = *shaderLines,
     .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-    .useDepth = true,
     .drawsObjID = false,
     .vertPitch = sizeof(LineVertex),
     .vertLayout = {
@@ -68,7 +72,6 @@ Renderer::Scene::Scene()
   pipelineSprites = std::make_unique<Pipeline>(Pipeline::Info{
   .shader = *shaderSprites,
   .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-  .useDepth = true,
   .drawsObjID = true,
   .vertPitch = sizeof(LineVertex),
   .vertLayout = {
@@ -94,10 +97,9 @@ Renderer::Scene::Scene()
   Pipeline::Info particleInfo{
     .shader = *shaderParticles,
     .prim = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-    .useDepth = true,
+    .depthWrite = false,  // test against geometry, but don't write (alpha-blended particles)
     .drawsObjID = true,   // 2 color targets, matching the viewport's render pass
     .translucent = true,  // alpha blend
-    .depthWrite = false,  // test against geometry, but don't write (alpha-blended particles)
     .vertPitch = sizeof(Renderer::ParticleVertex),
     .vertLayout = {
       {SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3     , offsetof(Renderer::ParticleVertex, pos)},

@@ -12,12 +12,14 @@
 
 namespace P64::Comp
 {
+  /// Component that attaches a primitive-shape collider to an object and registers it with the collision scene.
+  /// Everything about the collider itself (size, shape, offset, masks, ...) is set on
+  /// 'collider' directly, see 'Coll::Collider'.
   struct CollBody
   {
     static constexpr uint32_t ID = 5;
 
     Coll::Collider collider{};
-    fm_vec3_t orgScale{};
     bool registered{false}; // added to the collision scene, see onEnable
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData)
@@ -30,7 +32,5 @@ namespace P64::Comp
     static void onEnable(Object& obj, CollBody* data);
     
     static void onDisable(Object& obj, CollBody* data);
-
-    static void update(Object& obj, CollBody* data, float deltaTime);
   };
 }

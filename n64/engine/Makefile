@@ -1,6 +1,7 @@
 BUILD_DIR=build
 SOURCE_DIR=src
 PROJECT_NAME=engine
+LIBDRAGON_PREVIEW=2
 
 include $(N64_INST)/include/n64.mk
 include $(N64_INST)/include/t3d.mk
