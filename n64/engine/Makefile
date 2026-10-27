@@ -18,8 +18,12 @@ N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -O3 -Iinclude \
 	-Wfatal-errors
 
 # extra engine flags from the project (ENGINE_CXXFLAGS in its Makefile.custom), e.g. -DP64_PHYS_* tuning.
-# Not tracked by make: clean the engine build after changing them.
 N64_CXXFLAGS += $(ENGINE_CXXFLAGS)
+
+# The flags are not part of the .d dependencies: a stamp file records them and every engine object
+# depends on it, so changing them recompiles the engine.
+FLAGS_STAMP := $(BUILD_DIR)/engine_cxxflags.txt
+$(shell mkdir -p $(BUILD_DIR) && (echo '$(ENGINE_CXXFLAGS)' | cmp -s - $(FLAGS_STAMP) || echo '$(ENGINE_CXXFLAGS)' > $(FLAGS_STAMP)))
 
 src = $(wildcard src/*.cpp) $(wildcard src/vi/*.cpp) $(wildcard src/lib/*.cpp)
 src += $(wildcard src/scene/*.cpp) $(wildcard src/audio/*.cpp) $(wildcard src/assets/*.cpp)
@@ -44,7 +48,7 @@ $(BUILD_DIR)/$(PROJECT_NAME).a: $(src:%.cpp=$(BUILD_DIR)/%.o) $(extraObj)
 	$(N64_LD) -r -o $(BUILD_DIR)/$(PROJECT_NAME).a $^
 
 # Sources
-$(BUILD_DIR)/src/%.o: $(SOURCE_DIR)/%.cpp
+$(BUILD_DIR)/src/%.o: $(SOURCE_DIR)/%.cpp $(FLAGS_STAMP)
 	@mkdir -p $(dir $@)
 	@echo "    [CC_LIB] $<"
 	$(N64_CC) -c $(CFLAGS) $(N64_CXXFLAGS) -o $@ $<
