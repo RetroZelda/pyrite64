@@ -949,17 +949,20 @@ namespace
     if (nodeIsClicked && (ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift))
       ImGui::SetFocusID(ImGui::GetItemID(), ImGui::GetCurrentWindow());
 
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+    // While a prefab is edited the rest of the scene stays as it is: only the edited instance's row
+    // keeps its actions (they work on the prefab), and scene objects can't be dragged around
+    const bool sceneEditable = !prefabEditObj || &obj == prefabEditObj;
+    if (sceneEditable && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
       ImGui::OpenPopup("NodePopup");
     }
 
     // Double-clicked a node --> Start renaming
-    if (nodeIsDoubleClicked)
+    if (sceneEditable && nodeIsDoubleClicked)
       startRenaming(obj.uuid);
 
     bool isRenaming = renameObjectUUID == obj.uuid;
 
-    if (obj.parent && ImGui::BeginDragDropSource())
+    if (obj.parent && !prefabEditObj && ImGui::BeginDragDropSource())
     {
       ImGui::SetDragDropPayload("OBJECT", &obj.uuid, sizeof(obj.uuid));
       std::vector<uint32_t> dragRoots = collectDragRoots(scene, obj.uuid);
@@ -970,7 +973,7 @@ namespace
       ImGui::EndDragDropSource();
     }
 
-    if (obj.parent && ImGui::BeginDragDropTarget()) {
+    if (obj.parent && !prefabEditObj && ImGui::BeginDragDropTarget()) {
       if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("OBJECT")) {
         dragDropTask.sourceUUID = *static_cast<const uint32_t*>(payload->Data);
         dragDropTask.targetUUID = obj.uuid;
