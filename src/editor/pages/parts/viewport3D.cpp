@@ -1204,6 +1204,19 @@ void Editor::Viewport3D::draw()
       }
       obj = nullptr;
     }
+    // A selected node of the edited prefab's own file is removed from the prefab instead
+    if (!SplineEdit::isEditing() && ImGui::IsWindowFocused() && !ctx.selSubPath.empty()
+        && ImGui::IsKeyPressed(ctx.prefs.keymap.deleteObject)) {
+      uint64_t prefabUUID = 0;
+      if (Editor::SelectionUtils::findEditedPrefabNode(*scene, ctx.selObjectUUID, ctx.selSubPath, prefabUUID)) {
+        auto *scenePtr = &*scene;
+        uint32_t rootUuid = ctx.selObjectUUID;
+        auto path = ctx.selSubPath;
+        ctx.deferAction([scenePtr, rootUuid, path]() {
+          Editor::SelectionUtils::removePrefabObject(*scenePtr, rootUuid, path);
+        });
+      }
+    }
 
     isCameraFlying = (mouseHeldRight && inputActive) || navLocked;
 

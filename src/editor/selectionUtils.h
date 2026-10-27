@@ -94,6 +94,23 @@ namespace Editor::SelectionUtils
     std::vector<std::unique_ptr<PropScope::PrefabLayer>> nodeLayers;
   };
 
+  // Prefab-edit mode structure edits. They only act on nodes of the edited prefab's own file
+  // (see isSelectionAllowed), identified by the edited instance and the path to the node.
+
+  // The node of the edited prefab at rootUuid + path (the prefab root for an empty path), or
+  // null when it is not part of the edited prefab's file. prefabUUID receives the prefab.
+  Project::Object* findEditedPrefabNode(Project::Scene &scene, uint32_t rootUuid,
+                                        const std::vector<uint32_t> &path, uint64_t &prefabUUID);
+
+  // Adds a new object (or a "Spline Path") under the node at path, selects it and returns its
+  // path. Under a nested instance node it becomes an object added to that instance. Empty when
+  // nothing was added.
+  std::vector<uint32_t> addPrefabObject(Project::Scene &scene, uint32_t rootUuid,
+                                        std::vector<uint32_t> path, bool splinePath);
+
+  // Removes the node at path from the edited prefab and selects its parent.
+  bool removePrefabObject(Project::Scene &scene, uint32_t rootUuid, std::vector<uint32_t> path);
+
   // Decides where a nested node's edits are written and sets up the matching scope guards.
   // In normal mode that is the scene instance with the full path. In prefab-edit mode it is
   // the first contained prefab-instance along the path, whose overrides belong to the prefab

@@ -9,6 +9,9 @@
 #include "../context.h"
 #include "../project/scene/scene.h"
 #include "../project/scene/prefab.h"
+#include "../project/component/components.h"
+#include "../project/component/types/compSpline.h"
+#include "../utils/hash.h"
 
 namespace
 {
@@ -181,6 +184,66 @@ namespace Editor::SelectionUtils
     for (size_t i = 1; i < steps.size(); i++) {
       if (steps[i - 1].node->isPrefabInstance() && !steps[i].additive) return false;
     }
+    return true;
+  }
+
+  Project::Object* findEditedPrefabNode(Project::Scene &scene, uint32_t rootUuid,
+                                        const std::vector<uint32_t> &path, uint64_t &prefabUUID)
+  {
+    if (!ctx.isPrefabEditing(rootUuid) || !isSelectionAllowed(scene, rootUuid, path)) return nullptr;
+    auto root = scene.getObjectByUUID(rootUuid);
+    if (!root) return nullptr;
+    auto prefab = ctx.project->getAssets().getPrefabByUUID(root->uuidPrefab.value);
+    if (!prefab) return nullptr;
+    prefabUUID = prefab->uuid.value;
+    if (path.empty()) return &prefab->obj;
+    auto steps = walkNested(&prefab->obj, path);
+    return steps.empty() ? nullptr : steps.back().node;
+  }
+
+  std::vector<uint32_t> addPrefabObject(Project::Scene &scene, uint32_t rootUuid,
+                                        std::vector<uint32_t> path, bool splinePath)
+  {
+    uint64_t prefabUUID = 0;
+    auto *parent = findEditedPrefabNode(scene, rootUuid, path, prefabUUID);
+    if (!parent) return {};
+
+    // A plain node takes it as a child, a nested instance node as an object added to it:
+    // both live in the node's own children list, in the edited prefab's file.
+    auto child = std::make_shared<Project::Object>(*parent);
+    do { child->uuid = static_cast<uint32_t>(Utils::Hash::randomU64()); } while (child->uuid == 0);
+    child->name = splinePath ? "Spline Path" : "New Object";
+    child->rot.value = {0,0,0,1};
+    child->scale.value = {1,1,1};
+    if (splinePath) child->addComponent(Project::Component::Spline::ID);
+    parent->children.push_back(child);
+
+    ctx.project->getAssets().markPrefabDirty(prefabUUID);
+    path.push_back(child->uuid);
+    ctx.setNestedSelection(rootUuid, path);
+    return path;
+  }
+
+  bool removePrefabObject(Project::Scene &scene, uint32_t rootUuid, std::vector<uint32_t> path)
+  {
+    if (path.empty()) return false; // the prefab root goes with its instance, not here
+    uint64_t prefabUUID = 0;
+    auto *node = findEditedPrefabNode(scene, rootUuid, path, prefabUUID);
+    if (!node) return false;
+
+    // Within the edited file every node sits in its parent's own children list (a plain
+    // child, or an object added to a nested instance), see isSelectionAllowed.
+    path.pop_back();
+    auto *parent = findEditedPrefabNode(scene, rootUuid, path, prefabUUID);
+    if (!parent) return false;
+    auto &siblings = parent->children;
+    auto it = std::find_if(siblings.begin(), siblings.end(), [node](const auto &c) { return c.get() == node; });
+    if (it == siblings.end()) return false;
+    siblings.erase(it);
+
+    ctx.project->getAssets().markPrefabDirty(prefabUUID);
+    if (path.empty()) ctx.setObjectSelection(rootUuid);
+    else ctx.setNestedSelection(rootUuid, path);
     return true;
   }
 

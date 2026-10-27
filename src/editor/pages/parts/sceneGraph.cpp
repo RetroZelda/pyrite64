@@ -26,6 +26,10 @@ namespace
   uint32_t renameObjectUUID{0};
   std::string renameBuffer{};
   bool startingRename{false};
+  // Inline rename of a row of the edited prefab's definition. Definition nodes repeat under every
+  // instance of their prefab, so the row is identified by its instance and path, not its uuid.
+  uint32_t renameDefRoot{0};
+  std::vector<uint32_t> renameDefPath{};
   glm::vec3 rootViewCenter{0.0f}; // SceneGraph::draw()'s viewCenter
 
   // Range selection is based on the rows actually drawn in the scene graph, so collapsed
@@ -178,8 +182,22 @@ namespace
   void clearRenaming()
   {
     renameObjectUUID = 0;
+    renameDefRoot = 0;
+    renameDefPath.clear();
     renameBuffer.clear();
     startingRename = false;
+  }
+
+  /**
+   * Starts inline renaming for a row of the edited prefab's definition.
+   */
+  void startDefRenaming(uint32_t rootUuid, const std::vector<uint32_t> &path, const std::string &name)
+  {
+    clearRenaming();
+    renameDefRoot = rootUuid;
+    renameDefPath = path;
+    renameBuffer = name;
+    startingRename = true;
   }
 
   /**
@@ -539,6 +557,51 @@ namespace
       ctx.setNestedSelection(rootUuid, path);
       // Nested prefab targets cannot participate in the flat scene-object selection list
       rangeSelectionAnchorUUID = 0;
+    }
+
+    // Prefab edit mode: rows of the edited prefab's own file can be renamed, added to and deleted
+    if(prefabEditObj && selectable) {
+      const ImVec2 rowMin = ImGui::GetItemRectMin();
+      if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        startDefRenaming(rootUuid, path, node.name);
+      }
+
+      uint64_t rowHash = rootUuid;
+      for(uint32_t uid : path)rowHash = PropScope::combine(rowHash, uid);
+      ImGui::PushID(static_cast<int>(rowHash ^ (rowHash >> 32)));
+      if(ImGui::BeginPopupContextItem("DefNodePopup")) {
+        auto *scene = ctx.project->getScenes().getLoadedScene();
+        if(ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Add Object") && scene) {
+          ctx.deferAction([scene, rootUuid, path]() {
+            auto added = Editor::SelectionUtils::addPrefabObject(*scene, rootUuid, path, false);
+            if(!added.empty())startDefRenaming(rootUuid, added, "New Object");
+          });
+        }
+        if(ImGui::MenuItem(ICON_MDI_VECTOR_CURVE " Add Spline Path") && scene) {
+          ctx.deferAction([scene, rootUuid, path]() {
+            auto added = Editor::SelectionUtils::addPrefabObject(*scene, rootUuid, path, true);
+            if(!added.empty())startDefRenaming(rootUuid, added, "Spline Path");
+          });
+        }
+        if(ImGui::MenuItem(ICON_MDI_RENAME " Rename")) {
+          startDefRenaming(rootUuid, path, node.name);
+        }
+        if(ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete") && scene) {
+          ctx.deferAction([scene, rootUuid, path]() {
+            Editor::SelectionUtils::removePrefabObject(*scene, rootUuid, path);
+          });
+        }
+        ImGui::EndPopup();
+      }
+      ImGui::PopID();
+
+      if(renameDefRoot == rootUuid && renameDefPath == path) {
+        const std::string oldName = node.name;
+        drawRenameInput(node, rowMin);
+        if(node.name != oldName) {
+          ctx.project->getAssets().markPrefabDirty(prefabEditObj->uuidPrefab.value);
+        }
+      }
     }
 
     if(isOpen) {
@@ -938,24 +1001,45 @@ namespace
     {
       if (ImGui::BeginPopupContextItem("NodePopup"))
       {
+        // While its prefab is edited, objects added on the instance go into the prefab
+        const bool addToPrefab = ctx.isPrefabEditing(obj.uuid);
+
         if (ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Add Object")) {
-          auto added = scene.addObject(obj);
-          if (added) {
-            ctx.setObjectSelection(added->uuid);
-            startRenaming(added->uuid);
+          if (addToPrefab) {
+            auto *scenePtr = &scene;
+            uint32_t rootUuid = obj.uuid;
+            ctx.deferAction([scenePtr, rootUuid]() {
+              auto added = Editor::SelectionUtils::addPrefabObject(*scenePtr, rootUuid, {}, false);
+              if (!added.empty())startDefRenaming(rootUuid, added, "New Object");
+            });
+          } else {
+            auto added = scene.addObject(obj);
+            if (added) {
+              ctx.setObjectSelection(added->uuid);
+              startRenaming(added->uuid);
+            }
+            Editor::UndoRedo::getHistory().markChanged("Add Object");
           }
-          Editor::UndoRedo::getHistory().markChanged("Add Object");
         }
 
         // New object with a Spline component (AI patrol path etc.), ready for point editing.
         if (ImGui::MenuItem(ICON_MDI_VECTOR_CURVE " Add Spline Path")) {
-          auto added = scene.addObject(obj);
-          if (added) {
-            initSplinePath(*added, obj);
-            ctx.setObjectSelection(added->uuid);
-            startRenaming(added->uuid);
+          if (addToPrefab) {
+            auto *scenePtr = &scene;
+            uint32_t rootUuid = obj.uuid;
+            ctx.deferAction([scenePtr, rootUuid]() {
+              auto added = Editor::SelectionUtils::addPrefabObject(*scenePtr, rootUuid, {}, true);
+              if (!added.empty())startDefRenaming(rootUuid, added, "Spline Path");
+            });
+          } else {
+            auto added = scene.addObject(obj);
+            if (added) {
+              initSplinePath(*added, obj);
+              ctx.setObjectSelection(added->uuid);
+              startRenaming(added->uuid);
+            }
+            Editor::UndoRedo::getHistory().markChanged("Add Spline Path");
           }
-          Editor::UndoRedo::getHistory().markChanged("Add Spline Path");
         }
 
         if (obj.parent) {
@@ -1074,7 +1158,7 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
   }
   bool isFocus = ImGui::IsWindowFocused();
   // While rename is active, shortcuts stay disabled, so the text field can own the keyboard input
-  bool isRenaming = renameObjectUUID != 0;
+  bool isRenaming = renameObjectUUID != 0 || renameDefRoot != 0;
 
   // Ctrl+F focuses the search box, matching common scene-tree behavior
   if (isFocus && !isRenaming && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_F)) {
@@ -1098,6 +1182,23 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
     && (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace));
   // F2 starts renaming the current object, matching common scene-tree/file-explorer behavior
   bool keyRename = isFocus && !isRenaming && !isSearchActive && ImGui::IsKeyPressed(ImGuiKey_F2);
+
+  // A selected node of the edited prefab's own file: F2 renames it, Delete removes it from the prefab.
+  // Any other nested node is never renamed or deleted through its instance.
+  if ((keyRename || keyDelete) && !ctx.selSubPath.empty()) {
+    uint64_t prefabUUID = 0;
+    auto *node = Editor::SelectionUtils::findEditedPrefabNode(*scene, ctx.selObjectUUID, ctx.selSubPath, prefabUUID);
+    if (node && keyRename) {
+      startDefRenaming(ctx.selObjectUUID, ctx.selSubPath, node->name);
+    } else if (node && keyDelete) {
+      auto *scenePtr = scene;
+      uint32_t rootUuid = ctx.selObjectUUID;
+      auto path = ctx.selSubPath;
+      ctx.deferAction([scenePtr, rootUuid, path]() {
+        Editor::SelectionUtils::removePrefabObject(*scenePtr, rootUuid, path);
+      });
+    }
+  }
 
   if (keyRename && ctx.selSubPath.empty()) { // a nested prefab node is not renamed through its instance
     const std::vector<uint32_t> &selectedIds = ctx.getSelectedObjectUUIDs();

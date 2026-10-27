@@ -553,7 +553,19 @@ void Editor::ObjectInspector::draw() {
 
   {
     if (ImTable::start("General", tableObj)) {
-      if(nested.isNested) {
+      if(nested.isNested && nested.directDefEdit) {
+        // A node of the edited prefab's own file: its name and enabled state are edited directly
+        // (the prefab is marked dirty below while editing it).
+        ImTable::add("Name");
+        bool enabled = nested.node->enabled;
+        if (ImGui::Checkbox("##Enabled", &enabled)) {
+          nested.node->enabled = enabled;
+        }
+        ImGui::SetItemTooltip("%s Object", nested.node->enabled ? "Disable" : "Enable");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##Name", &nested.node->name);
+      } else if(nested.isNested) {
         // A nested node's name belongs to the prefab definition, so it is read-only here.
         ImTable::add("Name");
         ImGui::TextUnformatted(nested.node->name.c_str());
@@ -884,25 +896,31 @@ void Editor::ObjectInspector::draw() {
     ctx.project->getAssets().markPrefabDirty(prefab->uuid.value);
   }
 
+  // Component edits act on the list they were drawn from: the inspected nested node's own
+  // components when one of the edited prefab's nodes is selected.
+  Project::Object* compTarget = (nested.isNested && nested.directDefEdit) ? compSrc : srcObj;
   if (compCopy) {
     const int compCopyId = compCopy->id;
     const std::string compCopyName = compCopy->name;
-    const size_t countBefore = srcObj->components.size();
-    srcObj->addComponent(compCopyId);
+    const size_t countBefore = compTarget->components.size();
+    compTarget->addComponent(compCopyId);
     // single-instance components (e.g. Spline, Rigid-Body) reject the copy: don't rename an existing one
-    if (srcObj->components.size() > countBefore) {
+    if (compTarget->components.size() > countBefore) {
       UndoRedo::getHistory().markChanged("Duplicate Component");
-      srcObj->components.back().name = compCopyName + " Copy";
+      compTarget->components.back().name = compCopyName + " Copy";
     }
   }
   if (compDelUUID) {
     UndoRedo::getHistory().markChanged("Delete Component");
-    srcObj->removeComponent(compDelUUID);
+    compTarget->removeComponent(compDelUUID);
   }
 
-  // Adding components targets the root object, not a nested def node.
-  if(!nested.isNested)
+  // Adding components targets the root object, or a plain node of the edited prefab (a nested
+  // instance node's components belong to its own prefab).
+  const bool canAddToNested = nested.isNested && nested.directDefEdit && !nested.node->isPrefabInstance();
+  if(!nested.isNested || canAddToNested)
   {
+    if (canAddToNested) srcObj = nested.node;
     const char* addLabel = ICON_MDI_PLUS_BOX_OUTLINE " Add Component";
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4_px);
     ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(addLabel).x) * 0.5f - 4_px);
