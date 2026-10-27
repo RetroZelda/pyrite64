@@ -92,6 +92,10 @@ namespace Editor::SelectionUtils
 
   bool deleteSelectedObjects(Project::Scene &scene)
   {
+    // A nested prefab node is selected through its instance, which stays in the selection
+    // list: deleting "the selection" would remove the whole instance.
+    if (!ctx.selSubPath.empty()) return false;
+
     auto selectedRefs = collectSelectedObjectRefs(scene);
     if (selectedRefs.empty()) {
       return false;

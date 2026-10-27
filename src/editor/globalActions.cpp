@@ -271,6 +271,8 @@ namespace Editor::Actions
 
       const auto &selected = ctx.getSelectedObjectUUIDs();
       if (selected.empty()) return false;
+      // a nested prefab node keeps its instance selected, which must not be copied in its place
+      if (!ctx.selSubPath.empty()) return false;
 
       std::unordered_set<uint32_t> selectedSet(selected.begin(), selected.end());
       std::vector<std::shared_ptr<Project::Object>> toCopy{};

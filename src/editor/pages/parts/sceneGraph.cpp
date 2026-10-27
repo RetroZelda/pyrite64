@@ -781,7 +781,8 @@ namespace
       flag |= ImGuiTreeNodeFlags_Selected;
     }
 
-    if (isSelected && obj.parent && keyDelete) {
+    // (a nested prefab node keeps its instance selected: Delete must not remove the instance)
+    if (isSelected && obj.parent && keyDelete && ctx.selSubPath.empty()) {
       deleteSelection = true;
     }
 
@@ -1088,7 +1089,7 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
   // F2 starts renaming the current object, matching common scene-tree/file-explorer behavior
   bool keyRename = isFocus && !isRenaming && !isSearchActive && ImGui::IsKeyPressed(ImGuiKey_F2);
 
-  if (keyRename) {
+  if (keyRename && ctx.selSubPath.empty()) { // a nested prefab node is not renamed through its instance
     const std::vector<uint32_t> &selectedIds = ctx.getSelectedObjectUUIDs();
     // Inline renaming only makes sense for a single target; multi-select keeps its current state
     if (selectedIds.size() == 1) {
@@ -1209,11 +1210,14 @@ void Editor::SceneGraph::draw(const glm::vec3 &viewCenter)
   }
 
   if (deleteSelection || deleteObj) {
-    if (deleteObj && !ctx.isObjectSelected(deleteObj->uuid)) {
+    // the row's own Delete targets that object, also while one of its nested nodes is selected
+    if (deleteObj && (!ctx.isObjectSelected(deleteObj->uuid) || !ctx.selSubPath.empty())) {
       ctx.setObjectSelection(deleteObj->uuid);
     }
 
-    UndoRedo::getHistory().markChanged("Delete Object");
-    Editor::SelectionUtils::deleteSelectedObjects(*scene);
+    if (ctx.selSubPath.empty()) {
+      UndoRedo::getHistory().markChanged("Delete Object");
+      Editor::SelectionUtils::deleteSelectedObjects(*scene);
+    }
   }
 }

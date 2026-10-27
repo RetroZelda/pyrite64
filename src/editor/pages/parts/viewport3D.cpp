@@ -1185,7 +1185,9 @@ void Editor::Viewport3D::draw()
     // Handle object deletion when Delete is pressed while the viewport is focused and an object is selected
     // (while editing spline points, Delete removes the selected points instead: SplineEdit::drawViewport)
     bool deletedSelection = false;
-    if (!SplineEdit::isEditing() && ImGui::IsWindowFocused() && obj && ImGui::IsKeyPressed(ctx.prefs.keymap.deleteObject)) {
+    // (not for a nested prefab node: its instance stays selected and would be deleted)
+    if (!SplineEdit::isEditing() && ImGui::IsWindowFocused() && obj && ctx.selSubPath.empty()
+        && ImGui::IsKeyPressed(ctx.prefs.keymap.deleteObject)) {
       UndoRedo::getHistory().markChanged("Delete Object");
       if (Editor::SelectionUtils::deleteSelectedObjects(*scene)) {
         deletedSelection = true;
