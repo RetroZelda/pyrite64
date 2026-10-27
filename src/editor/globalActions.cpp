@@ -25,26 +25,29 @@
 
 namespace
 {
-  std::string getProcessPath()
-  {
-    const char *path = std::getenv("PATH");
-    return path ? std::string{path} : std::string{};
-  }
-
-  void restoreProcessPath(const std::string &path)
-  {
-    #if defined(_WIN32)
-      _putenv_s("PATH", path.c_str());
-    #else
-      setenv("PATH", path.c_str(), 1);
-    #endif
-  }
-
   fs::path getToolchainPath(const std::string &projectN64Inst)
   {
     // the project path may be an MSYS2 path on Windows, only use it if valid natively
     if(!projectN64Inst.empty() && fs::exists(projectN64Inst))return projectN64Inst;
     return ctx.toolchain.getState().toolchainPath;
+  }
+
+  /**
+   * Command that builds the project in a separate editor process ('--cli --cmd build').
+   * A build loads its own copy of the project and swaps the global ctx.project to it for the
+   * whole build. In-process the UI kept rendering, and writing, through that global meanwhile,
+   * which raced the asset serializers (torn .emit64 and scene data, non-deterministic ROMs).
+   * The build also changes environment variables (PATH, N64_INST) that the editor keeps.
+   */
+  std::string getBuildCommand(const std::string &configPath)
+  {
+    auto self = Utils::Proc::getSelfPath();
+    if(fs::is_directory(self))self /= "pyrite64"; // macOS reports the executable's folder
+    std::string cmd = "\"" + self.string() + "\" --cli --cmd build \"" + configPath + "\"";
+#ifdef _WIN32
+    cmd = "\"" + cmd + "\""; // runSyncLogged() goes through cmd.exe /c, which strips the outermost quotes
+#endif
+    return cmd;
   }
 
   /// Saves the project and kicks off the build on a worker thread. See Type::PROJECT_BUILD.
@@ -73,24 +76,10 @@ namespace
 #endif
     }
 
-    ctx.futureBuildRun = std::async(std::launch::async, [] (std::string configPath, std::string runCmd)
+    // the build process reads the project from disk, saved above; its output goes to the build log
+    ctx.futureBuildRun = std::async(std::launch::async, [] (std::string buildCmd, std::string runCmd)
     {
-      auto oldPATH = getProcessPath();
-      bool result = false;
-      try {
-        result = Build::buildProject(configPath);
-      } catch (const std::exception &e)
-      {
-        restoreProcessPath(oldPATH);
-        auto error = "Build failed with exception:\n" + std::string(e.what());
-        Utils::Logger::log(error, Utils::Logger::LEVEL_ERROR);
-        Editor::Noti::add(Editor::Noti::Type::ERROR, error);
-        return;
-      }
-
-      restoreProcessPath(oldPATH);
-
-      if(!result) {
+      if(!Utils::Proc::runSyncLogged(buildCmd)) {
         Editor::Noti::add(Editor::Noti::Type::ERROR, "Build failed!");
         return;
       }
@@ -98,7 +87,7 @@ namespace
       if (!runCmd.empty()) {
         Utils::Proc::runSyncLogged(runCmd);
       }
-    }, ctx.project->getConfigPath(), runCmd);
+    }, getBuildCommand(ctx.project->getConfigPath()), runCmd);
   }
 }
 
