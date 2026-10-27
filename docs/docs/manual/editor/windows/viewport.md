@@ -93,8 +93,8 @@ hidden.
 | **Toggle a point** | `Ctrl` + click its handle. The point is toggled when you release the mouse and never moves, even if you drag. |
 | **Box select points** | Drag on empty space (hold `Ctrl` to add to the selection). |
 | **Clear the point selection** | Click on empty space (edit mode stays active). |
-| **Move points by their handle** | Press a handle without `Ctrl` and drag: the selected points follow the mouse on a horizontal plane through the grabbed point (a camera-facing plane when looking almost level). Hold `Ctrl` after pressing the handle to snap to a 10-unit grid, press `Esc` to cancel the drag. |
-| **Move points with the gizmo** | Drag the translate gizmo at the centre of the selected points. The **World / Local** toolbar toggle picks the axes, holding `Ctrl` (before or during the drag) snaps to 10 units. |
+| **Move points by their handle** | Press a handle without `Ctrl` and drag: the selected points follow the mouse on a horizontal plane through the grabbed point (a camera-facing plane when looking almost level). Hold `Ctrl` after pressing the handle to snap to a 0.1 m grid, press `Esc` to cancel the drag. |
+| **Move points with the gizmo** | Drag the translate gizmo at the centre of the selected points. The **World / Local** toolbar toggle picks the axes, holding `Ctrl` (before or during the drag) snaps to 0.1 m. |
 | **Add a point on geometry** | `Shift` + click on level geometry (**Model (Static)** meshes; elsewhere on the horizontal plane of the selected point). The point is appended when the last point (or no point) is selected, prepended when point 0 of an open path is selected, and otherwise inserted after the selected point. It then becomes the selected point, so repeated `Shift` + clicks draw a path. |
 | **Insert a point on the curve** | `Shift` + click close to the curve inserts a point at exactly that spot. |
 
@@ -114,7 +114,7 @@ pressed without it, the drag snaps to the grid.
 | **Insert** a point after each selected point (appends when nothing is selected) | `I` | `I` | Insert Point |
 | **Select all / none** | `Ctrl+A` | `Ctrl+A` | Select All Points |
 | **Delete** the selected points (never the object while editing) | `Delete` | `Delete` | Delete Object |
-| **Snap** the selected points (all points when none are selected) to a 10-unit grid | `Shift+S` | `Shift+S` | Snap Object |
+| **Snap** the selected points (all points when none are selected) to a 0.1 m grid | `Shift+S` | `Shift+S` | Snap Object |
 | **Frame** the selected points (the whole path when none are selected) | `.` | `F` | Focus Object |
 | **Cancel** the current drag or box, else clear the point selection, else leave point edit | `Esc` | `Esc` | fixed |
 

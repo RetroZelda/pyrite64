@@ -34,7 +34,7 @@ Every change is a single undo step, except for points edited in prefab edit mode
 **Drop to Floor** moves the selected points (all of them when none are selected) straight down onto the closest surface\
 below that the viewport draws, so a point never jumps up onto an overhang. Sides the viewport culls are seen through,\
 as when looking down through a one-sided ceiling. A point inside a one-sided solid, or below the level, moves up onto\
-the surface above it instead, by at most 100 units.
+the surface above it instead, by at most 1 meter.
 
 See {ref}`Editing spline points <viewport-spline-editing>` in the 3D Viewport page for all mouse and keyboard controls.
 
@@ -162,7 +162,7 @@ and the **Gameplay > Guard > Spline ...** tweakables tune how guards follow path
 ## Runtime API
 
 The runtime component turns the points into a polyline with the same code the editor uses for its preview.\
-All queries work on the arc length `s` along that polyline, in world units:
+All queries work on the arc length `s` along that polyline, in meters:
 
 ```cpp
 #include "scene/components/spline.h"
@@ -184,7 +184,7 @@ if(path && path->isValid())
 
   // closest point limited to a window around the last position,
   // avoids jumping between two legs of the path that pass close to each other
-  float sNext = path->getClosestInRange(obj.pos, s - 50.0f, s + 50.0f);
+  float sNext = path->getClosestInRange(obj.pos, s - 5.0f, s + 5.0f);
 }
 ```
 

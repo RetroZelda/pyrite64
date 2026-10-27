@@ -152,7 +152,7 @@ namespace Project::Component::Constraint
       if(data.type.value == TYPE_COPY_CAM_OFFSET)
       {
         // Offset is in camera-local space: +X right, +Y up, -Z forward.
-        // e.g. {0, 0, -50} keeps the object 50 units in front of the camera.
+        // e.g. {0, 0, -5} keeps the object 5 meters in front of the camera.
         ImTable::addObjProp("Offset", data.offset);
         ImTable::addObjProp("Match Rotation", data.useRot);
       }
