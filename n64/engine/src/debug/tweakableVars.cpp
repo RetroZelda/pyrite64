@@ -10,6 +10,10 @@
 
 namespace P64::Debug::TweakableVars
 {
+    // Identifies saved variables. Versioned: since the meter-based engine (0.11) lengths are meters,
+    // so variables saved by earlier versions are ignored instead of loading in the wrong units.
+    constexpr uint32_t DATA_HEADER = Lib::Hash::fnv32("MENU VARS 2");
+
     // These two pools live for the entire lifetime of the program
     static std::vector<Menu> submenuPool;
     static std::vector<std::string> menuStringPool;
@@ -181,8 +185,6 @@ namespace P64::Debug::TweakableVars
     int32_t saveVariables(size_t offset)
     {
 #if DEBUG_MENU_ENABLED
-        constexpr uint32_t DATA_HEADER = Lib::Hash::fnv32("MENU VARS");
-
         eeprom_write_bytes(&DATA_HEADER, offset, sizeof(uint32_t));
 
         int32_t written = static_cast<int32_t>(offset) + static_cast<int32_t>(sizeof(uint32_t) * 2);
@@ -239,7 +241,6 @@ namespace P64::Debug::TweakableVars
         uint32_t header = 0;
         eeprom_read_bytes(&header, offset, sizeof(uint32_t));
 
-        constexpr uint32_t DATA_HEADER = Lib::Hash::fnv32("MENU VARS");
         if (header != DATA_HEADER)
             return -1;
 
