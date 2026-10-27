@@ -757,21 +757,34 @@ namespace P64::Coll {
   /// Scripts may move or rotate an owner object directly: the difference between the
   /// owner and what the last step wrote back is applied to the body as a teleport
   /// delta on top of the physics state, so manual changes and the physical response mesh together. 
-  /// Scripts may also change the body state directly (setPosition etc.) or rescale the owner
+  /// Scripts may also change the body state directly (setPosition etc.) or rescale the owner.
+  /// An explicitly set body position/rotation wins: the owner is snapped to it instead of applying
+  /// an owner change on top, so a script that sets both the body and the owner to the same transform
+  /// (as needed before owner changes were adopted) still moves the body only once.
   void CollisionScene::syncExternallyMovedBodies() {
     for(RigidBody *body : rigidBodies_) {
       if(!body || !body->owner_) continue;
       Object *owner = body->owner_;
 
       bool applied = false;
-      if(owner->pos != body->syncedOwnerPos_) {
+      if(body->positionSetExternally_) {
+        body->positionSetExternally_ = false;
+        owner->pos = body->position_;
+        body->syncedOwnerPos_ = body->position_;
+        applied = true;
+      } else if(owner->pos != body->syncedOwnerPos_) {
         const fm_vec3_t delta = (owner->pos - body->syncedOwnerPos_);
         body->position_ += delta;
         body->previousStepPosition_ += delta;
         body->syncedOwnerPos_ = owner->pos;
         applied = true;
       }
-      if(owner->rot != body->syncedOwnerRot_) {
+      if(body->rotationSetExternally_) {
+        body->rotationSetExternally_ = false;
+        owner->rot = body->rotation_;
+        body->syncedOwnerRot_ = body->rotation_;
+        applied = true;
+      } else if(owner->rot != body->syncedOwnerRot_) {
         fm_quat_t deltaRot = owner->rot * quatConjugate(body->syncedOwnerRot_);
         fm_quat_norm(&deltaRot, &deltaRot);
         body->rotation_ = deltaRot * body->rotation_;

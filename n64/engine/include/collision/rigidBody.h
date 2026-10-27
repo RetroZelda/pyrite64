@@ -92,8 +92,9 @@ namespace P64::Coll {
     P64::Object *ownerObject() const { return owner_; }
     const fm_vec3_t &position() const { return position_; }
     const fm_quat_t &rotation() const { return rotation_; }
-    void setPosition(const fm_vec3_t &pos) { position_ = pos; }
-    void setRotation(const fm_quat_t &rot) { rotation_ = rot; }
+    // Explicitly set body state wins over owner changes made before the next step (see syncExternallyMovedBodies)
+    void setPosition(const fm_vec3_t &pos) { position_ = pos; positionSetExternally_ = true; }
+    void setRotation(const fm_quat_t &rot) { rotation_ = rot; rotationSetExternally_ = true; }
 
     const fm_vec3_t &linearVelocity() const { return linearVelocity_; }
     const fm_vec3_t &angularVelocity() const { return angularVelocity_; }
@@ -217,6 +218,9 @@ namespace P64::Coll {
     bool isEnabled_{true};
     bool isKinematic_{false};
     bool isSleeping_{false};
+    // setPosition()/setRotation() was called since the last step
+    bool positionSetExternally_{false};
+    bool rotationSetExternally_{false};
 
     float mass_{1.0f};
     // Colliders registered for the same owner, maintained by the CollisionScene on add/remove
