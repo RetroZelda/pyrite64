@@ -21,20 +21,43 @@ namespace P64::Coll {
   class CollisionScene;
 
   // Constants
-  constexpr float TERMINAL_SPEED = 10000.0f; // Units per second, scaled by physicsScale when applied
-  constexpr float TERMINAL_ANGULAR_SPEED = 500.0f; // Radians per second
+  // Simulation limits, upstream defaults. A project can override them with -DP64_PHYS_<NAME>=<value>
+  // in ENGINE_CXXFLAGS (Makefile.custom), e.g. to keep a tuning made for other units.
+#ifndef P64_PHYS_TERMINAL_SPEED
+  #define P64_PHYS_TERMINAL_SPEED 100.0f
+#endif
+  constexpr float TERMINAL_SPEED = P64_PHYS_TERMINAL_SPEED; // Units per second
+#ifndef P64_PHYS_TERMINAL_ANGULAR_SPEED
+  #define P64_PHYS_TERMINAL_ANGULAR_SPEED 50.0f
+#endif
+  constexpr float TERMINAL_ANGULAR_SPEED = P64_PHYS_TERMINAL_ANGULAR_SPEED; // Radians per second
   constexpr float TERMINAL_ANGULAR_SPEED_SQ = TERMINAL_ANGULAR_SPEED * TERMINAL_ANGULAR_SPEED;
-  constexpr float POS_SLEEP_THRESHOLD = 1.0f; // Units moved, scaled by physicsScale when used
+#ifndef P64_PHYS_POS_SLEEP_THRESHOLD
+  #define P64_PHYS_POS_SLEEP_THRESHOLD 0.01f
+#endif
+  constexpr float POS_SLEEP_THRESHOLD = P64_PHYS_POS_SLEEP_THRESHOLD; // Units moved
   constexpr float POS_SLEEP_THRESHOLD_SQ = POS_SLEEP_THRESHOLD * POS_SLEEP_THRESHOLD;
-  constexpr float SPEED_SLEEP_THRESHOLD = 8.0f; // Units per second, scaled by physicsScale when used
+#ifndef P64_PHYS_SPEED_SLEEP_THRESHOLD
+  #define P64_PHYS_SPEED_SLEEP_THRESHOLD 0.8f
+#endif
+  constexpr float SPEED_SLEEP_THRESHOLD = P64_PHYS_SPEED_SLEEP_THRESHOLD; // Units per second
   constexpr float SPEED_SLEEP_THRESHOLD_SQ = SPEED_SLEEP_THRESHOLD * SPEED_SLEEP_THRESHOLD;
   constexpr float ROT_SIMILARITY_SLEEP_THRESHOLD = 0.9999988f;
-  constexpr float ANGULAR_SLEEP_THRESHOLD = 10.0f; // Radians per second, not scaled by physicsScale
+#ifndef P64_PHYS_ANGULAR_SLEEP_THRESHOLD
+  #define P64_PHYS_ANGULAR_SLEEP_THRESHOLD 1.0f
+#endif
+  constexpr float ANGULAR_SLEEP_THRESHOLD = P64_PHYS_ANGULAR_SLEEP_THRESHOLD; // Radians per second
   constexpr float ANGULAR_SLEEP_THRESHOLD_SQ = ANGULAR_SLEEP_THRESHOLD * ANGULAR_SLEEP_THRESHOLD;
-  constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD = 1.5f; // Radians per second, below this angular velocity, amplification is applied to damping
+#ifndef P64_PHYS_AMPLIFY_ANG_DAMPING_THRESHOLD
+  #define P64_PHYS_AMPLIFY_ANG_DAMPING_THRESHOLD 0.015f
+#endif
+  constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD = P64_PHYS_AMPLIFY_ANG_DAMPING_THRESHOLD; // Radians per second, below this angular velocity, amplification is applied to damping
   constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD_SQ = AMPLIFY_ANG_DAMPING_THRESHOLD * AMPLIFY_ANG_DAMPING_THRESHOLD;
   constexpr float AMPLIFY_ANG_DAMPING_THRESHOLD_SQ_INV = 1.0f / AMPLIFY_ANG_DAMPING_THRESHOLD_SQ;
-  constexpr int SLEEP_STEPS = 30; // Number of consecutive steps an object must be below the sleep thresholds before it goes to sleep
+#ifndef P64_PHYS_SLEEP_STEPS
+  #define P64_PHYS_SLEEP_STEPS 120
+#endif
+  constexpr int SLEEP_STEPS = P64_PHYS_SLEEP_STEPS; // Number of consecutive steps an object must be below the sleep thresholds before it goes to sleep
 
   /// @brief Defines the different positional and rotational constraints that can be imposed on a rigidbody
   enum class Constraint : uint16_t {
@@ -86,6 +109,8 @@ namespace P64::Coll {
 
     const fm_vec3_t &previousStepPosition() const { return previousStepPosition_; }
     const fm_quat_t &previousStepRotation() const { return previousStepRotation_; }
+    const fm_vec3_t &syncedOwnerPos() const { return syncedOwnerPos_; }
+    const fm_quat_t &syncedOwnerRot() const { return syncedOwnerRot_; }
 
     const AABB &worldAabb() const { return worldAabb_; }
     const Matrix3x3 &inverseWorldInertiaTensor() const { return invWorldInertiaTensor_; }
@@ -160,11 +185,6 @@ namespace P64::Coll {
       return matrix3Vec3Mul(constrainedInvWorldInertiaTensor_, in);
     }
 
-    /// Reset split impulse push velocities at the start of each physics step
-    void resetPushVelocities() { pushLinearVelocity_ = VEC3_ZERO; pushAngularVelocity_ = VEC3_ZERO; }
-    const fm_vec3_t &pushLinearVelocity() const { return pushLinearVelocity_; }
-    const fm_vec3_t &pushAngularVelocity() const { return pushAngularVelocity_; }
-
   private:
     friend class CollisionScene;
 
@@ -183,12 +203,15 @@ namespace P64::Coll {
     fm_vec3_t previousStepPosition_{};
     fm_quat_t previousStepRotation_{};
     fm_vec3_t previousStepScale_{};
+    // Owner transform as last written by the physics->object sync. If the owner no longer matches (e.g. it got moved) 
+    // the scene adopts the new transform as a teleport at the start of the next step
+    fm_vec3_t syncedOwnerPos_{};
+    fm_quat_t syncedOwnerRot_{};
     float inverseMass_{1.0f};
     float timeScale_{1.0f};
     float gravityScale_{1.0f};
     float angularDamping_{0.03f};
     uint32_t transformVersion_{0};
-    NodeProxy aabbTreeNodeId_{NULL_NODE};
     uint16_t sleepCounter_{0};
     bool hasGravity_{true};
     bool isEnabled_{true};
@@ -196,6 +219,10 @@ namespace P64::Coll {
     bool isSleeping_{false};
 
     float mass_{1.0f};
+    // Colliders registered for the same owner, maintained by the CollisionScene on add/remove
+    std::vector<Collider *> attachedColliders_{};
+    // Visitation stamp for island traversals (compared against the scene epoch counter)
+    uint32_t islandVisitEpoch_{0};
     Constraint constraints_{Constraint::None};
     fm_vec3_t localCenterOfMass_{};
     fm_vec3_t localCenterOfMassOffset_{};
@@ -211,11 +238,9 @@ namespace P64::Coll {
     bool hasAngularConstraints_{false};
     bool compoundPropertiesDirty_{true};
 
-    /// Split impulse push velocities (Bullet-style).
-    /// These accumulate position-correction impulses separately from real velocities,
-    /// preventing the "bouncy stacking" artifact of Baumgarte stabilization.
-    fm_vec3_t pushLinearVelocity_{};
-    fm_vec3_t pushAngularVelocity_{};
+    /// Index into the CollisionScene's per-step solver body array (-1 = not participating).
+    /// Only valid while the scene builds and runs the contact solvers.
+    int16_t solverIndex_{-1};
 
     void refreshConstraintCaches();
     void refreshAngularConstraintProjection();

@@ -26,7 +26,7 @@ namespace P64::Comp
    */
   struct Spline
   {
-    static constexpr uint32_t ID = 14;
+    static constexpr uint32_t ID = 25; // fork component: reserved id block 24+
 
     static uint32_t getAllocSize(void* initData);
     static void initDelete(Object& obj, Spline* data, void* initData);

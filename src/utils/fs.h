@@ -38,11 +38,10 @@ namespace Utils::FS
     return true;
   }
 
-  // Write only if the content differs (or the file is missing), preserving the mtime
-  // otherwise. Use for generated sources consumed by make: an unchanged rewrite would
-  // bump the mtime and force pointless recompiles on every incremental build.
+  // Only writes if the content differs, this keeps the timestamp stable for generated
+  // source/header files, so make doesn't rebuild everything that includes them.
   inline bool saveTextFileIfChanged(const fs::path &path, const std::string &content) {
-    if (fs::exists(path) && loadTextFile(path) == content) return true;
+    if(fs::exists(path) && loadTextFile(path) == content)return true;
     return saveTextFile(path, content);
   }
 

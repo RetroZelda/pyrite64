@@ -15,13 +15,14 @@ namespace
     return par ? par->pos : fm_vec3_t{};
   }
 
-  // yaw of the owner's facing (+Z forward), so directional emission shapes rotate with it
+  // yaw of the owner's facing (-Z forward, see Math::VEC3_FORWARD), so directional emission
+  // shapes rotate with it: an emitter authored towards +Z emits along the object's facing
   float objectYaw(const P64::Object &obj)
   {
     const fm_quat_t &q = obj.rot;
-    // rotate {0,0,1} by q, then take atan2 of the horizontal result
-    const float fwdX = 2.0f * (q.x * q.z + q.w * q.y);
-    const float fwdZ = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+    // rotate {0,0,-1} by q, then take atan2 of the horizontal result
+    const float fwdX = -2.0f * (q.x * q.z + q.w * q.y);
+    const float fwdZ = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
     return atan2f(fwdX, fwdZ);
   }
 

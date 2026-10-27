@@ -40,6 +40,7 @@ namespace P64
     FuncGetAllocSize getAllocSize{};
   };
 
-  constexpr uint32_t COMP_TABLE_SIZE = 16;
+  // 0..23 belong to upstream components, 24+ are reserved for the fork's own components
+  constexpr uint32_t COMP_TABLE_SIZE = 32;
   extern const ComponentDef COMP_TABLE[COMP_TABLE_SIZE];
 }

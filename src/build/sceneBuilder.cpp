@@ -14,6 +14,7 @@
 #include "../utils/logger.h"
 
 #include "engine/include/scene/objectFlags.h"
+#include "../project/component/types/compSpline.h"
 
 namespace T3D
 {
@@ -59,7 +60,8 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
   ctx.fileObj.write<uint16_t>(objFlags); // @TODO type
   ctx.fileObj.write<uint16_t>(runtimeId);
   ctx.fileObj.write<uint16_t>(parentRuntimeId);
-  ctx.fileObj.write<uint16_t>(0); // padding
+  ctx.fileObj.write<uint8_t>(srcObj->visMask.resolve(obj.propOverrides));
+  ctx.fileObj.write<uint8_t>(0); // padding
 
   glm::vec3 lpos   = srcObj->pos.resolve(obj.propOverrides);
   glm::vec3 lscale = srcObj->scale.resolve(obj.propOverrides);
@@ -95,7 +97,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
     ctx.fileObj.skip(2);
     ctx.fileObj.skip(2); // flags (@TODO)
 
-    if (comp.id >= 0 && comp.id < (int)Project::Component::TABLE.size()) {
+    if (Project::Component::isUsableId(comp.id)) {
       PropScope::Path compPath(comp.uuid); // resolve comp props relative to this object
       Project::Component::TABLE[comp.id].funcBuild(obj, comp, ctx);
     } else {
@@ -122,11 +124,15 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
 
   std::vector<Project::Component::Entry*> compList{};
   for (auto &comp : srcObj->components) {
+    PropScope::Path compPath(comp.uuid);
+    if (!comp.enabled.resolve(obj)) continue;
     compList.push_back(&comp);
   }
 
   if(srcObj != &obj) {
     for (auto &comp : obj.components) {
+      PropScope::Path compPath(comp.uuid);
+      if (!comp.enabled.resolve(obj)) continue;
       compList.push_back(&comp);
     }
   }
@@ -136,7 +142,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
   // one on to an instance that has its own (an instance in a scene that was not loaded when it was
   // added to the prefab, or a hand-edited file): warn, older projects must keep building.
   const size_t prefabCompCount = srcObj != &obj ? srcObj->components.size() : 0;
-  for (int singleId : {11, 14}) // rigidbody, spline
+  for (int singleId : {11, Project::Component::Spline::ID}) // rigidbody, spline
   {
     size_t count = 0;
     size_t fromPrefab = 0;
@@ -155,7 +161,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
 
   // sort by component prio (unknown ids sort as 0, saveComp() then fails the build for them)
   auto getPrio = [](const Project::Component::Entry* comp) {
-    bool known = comp->id >= 0 && comp->id < (int)Project::Component::TABLE.size();
+    bool known = Project::Component::isUsableId(comp->id);
     return known ? Project::Component::TABLE[comp->id].prio : 0;
   };
   std::stable_sort(compList.begin(), compList.end(),

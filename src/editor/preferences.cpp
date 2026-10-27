@@ -86,6 +86,8 @@ void Editor::Preferences::load()
     splineLineColorSelected.g = doc.value("splineLineColorSelected_g", DEF.splineLineColorSelected.g);
     splineLineColorSelected.b = doc.value("splineLineColorSelected_b", DEF.splineLineColorSelected.b);
     splineLineColorSelected.a = doc.value("splineLineColorSelected_a", DEF.splineLineColorSelected.a);
+
+    viewportLockMode = doc.value("viewportLockMode", DEF.viewportLockMode);
   } else {
     applyKeymapPreset();
   }
@@ -154,6 +156,8 @@ void Editor::Preferences::save()
     .set("splineLineColorSelected_g", splineLineColorSelected.g)
     .set("splineLineColorSelected_b", splineLineColorSelected.b)
     .set("splineLineColorSelected_a", splineLineColorSelected.a)
+
+    .set("viewportLockMode", viewportLockMode)
     .toString();
   auto prefPath = getPrefsPath();
   printf("Saving prefs to %s\n", prefPath.c_str());

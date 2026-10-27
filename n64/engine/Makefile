@@ -10,11 +10,15 @@ include $(N64_INST)/include/t3d.mk
 CFLAGS += -MP
 CXXFLAGS += -MP
 
-N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -Os -Iinclude \
+N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -O3 -Iinclude \
 	-Wall -Wextra -Werror \
 	-Wformat-signedness -fno-common \
 	-Wshadow -Wdouble-promotion -Wformat-security -Wformat-overflow -Wformat-truncation \
 	-Wfatal-errors
+
+# extra engine flags from the project (ENGINE_CXXFLAGS in its Makefile.custom), e.g. -DP64_PHYS_* tuning.
+# Not tracked by make: clean the engine build after changing them.
+N64_CXXFLAGS += $(ENGINE_CXXFLAGS)
 
 src = $(wildcard src/*.cpp) $(wildcard src/vi/*.cpp) $(wildcard src/lib/*.cpp)
 src += $(wildcard src/scene/*.cpp) $(wildcard src/audio/*.cpp) $(wildcard src/assets/*.cpp)

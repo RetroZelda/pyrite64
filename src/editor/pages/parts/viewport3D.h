@@ -72,6 +72,8 @@ namespace Editor
       // Mirror the editor view onto a scene camera (0 = free fly).
       uint64_t boundCameraUUID{0};
       bool useCameraRes{false};
+      // Free-fly camera ortho toggle. Keep separate so a bound camera's projection doesn't overwrite.
+      bool freeFlyOrtho{false};
       float fbScale{1.0f}; // framebuffer pixels per displayed pixel (used for object picking)
 
       int gizmoOp{0};
@@ -79,6 +81,7 @@ namespace Editor
       bool overRotGizmo{false};
       bool inputActive{false};    // this viewport captured the camera drag (started inside it)
       bool viewGizmoOwned{false}; // this viewport owns the active orientation-cube drag
+      bool navLocked{false};      // viewport lock mode: cursor captured, right-click to toggle
 
       SplineEdit::ViewportState splineState{}; // spline point editor transients (session is global)
       bool showSplines{true};

@@ -145,6 +145,7 @@ namespace Project::Component::Code
       const std::string &compName = requireAttr->second;
       const char *similarName = nullptr; // same name in another case, to suggest it
       for (const auto &info : TABLE) {
+        if (info.reserved)continue;
         if (compName == info.name)return info.id;
 
         bool isSimilar = std::equal(compName.begin(), compName.end(), info.name, info.name + strlen(info.name),
@@ -263,7 +264,15 @@ namespace Project::Component::Code
           ctx.fileObj.write<uint8_t>(c);
         }
       } else {
-        ctx.fileObj.writeAs(val, field.type);
+        try
+        {
+          ctx.fileObj.writeAs(val, field.type);
+        } catch (...) {
+          std::string error = script->getName() + ": Invalid argument value '" + val + "' for '" + field.name + "' "
+            "(type-id " + std::to_string(field.type) + ")";
+          Utils::Logger::log(error, Utils::Logger::LEVEL_ERROR);
+          throw std::runtime_error(error);
+        }
       }
     }
   }
@@ -466,6 +475,27 @@ namespace Project::Component::Code
               ImTable::addAssetVecComboBox("", prefabs, uuid, validationFunc);
             }
             ImGui::PopID();
+          } else if(field.type == Utils::DataType::VEC3) {
+            drawArg([&](std::string *val) -> bool {
+              auto values = Utils::parseFloatList(*val);
+              values.resize(3, 0.0f);
+              if (ImGui::InputFloat3("##", values.data())) {
+                *val = Utils::floatListToString(values.data(), 3);
+                return true;
+              }
+              return false;
+            });
+          } else if(field.type == Utils::DataType::QUAT) {
+            drawArg([&](std::string *val) -> bool {
+              auto values = Utils::parseFloatList(*val);
+              if (values.empty()) values = {0,0,0,1};
+              values.resize(4, 0.0f);
+              if (ImGui::InputFloat4("##", values.data())) {
+                *val = Utils::floatListToString(values.data(), 4);
+                return true;
+              }
+              return false;
+            });
           } else if(!field.enumValues.empty()) {
             drawArg([&](std::string *val) -> bool {
               // an empty value means the default from the script (or 0 without one), same as in build()

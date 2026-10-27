@@ -19,6 +19,7 @@ namespace P64::Comp
 
     private:
       Coll::RigidBody rigidBody{};
+      bool registered{false}; // added to the collision scene, see onEnable
     public:
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData)

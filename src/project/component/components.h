@@ -11,6 +11,7 @@
 #include "IconsMaterialDesignIcons.h"
 #include "../../build/sceneContext.h"
 #include "../../utils/aabb.h"
+#include "../../utils/prop.h"
 
 namespace Editor
 {
@@ -30,6 +31,7 @@ namespace Project::Component
     int id{};
     uint64_t uuid{};
     std::string name{};
+    Property<bool> enabled{"enabled", true};
     std::shared_ptr<void> data{};
   };
 
@@ -59,6 +61,7 @@ namespace Project::Component
     FuncCompDeserial funcDeserialize{};
     FuncCompBuild funcBuild{};
     FuncCompGetAABB funcGetAABB{};
+    bool reserved{false}; // placeholder for an unused id: never listed, added, drawn or built
   };
 
   #define MAKE_COMP(name) \
@@ -90,11 +93,17 @@ namespace Project::Component
   MAKE_COMP(CharBody)
   MAKE_COMP(Particle)
   MAKE_COMP(Spline)
+  MAKE_COMP(Surface)
+
+  namespace Particle { constexpr int ID = 24; } // == TABLE index == P64::Comp::Particle::ID
 
   namespace Camera
   {
     // Resolved view parameters of a camera component, used by the editor viewport to mirror it.
-    struct View { int resX{320}; int resY{240}; float aspect{4.0f/3.0f}; float fov{65.0f}; };
+    struct View {
+      int resX{320}; int resY{240}; float aspect{4.0f/3.0f}; float fov{65.0f};
+      bool isOrtho{false}; float orthoSize{300.0f};
+    };
     View getView(Object &obj, Entry &entry);
   }
 
@@ -107,6 +116,26 @@ namespace Project::Component
      * @param openScriptComboBox true to auto-open the combo box.
      */
     void setScript(Entry &entry, uint64_t scriptUUID, bool openScriptComboBox);
+  }
+
+  namespace Model
+  {
+    /**
+     * Assigns a 3D model asset to a static Model component.
+     * @param entry Static Model component entry to update.
+     * @param modelUUID UUID of the 3D model asset.
+     */
+    void setModel(Entry &entry, uint64_t modelUUID);
+  }
+
+  namespace AnimModel
+  {
+    /**
+     * Assigns a 3D model asset to an animated Model component.
+     * @param entry Animated Model component entry to update.
+     * @param modelUUID UUID of the 3D model asset.
+     */
+    void setModel(Entry &entry, uint64_t modelUUID);
   }
 
   constexpr std::array TABLE{
@@ -285,6 +314,31 @@ namespace Project::Component
     },
     CompInfo{
       .id = 13,
+      .prio = -1, // surfaces must exist before scripts/components that may fetch them in init
+      .icon = ICON_MDI_TEXTURE " ",
+      .name = "Surface",
+      .docSlug = "/manual/editor/components/surface",
+      .funcInit = Surface::init,
+      .funcDraw = Surface::draw,
+      .funcSerialize = Surface::serialize,
+      .funcDeserialize = Surface::deserialize,
+      .funcBuild = Surface::build,
+      .funcGetAABB = nullptr
+    },
+    // ids 14..23 are left free for upstream's next components (ids are stored in scene data)
+    CompInfo{ .id = 14, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 15, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 16, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 17, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 18, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 19, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 20, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 21, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 22, .icon = "", .name = "(reserved)", .reserved = true },
+    CompInfo{ .id = 23, .icon = "", .name = "(reserved)", .reserved = true },
+    // fork components: reserved id block 24+
+    CompInfo{
+      .id = 24,
       .icon = ICON_MDI_CREATION " ",
       .name = "Particle Emitter",
       .docSlug = "/manual/editor/components/particle",
@@ -298,7 +352,7 @@ namespace Project::Component
       .funcGetAABB = nullptr
     },
     CompInfo{
-      .id = 14,
+      .id = 25,
       .icon = ICON_MDI_VECTOR_CURVE " ",
       .name = "Spline",
       .docSlug = "/manual/editor/components/spline",
@@ -314,6 +368,19 @@ namespace Project::Component
 
   // TABLE is indexed by Entry::id everywhere (and ids are saved in scenes / match the engine)
   static_assert([]{ for(size_t i = 0; i < TABLE.size(); ++i) if(TABLE[i].id != (int)i) return false; return true; }(), "Component TABLE must be ordered by id");
+  static_assert(TABLE[Particle::ID].funcInit == &Particle::init, "Particle::ID must match its TABLE entry");
+
+  // Whether `id` names a real component: in range and not a reserved placeholder.
+  constexpr bool isUsableId(int id) {
+    return id >= 0 && id < (int)TABLE.size() && !TABLE[id].reserved;
+  }
+
+  /**
+   * Id a stored component is loaded as. The fork's own components moved to the reserved
+   * block (24+) when upstream took id 13 for Surface, so data saved before that still
+   * carries 13 (Particle Emitter) or 14 (Spline). Those are recognized by their data.
+   */
+  int remapLegacyId(int id, const nlohmann::json &data);
 
   extern std::array<CompInfo, TABLE.size()> TABLE_SORTED_BY_NAME;
 

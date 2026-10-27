@@ -66,8 +66,10 @@ namespace Project
     uint32_t sceneIdOnBoot{1};
     uint32_t sceneIdOnReset{1};
     uint32_t sceneIdLastOpened{1};
+    bool debugMenu{true};
 
     std::array<std::string, 8> collLayerNames{};
+    std::array<std::string, 8> visLayerNames{};
 
     std::string serialize() const;
   };

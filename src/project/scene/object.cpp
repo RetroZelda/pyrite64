@@ -12,6 +12,7 @@
 #include "../../utils/json.h"
 #include "../../utils/logger.h"
 #include "../../editor/imgui/notification.h"
+#include "../component/types/compSpline.h"
 
 using Builder = Utils::JSON::Builder;
 
@@ -31,7 +32,8 @@ namespace
       .set(obj.uuidPrefab)
       .set(obj.pos)
       .set(obj.rot)
-      .set(obj.scale);
+      .set(obj.scale)
+      .set(obj.visMask);
 
     auto ovr = nlohmann::json::object();
     for(auto &[key, val] : obj.propOverrides) {
@@ -46,6 +48,7 @@ namespace
       c["id"] = comp.id;
       c["uuid"] = comp.uuid;
       c["name"] = comp.name;
+      c["enabled"] = comp.enabled.value;
       c["data"] = def.funcSerialize(comp);
       comps.push_back(c);
     }
@@ -84,12 +87,18 @@ namespace
 }
 
 void Project::Object::addComponent(int compID) {
-  if (compID < 0 || compID >= static_cast<int>(Component::TABLE.size()))return;
+  if (!Component::isUsableId(compID))return;
   auto &def = Component::TABLE[compID];
+
+  if (components.size() >= MAX_COMPONENTS) {
+    Utils::Logger::log("Object '" + name + "' reached the component limit (max. 255)", Utils::Logger::LEVEL_ERROR);
+    Editor::Noti::add(Editor::Noti::Type::ERROR, "Object '" + name + "' reached the component limit (max. 255)");
+    return;
+  }
 
   // some components can only exist once per object (the runtime only uses the first one):
   // don't add another one and show an error message instead
-  if (def.id == 11 || def.id == 14) // rigidbody, spline
+  if (def.id == 11 || def.id == Component::Spline::ID) // rigidbody, spline
   {
     // prefab instances also get the components of their source node at build time
     const Object *srcObj = nullptr;
@@ -170,6 +179,7 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
   Utils::JSON::readProp(doc, pos);
   Utils::JSON::readProp(doc, rot);
   Utils::JSON::readProp(doc, scale, {1,1,1});
+  Utils::JSON::readProp(doc, visMask, 1u);
 
   propOverrides.clear();
   if(doc.contains("propOverrides"))
@@ -190,14 +200,16 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
     for (int i=0; i<count; ++i) {
       auto compObj = cmArray.at(i);
 
-      auto id = compObj["id"];
-      if (id < 0 || id >= static_cast<int>(Component::TABLE.size()))continue;
+      int id = compObj.value("id", -1);
+      id = Component::remapLegacyId(id, compObj.contains("data") ? compObj["data"] : nlohmann::json{});
+      if (!Component::isUsableId(id))continue;
       auto &def = Component::TABLE[id];
 
       components.push_back({
         .id = id,
         .uuid = compObj["uuid"],
         .name = compObj["name"],
+        .enabled = Property<bool>{"enabled", compObj.value("enabled", true)},
         .data = def.funcDeserialize(compObj["data"])
       });
 

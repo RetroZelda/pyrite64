@@ -191,8 +191,16 @@ bool Editor::ProjectSettings::draw()
     ImTable::start("General");
     ImTable::add("Name", ctx.project->conf.name);
     ImTable::add("ROM-Name", ctx.project->conf.romName);
+    ImTable::addCheckBox("Debug Menu (L + D-Up)", ctx.project->conf.debugMenu);
     ImTable::end();
+
+    if(!ctx.project->conf.debugMenu) {
+      ImGui::TextWrapped(ICON_MDI_INFORMATION_OUTLINE
+        " The in-game debug menu hotkey (L + D-Up) is disabled.\n"
+        "Call P64::Debug::Overlay::toggle() from your own code to open it.");
+    }
   }
+
   if (ImGui::CollapsingHeader("Collision", ImGuiTreeNodeFlags_DefaultOpen))
   {
     ImTable::start("Collision");
@@ -201,6 +209,18 @@ bool Editor::ProjectSettings::draw()
     for(int i=0; i<8; ++i) {
       ImTable::add("Layer " + std::to_string(i));
       ImGui::InputText(("##" + std::to_string(i)).c_str(), &ctx.project->conf.collLayerNames[i]);
+    }
+    ImTable::end();
+  }
+
+  if (ImGui::CollapsingHeader("Visibility", ImGuiTreeNodeFlags_DefaultOpen))
+  {
+    ImTable::start("Visibility");
+
+    ImTable::add("Layer Names");
+    for(int i=0; i<8; ++i) {
+      ImTable::add("Layer " + std::to_string(i));
+      ImGui::InputText(("##vis" + std::to_string(i)).c_str(), &ctx.project->conf.visLayerNames[i]);
     }
     ImTable::end();
   }

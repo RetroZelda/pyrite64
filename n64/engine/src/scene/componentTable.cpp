@@ -4,6 +4,7 @@
 */
 #include "scene/componentTable.h"
 #include "scene/scene.h"
+#include <iterator>
 #include <type_traits>
 
 #include "scene/components/code.h"
@@ -19,6 +20,7 @@
 #include "scene/components/nodeGraph.h"
 #include "scene/components/animModel.h"
 #include "scene/components/charBody.h"
+#include "scene/components/surface.h"
 #include "scene/components/particle.h"
 #include "scene/components/spline.h"
 
@@ -77,9 +79,31 @@ namespace P64
     SET_COMP(AnimModel),
     SET_COMP(RigidBody),
     SET_COMP(CharBody),
+    SET_COMP(Surface),
+    // unused ids up to the fork block: GCC only supports designators without gaps
+    [14] = {}, [15] = {}, [16] = {}, [17] = {}, [18] = {},
+    [19] = {}, [20] = {}, [21] = {}, [22] = {}, [23] = {},
+    // fork components, reserved id block 24+ (keep the designators ascending)
     SET_COMP(Particle),
     SET_COMP(Spline),
   };
 
+  static_assert(P64::Comp::Surface::ID == 13 && P64::Comp::Particle::ID == 24, "update the empty designators above");
   static_assert(P64::Comp::Spline::ID < P64::COMP_TABLE_SIZE);
+
+  // Ids are stored in scene and prefab data, so two components must never share one
+  constexpr uint32_t ALL_COMP_IDS[] {
+    Comp::Code::ID, Comp::Model::ID, Comp::Light::ID, Comp::Camera::ID, Comp::CollMesh::ID,
+    Comp::CollBody::ID, Comp::Audio2D::ID, Comp::Constraint::ID, Comp::Culling::ID,
+    Comp::NodeGraph::ID, Comp::AnimModel::ID, Comp::RigidBody::ID, Comp::CharBody::ID,
+    Comp::Surface::ID, Comp::Particle::ID, Comp::Spline::ID,
+  };
+  static_assert([]{
+    for(uint32_t i = 0; i < std::size(ALL_COMP_IDS); ++i) {
+      for(uint32_t j = i + 1; j < std::size(ALL_COMP_IDS); ++j) {
+        if(ALL_COMP_IDS[i] == ALL_COMP_IDS[j])return false;
+      }
+    }
+    return true;
+  }(), "component ids must be unique");
 }

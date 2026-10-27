@@ -10,6 +10,7 @@ namespace P64::Script::__UUID__
     // Types that can be set in the editor:
     // - uint8_t, int8_t, uint16_t, int16_t, uint32_t, int32_t
     // - float
+    // - fm_vec3_t, fm_quat_t
     // - AssetRef<sprite_t>
     // - ObjectRef (only objects placed directly in a scene: it is 0 inside prefabs and for spawned objects)
     //

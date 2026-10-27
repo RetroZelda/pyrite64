@@ -3,10 +3,19 @@
 * @license MIT
 */
 #include "components.h"
+#include "types/compSpline.h"
 
 namespace Project::Component
 {
   std::array<CompInfo, TABLE.size()> TABLE_SORTED_BY_NAME{};
+}
+
+int Project::Component::remapLegacyId(int id, const nlohmann::json &data)
+{
+  if (!data.is_object())return id;
+  if (id == 13 && data.contains("emitterUUID"))return Particle::ID;
+  if (id == 14 && data.contains("points"))return Spline::ID;
+  return id;
 }
 
 void Project::Component::init() {

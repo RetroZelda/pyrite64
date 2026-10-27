@@ -45,6 +45,13 @@ namespace Project::Component::AnimModel
     return std::make_shared<Data>();
   }
 
+  void setModel(Entry &entry, uint64_t modelUUID)
+  {
+    Data &data = *static_cast<Data*>(entry.data.get());
+    data.model.value = modelUUID;
+    data.obj3D.removeMesh();
+  }
+
   nlohmann::json serialize(const Entry &entry)
   {
     Data &data = *static_cast<Data*>(entry.data.get());
@@ -257,9 +264,18 @@ namespace Project::Component::AnimModel
 
   Utils::AABB getAABB(Object &obj, Entry &entry) {
     Data &data = *static_cast<Data*>(entry.data.get());
-    Utils::AABB aabb = data.aabb;
-    aabb.min *= (float)0xFFFF;
-    aabb.max *= (float)0xFFFF;
+    Utils::AABB aabb{};
+    auto asset = ctx.project->getAssets().getEntryByUUID(data.model.value);
+    if (!asset) return aabb;
+
+    // Use the imported bind-pose geometry so bounds are available before first render
+    for (const auto &model : asset->model.t3dm.models) {
+      for (const auto &triangle : model.triangles) {
+        for (const auto &vert : triangle.vert) {
+          aabb.addPoint({vert.pos[0], vert.pos[1], vert.pos[2]});
+        }
+      }
+    }
     return aabb;
   }
 }

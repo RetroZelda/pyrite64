@@ -11,9 +11,11 @@
 #include "scene/scene.h"
 
 #include <malloc.h>
+#include <cstring>
 
 #include "scene/globalState.h"
 #include "collision/meshCollider.h"
+#include "collision/gfxScale.h"
 #include "vi/swapChain.h"
 #include "lib/memory.h"
 #include "lib/logger.h"
@@ -32,6 +34,7 @@
 #include "debug/debugDraw.h"
 #include "renderer/drawLayer.h"
 #include "scene/componentTable.h"
+#include "scene/components/surface.h"
 #include "script/globalScript.h"
 #include "scene/object.h"
 
@@ -172,11 +175,6 @@ void P64::Scene::update(float deltaTime)
   accumulator_ticks += TICKS_FROM_US((uint32_t)(deltaTime * 1000000.0f));
   
   joypad_poll();
-  auto pressed = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-  auto held = joypad_get_buttons_held(JOYPAD_PORT_1);
-  if(held.l && pressed.d_up) {
-    Debug::Overlay::toggle();
-  }
 
   // reset metrics
   ticksActorUpdate = 0;
@@ -287,7 +285,7 @@ void P64::Scene::update(float deltaTime)
   // Extrapolate rigid body transforms for visual smoothness
   if(conf.interpolatePhysicsTransforms){
     float remainderSec = static_cast<float>(accumulator_ticks) / static_cast<float>(TICKS_FROM_US(SEC_TO_USEC));
-    applyRenderInterpolation(remainderSec);
+    applyRigidBodyRenderInterpolation(remainderSec);
   }
 
   ticksComponents.clear();
@@ -334,7 +332,7 @@ void P64::Scene::update(float deltaTime)
     if(obj->id < idLookup.size()) {
       idLookup[obj->id] = nullptr;
     }
-    std::erase_if(savedTransforms_, [&](const SavedTransform &st) { return st.obj == obj; });
+    std::erase_if(savedTransforms_, [&](const SavedTransform &st) { return st.body->ownerObject() == obj; });
     std::erase(objects, obj);
     obj->~Object();
 
@@ -359,14 +357,18 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
   uint64_t componentTicksStart, componentTicksEnd;
   for(auto &cam : cameras)
   {
+    // cameras targeting a surface render into it instead of the framebuffer,
+    // with no target set (or its owner deleted) the camera renders nothing
+    if(!cam->attach())continue;
     camMain = cam;
-    cam->attach();
 
     lighting.apply();
     t3d_matrix_push_pos(1);
 
-    for(int i=1; i<conf.layerSetup.layerCount3D; ++i) {
+    for(int i=1; i<conf.layerSetup.layerCount3D; ++i) 
+    {
       DrawLayer::use3D(i);
+        cam->applyTargetImages();
         cam->reApplyScissor();
         t3d_matrix_push_pos(1);
       DrawLayer::useDefault();
@@ -379,6 +381,7 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
     {
       //debugf(" - %d\n", obj->id);
       if(!obj->isEnabled())continue;
+      if(!(obj->visMask & cam->visMask))continue;
       auto compRefs = obj->getCompRefs();
 
       for (uint32_t i=0; i<obj->compCount; ++i)
@@ -420,8 +423,11 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
     for(int i=1; i<conf.layerSetup.layerCount3D; ++i) {
       DrawLayer::use3D(i);
         t3d_matrix_pop(1);
+        cam->restoreTargetImages();
       DrawLayer::useDefault();
     }
+
+    cam->detach();
   }
 
   auto t = get_user_ticks();
@@ -470,10 +476,10 @@ void P64::Scene::runPendingEvents()
   evQueue.clear();
 }
 
-void P64::Scene::applyRenderInterpolation(float dt)
+void P64::Scene::applyRigidBodyRenderInterpolation(float dt)
 {
   auto &rigidBodies = Coll::collisionSceneGetInstance()->getRigidBodies();
-  savedTransforms_.clear();
+  restoreInterpolatedTransforms();
 
   for(auto *body : rigidBodies) {
     if(!body || body->isSleeping() || body->isKinematic()) continue;
@@ -481,25 +487,43 @@ void P64::Scene::applyRenderInterpolation(float dt)
     Object *obj = body->ownerObject();
     if(!obj) continue;
 
-    savedTransforms_.push_back({obj, obj->pos, obj->rot});
+    // A transform that doesn't match the last physics writeback holds a manual change that physics hasn't adopted yet
+    if(obj->pos != body->syncedOwnerPos() ||
+       obj->rot != body->syncedOwnerRot()) continue;
 
-    // Extrapolate position forward by remaining time
+    // Extrapolate forward by the remaining time (velocity is in physics units, obj->pos in gfx units)
     const fm_vec3_t &vel = body->linearVelocity();
-    obj->pos = obj->pos + vel * dt;
+    obj->pos = obj->pos + vel * dt * Coll::getGfxScale();
 
-    // Extrapolate rotation forward by remaining time
     const fm_vec3_t &angVel = body->angularVelocity();
     if(!Coll::vec3IsZero(angVel)) {
       obj->rot = Coll::quatApplyAngularVelocity(obj->rot, angVel, dt);
     }
+
+    savedTransforms_.push_back({body, obj->pos, obj->rot});
   }
 }
 
 void P64::Scene::restoreInterpolatedTransforms()
 {
   for(auto &saved : savedTransforms_) {
-    saved.obj->pos = saved.pos;
-    saved.obj->rot = saved.rot;
+    Object *obj = saved.body->ownerObject();
+    const fm_vec3_t &basePos = saved.body->syncedOwnerPos();
+    const fm_quat_t &baseRot = saved.body->syncedOwnerRot();
+
+    // If a script/update changed the transform after extrapolation, re-base its change onto the real physics transform 
+    //so the extrapolation offset doesn't leak into it
+    if(obj->pos == saved.shownPos) {
+      obj->pos = basePos;
+    } else {
+      obj->pos = basePos + (obj->pos - saved.shownPos);
+    }
+    if(obj->rot == saved.shownRot) {
+      obj->rot = baseRot;
+    } else {
+      obj->rot = (obj->rot * Coll::quatConjugate(saved.shownRot)) * baseRot;
+      fm_quat_norm(&obj->rot, &obj->rot);
+    }
   }
   savedTransforms_.clear();
 }
@@ -512,6 +536,16 @@ void P64::Scene::onObjectCollision(const Coll::CollEvent &event)
   if(!selfObject->isEnabled() || !otherObject->isEnabled()) return;
 
   dispatchObjectCollisionEvent(*selfObject, event);
+}
+
+bool P64::Scene::objectHasCollisionHandler(const Object &obj)
+{
+  auto compRefs = obj.getCompRefs();
+  for(uint32_t i = 0; i < obj.compCount; ++i)
+  {
+    if(COMP_TABLE[compRefs[i].type].onColl) return true;
+  }
+  return false;
 }
 
 uint16_t P64::Scene::addObject(

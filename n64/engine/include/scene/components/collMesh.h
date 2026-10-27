@@ -17,6 +17,7 @@ namespace P64::Comp
     Coll::MeshCollider *meshCollider{nullptr};
     uint16_t assetIdx{0};
     uint8_t flags;
+    bool registered{false}; // added to the collision scene, see onEnable
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData);
 

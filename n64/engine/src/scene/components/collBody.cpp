@@ -34,7 +34,7 @@ namespace P64::Comp
     auto &coll = SceneManager::getCurrent().getCollision();
 
     if (initData == nullptr) {
-      coll.removeCollider(&data->collider);
+      if(data->registered)coll.removeCollider(&data->collider);
       data->~CollBody();
       return;
     }
@@ -88,12 +88,18 @@ namespace P64::Comp
 
   void CollBody::onEnable(Object& obj, CollBody* data)
   {
-    return obj.getScene().getCollision().addCollider(&data->collider);
+    // also called when only the visibility of an enabled object changes: the collision scene
+    // must not get the same collider twice (it would also leak a broadphase node)
+    if(data->registered)return;
+    data->registered = true;
+    obj.getScene().getCollision().addCollider(&data->collider);
   }
 
   void CollBody::onDisable(Object& obj, CollBody* data)
   {
-    return obj.getScene().getCollision().removeCollider(&data->collider);
+    if(!data->registered)return;
+    data->registered = false;
+    obj.getScene().getCollision().removeCollider(&data->collider);
   }
 
   void CollBody::update(Object &obj, CollBody* data, float deltaTime)

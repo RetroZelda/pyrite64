@@ -13,8 +13,12 @@ export N64_INST={{N64_INST}}
 include $(N64_INST)/include/n64.mk
 include $(N64_INST)/include/t3d.mk
 
-N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -Os -Isrc -Isrc/user \
-	-I$(ENGINE_DIR)/include
+# recursive wildcard
+rwildcard = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -O3 -Isrc -Isrc/user \
+	-I$(ENGINE_DIR)/include \
+	-MP
 
 # n64.mk adds -MMD; -MP additionally emits a phony target per header so that
 # deleting/renaming a header doesn't break incremental builds with
@@ -36,7 +40,7 @@ include Makefile.custom
 # Engine changes don't force project recompiles: project objects list the engine
 # headers they include in their .d files, and the .elf below relinks via engine.a.
 $(ENGINE_DIR)/build/engine.a: FORCE
-	$(MAKE) -C $(ENGINE_DIR)
+	$(MAKE) -C $(ENGINE_DIR) ENGINE_CXXFLAGS="$(ENGINE_CXXFLAGS)"
 FORCE: ;
 
 AUDIOCONV_FLAGS = --wav-resample 24000 --wav-compress 1
@@ -74,9 +78,8 @@ p64:
 	{{P64_SELF_PATH}} --cli --cmd build {{PROJECT_SELF_PATH}}
 
 # Compiler-generated header dependencies (-MMD) live next to each .o in nested
-# subdirs (src/p64/, src/user/**, lib/**), so they must be collected recursively —
-# a flat wildcard misses all of them, and stale objects keep baked-in asset indices.
-rwildcard = $(foreach d,$(wildcard $(1)*),$(call rwildcard,$(d)/,$(2)) $(filter $(subst *,%,$(2)),$(d)))
--include $(call rwildcard,$(BUILD_DIR)/,*.d)
+# subdirs (src/p64/, src/user/**, lib/**), so they must be collected recursively over the
+# whole build dir — stale objects would otherwise keep baked-in asset indices.
+-include $(call rwildcard,$(BUILD_DIR),*.d)
 
 .PHONY: all clean

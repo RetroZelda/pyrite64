@@ -4,6 +4,9 @@
 */
 #pragma once
 
+// libdragon's host-side assertf() expands to assert(), but debug.h only includes <stdlib.h>
+#include <cassert>
+
 #define __LIBDRAGON_N64SYS_H 1
 #define PhysicalAddr(a) (uint64_t)(a)
 

@@ -7,7 +7,8 @@
   "collLayer5": "",
   "collLayer6": "",
   "collLayer7": "",
-  "editorVersion": "0.8.0-Full-Frontal-20260705-102523",
+  "debugMenu": true,
+  "editorVersion": "0.9.0",
   "metadata": {
     "enabled": true,
     "langs": [

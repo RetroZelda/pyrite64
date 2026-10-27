@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(pyrite64 VERSION 0.8.0)
+project(pyrite64 VERSION 0.9.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -135,12 +135,16 @@ add_executable(pyrite64 src/main.cpp
         src/project/project.cpp
         src/editor/actions.h
         src/editor/actions.cpp
+        src/editor/audioPreview.h
+        src/editor/audioPreview.cpp
         src/editor/undoRedo.h
         src/editor/undoRedo.cpp
         src/editor/canvasHistory.h
         src/editor/canvasHistory.cpp
         src/editor/selectionUtils.h
         src/editor/selectionUtils.cpp
+        src/editor/transformUtils.h
+        src/editor/transformUtils.cpp
         src/editor/thumbnailCache.h
         src/editor/thumbnailCache.cpp
         src/editor/window.h
@@ -283,6 +287,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/component/types/compCulling.cpp
         src/project/component/types/compSpline.h
         src/project/component/types/compSpline.cpp
+        src/project/component/types/compSurface.cpp
         src/editor/pages/parts/nodeEditor.cpp
         src/project/component/shared/materialInstance.cpp
         src/project/component/shared/meshFilter.cpp

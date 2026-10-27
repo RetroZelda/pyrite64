@@ -5,8 +5,8 @@
 #include "scene.h"
 #include "object.h"
 #include <algorithm>
-#include <functional>
 #include <filesystem>
+#include <functional>
 #include "../../utils/json.h"
 #include "../../context.h"
 #include "../../utils/hash.h"
@@ -22,6 +22,8 @@
 namespace
 {
   constexpr float DEF_MODEL_SCALE = 1.0f;
+  constexpr int COMP_ID_MODEL_STATIC = 1;
+  constexpr int COMP_ID_MODEL_ANIMATED = 10;
 
   /**
    * Checks whether a target object belongs to the subtree of a given ancestor.
@@ -159,25 +161,25 @@ std::shared_ptr<Project::Object> Project::Scene::addPrefabInstance(uint64_t pref
   return addObject(root, obj);
 }
 
-std::shared_ptr<Project::Object> Project::Scene::addPrefabInstance(uint64_t prefabUUID, Object& parent)
+std::shared_ptr<Project::Object> Project::Scene::addModelObject(uint64_t modelUUID)
 {
-  auto prefab = ctx.project->getAssets().getPrefabByUUID(prefabUUID);
-  if (!prefab) return nullptr;
+  AssetManagerEntry* asset = ctx.project->getAssets().getEntryByUUID(modelUUID);
+  if (!asset || asset->type != FileType::MODEL_3D) return nullptr;
 
-  // Placed under 'parent' in the hierarchy, starting at its position (editor positions are world space)
-  auto obj = std::make_shared<Object>(parent);
-  obj->name = prefab->obj.name;
-  obj->uuid = Utils::Hash::randomU32();
-  obj->pos.value = parent.pos.resolve(parent.propOverrides);
-  obj->rot = prefab->obj.rot;
-  obj->scale = prefab->obj.scale;
+  std::shared_ptr<Object> obj = addObject(root);
+  obj->name = std::filesystem::path{asset->name}.stem().string();
 
-  obj->uuidPrefab.value = prefab->uuid.value; // Link to prefab
-  obj->addPropOverride(obj->pos); // by default allow transforming the instance
-  obj->addPropOverride(obj->rot);
-  obj->addPropOverride(obj->scale);
+  // Models containing animation clips use the animated component automatically
+  bool isAnimated = !asset->model.t3dm.animations.empty();
+  obj->addComponent(isAnimated ? COMP_ID_MODEL_ANIMATED : COMP_ID_MODEL_STATIC);
 
-  return addObject(parent, obj);
+  Component::Entry &component = obj->components.back();
+  if (isAnimated)
+    Component::AnimModel::setModel(component, modelUUID);
+  else
+    Component::Model::setModel(component, modelUUID);
+
+  return obj;
 }
 
 void Project::Scene::removeObject(Object &obj) {
@@ -195,7 +197,7 @@ void Project::Scene::removeAllObjects() {
   root.children.clear();
 }
 
-bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool asChild)
+bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool asChild, bool insertBefore)
 {
   if(uuidObject == uuidTarget) {
     return false;
@@ -241,7 +243,7 @@ bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool a
       // Add as sibling to target
       auto parent = target->parent;
       if (parent) {
-        // insert after target
+        // Insert before or after the target
         auto &siblings = parent->children;
         auto it = std::find_if(
           siblings.begin(), siblings.end(),
@@ -249,7 +251,7 @@ bool Project::Scene::moveObject(uint32_t uuidObject, uint32_t uuidTarget, bool a
         );
         if (it != siblings.end())
         {
-          siblings.insert(it + 1, obj);
+          siblings.insert(insertBefore ? it : it + 1, obj);
           obj->parent = parent;
         }
       }
@@ -264,7 +266,7 @@ void Project::Scene::save()
   Utils::FS::saveTextFile(scenePath + "/scene.json", serialize());
 }
 
-uint32_t Project::Scene::createPrefabFromObject(uint32_t uuid)
+uint64_t Project::Scene::createPrefabFromObject(uint32_t uuid, const std::string &subDir)
 {
   auto obj = getObjectByUUID(uuid);
   if(!obj)return 0;
@@ -305,20 +307,18 @@ uint32_t Project::Scene::createPrefabFromObject(uint32_t uuid)
   ), name.end());
   if(name.empty())name = "prefab " + std::to_string(prefab.uuid.value);
 
-  // Create the prefab in the folder the Prefabs browser is currently in (so prefabs can be
-  // organized into subfolders), falling back to the assets root. Ensure the folder exists,
-  // since saveTextFile does not create parent directories.
-  std::filesystem::path targetDir = std::filesystem::path{ctx.project->getPath()} / "assets";
-  if(!ctx.prefabCreateDir.empty()) {
-    targetDir /= ctx.prefabCreateDir;
+  // Create the prefab in the requested asset folder, else the folder the Prefabs browser is
+  // currently in, falling back to the assets root. Ensure the folder exists, since
+  // saveTextFile does not create parent directories.
+  const std::string &dir = !subDir.empty() ? subDir : ctx.prefabCreateDir;
+  auto prefabPath = std::filesystem::path(ctx.project->getPath()) / "assets";
+  if(!dir.empty()) {
+    prefabPath /= dir;
     std::error_code ec;
-    std::filesystem::create_directories(targetDir, ec);
+    std::filesystem::create_directories(prefabPath, ec);
   }
-
-  Utils::FS::saveTextFile(
-    (targetDir / (name + ".prefab")).string(),
-    prefabJson
-  );
+  prefabPath /= name + ".prefab";
+  Utils::FS::saveTextFile(prefabPath, prefabJson);
 
   ctx.project->getAssets().reload();
 
@@ -339,7 +339,7 @@ uint32_t Project::Scene::createPrefabFromObject(uint32_t uuid)
   obj->addPropOverride(obj->pos);
   obj->addPropOverride(obj->rot);
   obj->addPropOverride(obj->scale);
-  return 0;
+  return prefab.uuid.value;
 }
 
 void Project::Scene::unpackPrefabInstance(uint32_t uuid)
@@ -362,6 +362,7 @@ void Project::Scene::unpackPrefabInstance(uint32_t uuid)
       auto data = cdef.funcSerialize(comp);
       dst.components.push_back(Component::Entry{
         .id = comp.id, .uuid = comp.uuid, .name = comp.name,
+        .enabled = comp.enabled,
         .data = cdef.funcDeserialize(data)
       });
     }

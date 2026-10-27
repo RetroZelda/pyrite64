@@ -37,7 +37,7 @@ namespace P64::Comp
     auto &coll = SceneManager::getCurrent().getCollision();
 
     if (initData == nullptr) {
-      coll.removeRigidBody(&data->rigidBody);
+      if(data->registered)coll.removeRigidBody(&data->rigidBody);
       // TODO: add collider to new collision scene
       data->~RigidBody();
       return;
@@ -66,20 +66,29 @@ namespace P64::Comp
     if(initData->constrainRotY) constraints = constraints | Coll::Constraint::FreezeRotY;
     if(initData->constrainRotZ) constraints = constraints | Coll::Constraint::FreezeRotZ;
     data->rigidBody.setConstraints(constraints);
-
-    if(obj.isEnabled()) {
-      coll.addRigidBody(&data->rigidBody);
-    }
+    // added to the collision scene in onEnable (runs right after this for an enabled object).
+    // Adding it here as well registered every body twice, so it was integrated twice per step.
   }
 
   void RigidBody::onEnable(Object& obj, RigidBody* data)
   {
-    return obj.getScene().getCollision().addRigidBody(&data->rigidBody);
+    // also called when only the visibility of an enabled object changes: register once
+    if(data->registered)return;
+    auto &coll = obj.getScene().getCollision();
+    if(coll.findRigidBodyByObjectId(obj.id)) {
+      P64::Log::error("Object '%d' already has a Rigidbody component, cannot add another one", obj.id);
+      return;
+    }
+    data->registered = true;
+    coll.addRigidBody(&data->rigidBody);
+    coll.enableRigidBody(&data->rigidBody); // removeRigidBody() disabled it when the object was disabled
   }
 
   void RigidBody::onDisable(Object& obj, RigidBody* data)
   {
-    return obj.getScene().getCollision().removeRigidBody(&data->rigidBody);
+    if(!data->registered)return;
+    data->registered = false;
+    obj.getScene().getCollision().removeRigidBody(&data->rigidBody);
   }
 
   void RigidBody::update(Object &obj, RigidBody* data, float deltaTime)

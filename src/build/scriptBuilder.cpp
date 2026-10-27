@@ -194,7 +194,15 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
   if(sceneCtx.hasCanvases) {
     srcExtraDecl += "namespace P64::UI { void init(); void destroy(); }\n";
     srcExtraDecl += "namespace P64::UI::Generated { void uiInitializeBindings(); }\n";
+  }
 
+  // builtin debug-menu hotkey (L + D-Pad Up), opt-out via project settings
+  if(project.conf.debugMenu) {
+    nameMap["onSceneUpdate"] += "{\n"
+      "auto _h = joypad_get_buttons_held(JOYPAD_PORT_1);\n"
+      "auto _p = joypad_get_buttons_pressed(JOYPAD_PORT_1);\n"
+      "if(_h.l && _p.d_up) P64::Debug::Overlay::toggle(); \n"
+    "}\n";
   }
 
   std::string srcHook = "";

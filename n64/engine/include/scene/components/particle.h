@@ -14,7 +14,7 @@ namespace P64::Comp
   // each frame, and (optionally) plays on spawn.
   struct Particle
   {
-    static constexpr uint32_t ID = 13;
+    static constexpr uint32_t ID = 24; // fork component: reserved id block 24+
     static constexpr uint8_t FLAG_AUTO_PLAY = 1 << 0;
     // When set, deleting the object drops the emitter (and its live particles) immediately.
     // Default (unset): the emitter stops spawning but its live particles finish draining first.

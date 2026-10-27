@@ -129,15 +129,16 @@ namespace P64
       SceneConf conf{};
       uint16_t id;
 
-      /// Saved physics transforms for render interpolation restore
+      /// Extrapolated transforms written to objects for rendering. Only the shown
+      /// values are kept; restore re-bases against the body's synced snapshot
       struct SavedTransform {
-        Object *obj;
-        fm_vec3_t pos;
-        fm_quat_t rot;
+        Coll::RigidBody *body;
+        fm_vec3_t shownPos;
+        fm_quat_t shownRot;
       };
       std::vector<SavedTransform> savedTransforms_{};
 
-      void applyRenderInterpolation(float dt);
+      void applyRigidBodyRenderInterpolation(float dt);
       void restoreInterpolatedTransforms();
 
       void loadSceneConfig();
@@ -184,6 +185,11 @@ namespace P64
       Coll::CollisionScene &getCollision() { return *Coll::collisionSceneGetInstance(); }
 
       void onObjectCollision(const Coll::CollEvent &event);
+
+      /// @brief Returns true if any of the object's components has a collision callback.
+      /// @param obj 
+      /// @return 
+      static bool objectHasCollisionHandler(const Object &obj);
 
       void sendEvent(uint16_t targetId, uint16_t senderId, uint16_t type, uint32_t value) {
         eventQueue[eventQueueIdx].add(targetId, senderId, type, value);

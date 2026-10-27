@@ -24,6 +24,9 @@ namespace Project
   class Object
   {
     public:
+      // runtime stores the component count as a u8
+      static constexpr size_t MAX_COMPONENTS = 255;
+
       Object* parent{nullptr};
 
       std::string name{};
@@ -37,6 +40,9 @@ namespace Project
       PROP_VEC3(pos);
       PROP_QUAT(rot);
       PROP_VEC3(scale);
+
+      // visibility layer mask, cameras only draw objects matching their own mask
+      Property<uint32_t> visMask{"visMask", 1};
 
       bool proportionalScale{false};
       bool enabled{true};
@@ -106,6 +112,8 @@ namespace Project
         Utils::AABB aabb{};
         bool hasVolume = false;
         for (const auto &entry : components) {
+          PropScope::Dispatch enabledScope(propOverrides, entry.uuid);
+          if (!entry.enabled.resolve(*this)) continue;
           const auto &info = Component::TABLE[entry.id];
           if (!info.funcGetAABB) continue;
           PropScope::Dispatch dispatchScope(propOverrides, entry.uuid);

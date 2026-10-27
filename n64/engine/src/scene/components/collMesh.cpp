@@ -37,7 +37,7 @@ namespace P64::Comp
     auto *initData = (InitData*)initData_;
     if (initData == nullptr) {
       if(data->meshCollider) {
-        obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
+        if(data->registered)obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
         data->meshCollider->destroyData();
         delete data->meshCollider;
         data->meshCollider = nullptr;
@@ -60,16 +60,17 @@ namespace P64::Comp
 
   void CollMesh::onEnable(Object& obj, CollMesh* data)
   {
-    if(data->meshCollider) {
-      obj.getScene().getCollision().addMeshCollider(data->meshCollider);
-    }
+    // also called when only the visibility of an enabled object changes: register once
+    if(!data->meshCollider || data->registered)return;
+    data->registered = true;
+    obj.getScene().getCollision().addMeshCollider(data->meshCollider);
   }
 
   void CollMesh::onDisable(Object& obj, CollMesh* data)
   {
-    if(data->meshCollider) {
-      obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
-    }
+    if(!data->meshCollider || !data->registered)return;
+    data->registered = false;
+    obj.getScene().getCollision().removeMeshCollider(data->meshCollider);
   }
 
   void CollMesh::update(Object &obj, CollMesh* data, float deltaTime)

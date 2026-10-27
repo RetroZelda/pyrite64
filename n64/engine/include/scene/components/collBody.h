@@ -18,6 +18,7 @@ namespace P64::Comp
 
     Coll::Collider collider{};
     fm_vec3_t orgScale{};
+    bool registered{false}; // added to the collision scene, see onEnable
 
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData)
     {

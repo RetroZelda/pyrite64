@@ -14,13 +14,13 @@
 namespace Project { class AssetManager; class Object; }
 
 /**
- * Editor "Spline" component (TABLE[14]) - shared API for the component itself, the viewport point
+ * Editor "Spline" component (TABLE[25]) - shared API for the component itself, the viewport point
  * editor (Editor::SplineEdit) and scene building. Points are OBJECT-LOCAL; they are shared by every
  * instance of a prefab template (a point list cannot be a prefab override).
  */
 namespace Project::Component::Spline
 {
-  constexpr int ID = 14;                                         // == TABLE index == P64::Comp::Spline::ID
+  constexpr int ID = 25;                                         // == TABLE index == P64::Comp::Spline::ID
   constexpr uint32_t MAX_POINTS = P64::SplineMath::MAX_POINTS;   // 64
 
   struct Point

@@ -33,6 +33,7 @@ namespace Editor
     int fpsLimit = 60;
     bool showRotAsEuler = false;
     bool mouseWheelModifiesSpeed = false;
+    bool viewportLockMode = false;
 
     float gridLineThickness = 0.05f;
     float aabbLineThickness = 2.5f;
