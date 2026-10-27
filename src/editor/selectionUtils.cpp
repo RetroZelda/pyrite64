@@ -26,23 +26,6 @@ namespace
     return selectedObjects;
   }
 
-  // Follows a sub-path of child ids from a prefab root down to the selected node, hopping
-  // through each prefab definition along the way. Returns the chain of visited nodes, or
-  // an empty vector when the path no longer resolves.
-  std::vector<Project::Object*> walkToNode(Project::Object* root, const std::vector<uint32_t> &subPath)
-  {
-    std::vector<Project::Object*> nodes;
-    Project::Object* cur = root;
-    for(uint32_t uid : subPath) {
-      Project::Object* parent = Editor::SelectionUtils::prefabDefOf(cur);
-      Project::Object* next = nullptr;
-      for(auto &c : parent->children) { if(c->uuid == uid) { next = c.get(); break; } }
-      if(!next) return {};
-      nodes.push_back(next);
-      cur = next;
-    }
-    return nodes;
-  }
 }
 
 namespace Editor::SelectionUtils
@@ -56,21 +39,56 @@ namespace Editor::SelectionUtils
     return node;
   }
 
-  AuthTarget pickAuthNode(Project::Object* rootInstance, const std::vector<Project::Object*> &nodes)
+  std::vector<NestedStep> walkNested(Project::Object* root, const std::vector<uint32_t> &subPath)
+  {
+    std::vector<NestedStep> steps;
+    Project::Object* cur = root;
+    for(uint32_t uid : subPath) {
+      Project::Object* parent = prefabDefOf(cur);
+      NestedStep step{};
+      for(auto &c : parent->children) { if(c->uuid == uid) { step.node = c.get(); break; } }
+      if(!step.node && parent != cur) { // an object added directly to the instance node
+        for(auto &c : cur->children) { if(c->uuid == uid) { step.node = c.get(); break; } }
+        step.additive = step.node != nullptr;
+      }
+      if(!step.node) return {};
+      steps.push_back(step);
+      cur = step.node;
+    }
+    return steps;
+  }
+
+  AuthTarget pickAuthNode(Project::Object* rootInstance, const std::vector<NestedStep> &steps)
   {
     AuthTarget out;
     out.authNode = rootInstance;
     out.relPath = ctx.selSubPath;
     if(ctx.isPrefabEditing(rootInstance->uuid)) {
+      // The first instance whose definition the path descends into (excluding the target
+      // itself). Objects added to an instance stay in the edited file, so those steps
+      // don't count.
       int ai = -1;
-      for(size_t i = 0; i + 1 < nodes.size(); i++) { // exclude the target itself
-        if(nodes[i]->isPrefabInstance()) { ai = (int)i; break; }
+      for(size_t i = 0; i + 1 < steps.size(); i++) {
+        if(steps[i].node->isPrefabInstance() && !steps[i + 1].additive) { ai = (int)i; break; }
       }
       if(ai >= 0) {
-        out.authNode = nodes[ai];
+        out.authNode = steps[ai].node;
         out.relPath.assign(ctx.selSubPath.begin() + ai + 1, ctx.selSubPath.end());
       } else {
         out.directDefEdit = true;
+      }
+    } else {
+      // The build writes an object added to a nested instance with a fresh scope, so the
+      // scene instance's overrides never reach it or anything below it. Show it the way the
+      // build resolves it: from the last such object down, without any override to edit.
+      int last = -1;
+      for(size_t i = 0; i < steps.size(); i++) {
+        if(steps[i].additive) last = (int)i;
+      }
+      if(last >= 0) {
+        out.readOnly = true;
+        out.authNode = steps[last].node;
+        out.relPath.assign(ctx.selSubPath.begin() + last + 1, ctx.selSubPath.end());
       }
     }
     return out;
@@ -154,13 +172,14 @@ namespace Editor::SelectionUtils
     auto prefab = ctx.project->getAssets().getPrefabByUUID(editObj->uuidPrefab.value);
     if (!prefab) return false;
 
-    auto nodes = walkToNode(&prefab->obj, subPath);
-    if (nodes.empty()) return false;                 // stale path
+    auto steps = walkNested(&prefab->obj, subPath);
+    if (steps.empty()) return false;                 // stale path
 
-    // A prefab-instance node before the target means we'd be selecting inside a nested
-    // prefab, which is not part of this prefab's definition.
-    for (size_t i = 0; i + 1 < nodes.size(); i++) {
-      if (nodes[i]->isPrefabInstance()) return false;
+    // Descending into a nested prefab instance's definition means we'd be selecting inside
+    // that prefab, which is not part of this prefab's file. Objects added directly to the
+    // instance are.
+    for (size_t i = 1; i < steps.size(); i++) {
+      if (steps[i - 1].node->isPrefabInstance() && !steps[i].additive) return false;
     }
     return true;
   }
@@ -169,15 +188,16 @@ namespace Editor::SelectionUtils
   {
     if(!prefab || ctx.selSubPath.empty()) return;
 
-    auto nodes = walkToNode(&prefab->obj, ctx.selSubPath);
-    if(nodes.empty()) { ctx.selSubPath.clear(); return; } // stale path, fall back to the root
+    auto steps = walkNested(&prefab->obj, ctx.selSubPath);
+    if(steps.empty()) { ctx.selSubPath.clear(); return; } // stale path, fall back to the root
 
-    out.node = nodes.back();
+    out.node = steps.back().node;
     out.nodeSrc = prefabDefOf(out.node);
     out.isNested = true;
 
-    auto auth = pickAuthNode(obj, nodes);
+    auto auth = pickAuthNode(obj, steps);
     out.directDefEdit = auth.directDefEdit;
+    out.readOnly = auth.readOnly;
 
     if(!out.directDefEdit) {
       out.authLayer.emplace(auth.authNode->propOverrides);
@@ -187,10 +207,10 @@ namespace Editor::SelectionUtils
       // node along the way (the selected node's own layer is the last). This resolves the same
       // cascade the build does, so an override baked on an intermediate prefab still shows.
       // authNode stays the outermost layer, so it remains the write target.
-      size_t startIdx = nodes.size() - auth.relPath.size();
+      size_t startIdx = steps.size() - auth.relPath.size();
       for(size_t k = 0; k < auth.relPath.size(); k++) {
         out.nestedPaths.push_back(std::make_unique<PropScope::Path>(auth.relPath[k]));
-        Project::Object* n = nodes[startIdx + k];
+        Project::Object* n = steps[startIdx + k].node;
         if(n->isPrefabInstance())
           out.nodeLayers.push_back(std::make_unique<PropScope::PrefabLayer>(n->propOverrides));
       }

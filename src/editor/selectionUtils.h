@@ -37,9 +37,25 @@ namespace Editor::SelectionUtils
                           const std::vector<uint32_t> &subPath);
 
   // Resolves a node to the prefab definition whose children it exposes. A prefab-instance
-  // node has no children of its own, so this returns the referenced prefab's root, otherwise
-  // the node itself (also when the prefab cannot be found).
+  // node exposes the referenced prefab's root, otherwise the node itself (also when the
+  // prefab cannot be found). An instance node can still hold children of its own, see
+  // NestedStep::additive.
   Project::Object* prefabDefOf(Project::Object* node);
+
+  // One element of a nested selection path, see walkNested().
+  struct NestedStep
+  {
+    Project::Object* node = nullptr;
+    // Found among the parent's OWN children rather than its prefab definition's: an object
+    // added directly to a nested prefab instance. It belongs to the same file as that
+    // instance, and the build writes it with a fresh override scope (its own overrides only).
+    bool additive = false;
+  };
+
+  // Follows a sub-path of child ids from a prefab root down to the selected node, through each
+  // prefab definition along the way and into objects added directly to nested instances.
+  // Returns one step per path element, or an empty vector when the path no longer resolves.
+  std::vector<NestedStep> walkNested(Project::Object* root, const std::vector<uint32_t> &subPath);
 
   // Where a nested node's edits are written, given the chain of def nodes leading to it.
   struct AuthTarget
@@ -47,13 +63,18 @@ namespace Editor::SelectionUtils
     Project::Object* authNode = nullptr;  // object whose override map the edit is stored on
     std::vector<uint32_t> relPath;        // path from authNode down to the edited node
     bool directDefEdit = false;           // edit the def node directly, no override layer
+    // No edit can reach the node from here: outside prefab-edit mode, an object added
+    // directly to a nested instance (or anything below it) ignores the scene instance's
+    // overrides in the build. authNode/relPath then only describe how to display it.
+    bool readOnly = false;
   };
 
   // Decides where a nested node's edits go. In normal mode that is the scene instance with
-  // the full selSubPath. In prefab-edit mode it is the first contained prefab-instance along
-  // the path, whose overrides belong to the prefab being edited, or a direct definition edit
-  // when no such prefab sits in between.
-  AuthTarget pickAuthNode(Project::Object* rootInstance, const std::vector<Project::Object*> &nodes);
+  // the full selSubPath, or nowhere (readOnly) below an object added to a nested instance.
+  // In prefab-edit mode it is the first contained prefab-instance whose definition the path
+  // descends into, whose overrides belong to the prefab being edited, or a direct definition
+  // edit when the path stays in the edited prefab's file.
+  AuthTarget pickAuthNode(Project::Object* rootInstance, const std::vector<NestedStep> &steps);
 
   // A nested prefab selection resolved for the inspector: which def node to show, and the
   // live scope guards that route its edits to the correct override owner. The guards are
@@ -64,6 +85,7 @@ namespace Editor::SelectionUtils
     Project::Object* nodeSrc = nullptr;  // its component source, its prefab root if instance
     bool isNested = false;
     bool directDefEdit = false;
+    bool readOnly = false;               // see AuthTarget::readOnly
     std::optional<PropScope::PrefabLayer> authLayer;
     std::vector<std::unique_ptr<PropScope::Path>> nestedPaths;
     std::optional<ImTable::ForceLockScope> nestedLock;

@@ -240,6 +240,16 @@ namespace
       PropScope::Path childPath(child->uuid);
       renderNestedPrefab(*child, world, callback, depth + 1, rootUuid, path, pre);
     }
+
+    // Objects added directly to a nested instance node, stored with the node in the file that
+    // contains it. The build writes them composed onto the node's world transform, with a
+    // fresh scope (their own overrides only), see Build::writeObject.
+    if(src != &node && !node.children.empty()) {
+      PropScope::ResetScope freshScope;
+      for(auto &child : node.children) {
+        renderNestedPrefab(*child, world, callback, depth + 1, rootUuid, path, pre);
+      }
+    }
   }
 
   void iterateObjects(Project::Object& parent, const IterCallback& callback,
@@ -314,7 +324,7 @@ namespace
     Project::Object* rootInstance{};
     EditorWorldTrans parentWorld{};
     EditorWorldTrans world{};
-    std::vector<Project::Object*> nodes{}; // resolved def node for each selSubPath element
+    std::vector<Editor::SelectionUtils::NestedStep> steps{}; // resolved node for each selSubPath element
     bool valid{false};
   };
 
@@ -327,6 +337,9 @@ namespace
     auto pf = ctx.project->getAssets().getPrefabByUUID(root->uuidPrefab.value);
     if(!pf)return out;
 
+    auto steps = Editor::SelectionUtils::walkNested(&pf->obj, ctx.selSubPath);
+    if(steps.empty())return out; // stale path
+
     EditorWorldTrans world{
       root->pos.resolve(root->propOverrides),
       root->rot.resolve(root->propOverrides),
@@ -336,24 +349,20 @@ namespace
     // Cascade context: every prefab-instance node along the path keeps its own layer active
     // for the rest of the descent (matches the build). Keys are path-precise, so an override
     // only resolves for its exact target, and a compound prefab can reach into the prefabs it
-    // contains. The layers accumulate rather than popping per step.
-    PropScope::PrefabLayer sceneLayer(root->propOverrides);
-    std::vector<std::unique_ptr<PropScope::Path>> pathScopes;
-    std::vector<std::unique_ptr<PropScope::PrefabLayer>> nodeLayers;
+    // contains. The layers accumulate rather than popping per step. An object added directly
+    // to a nested instance starts over with a fresh scope, like the build writes it.
+    // PropScope is a stack: the guards are released in reverse order below.
+    std::vector<std::shared_ptr<void>> scopes;
+    scopes.push_back(std::make_shared<PropScope::PrefabLayer>(root->propOverrides));
 
-    Project::Object* node = &pf->obj;
-    for(uint32_t uid : ctx.selSubPath) {
-      Project::Object* defParent = Editor::SelectionUtils::prefabDefOf(node);
-      Project::Object* next = nullptr;
-      for(auto &c : defParent->children) { if(c->uuid == uid) { next = c.get(); break; } }
-      if(!next)return out; // stale path
+    for(size_t i = 0; i < steps.size(); i++) {
+      Project::Object* next = steps[i].node;
+      if(steps[i].additive) scopes.push_back(std::make_shared<PropScope::ResetScope>());
+      else                  scopes.push_back(std::make_shared<PropScope::Path>(ctx.selSubPath[i]));
 
       out.parentWorld = world;
-      out.nodes.push_back(next);
-      pathScopes.push_back(std::make_unique<PropScope::Path>(uid));
-
       if(next->isPrefabInstance())
-        nodeLayers.push_back(std::make_unique<PropScope::PrefabLayer>(next->propOverrides));
+        scopes.push_back(std::make_shared<PropScope::PrefabLayer>(next->propOverrides));
 
       glm::vec3 lpos = next->pos.resolve(next->propOverrides);
       glm::quat lrot = next->rot.resolve(next->propOverrides);
@@ -363,10 +372,11 @@ namespace
         world.rot * lrot,
         world.scale * lscale
       };
-      node = next;
     }
+    while(!scopes.empty())scopes.pop_back();
 
-    out.node = node;
+    out.node = steps.back().node;
+    out.steps = std::move(steps);
     out.rootInstance = root.get();
     out.world = world;
     out.valid = true;
@@ -1544,7 +1554,9 @@ void Editor::Viewport3D::draw()
   if (hasSelection && !ctx.selSubPath.empty() && !SplineEdit::isEditing())
   {
     auto target = resolveNestedTarget(*scene);
-    if (target.valid)
+    auto auth = target.valid ? Editor::SelectionUtils::pickAuthNode(target.rootInstance, target.steps)
+                             : Editor::SelectionUtils::AuthTarget{};
+    if (target.valid && !auth.readOnly) // no gizmo where no edit could reach the node
     {
       glm::vec3 skewN{0,0,0}; glm::vec4 perspN{0,0,0,1};
       glm::vec3 gscale = target.world.scale;
@@ -1563,8 +1575,6 @@ void Editor::Viewport3D::draw()
         glm::vec3 newLpos = (pInv * (nwPos - target.parentWorld.pos)) / target.parentWorld.scale;
         glm::quat newLrot = pInv * nwRot;
         glm::vec3 newLscale = nwScale / target.parentWorld.scale;
-
-        auto auth = Editor::SelectionUtils::pickAuthNode(target.rootInstance, target.nodes);
 
         if (auth.directDefEdit) {
           // Direct edit of this prefab's definition (empty scope -> the node's own slot).

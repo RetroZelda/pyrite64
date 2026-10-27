@@ -504,6 +504,8 @@ namespace
     path.push_back(node.uuid);
 
     Project::Object* src = Editor::SelectionUtils::prefabDefOf(&node);
+    // objects added directly to this nested instance node, stored with it in the same file
+    const bool hasAdded = src != &node && !node.children.empty();
 
     bool isSelected = (ctx.selObjectUUID == rootUuid && ctx.selSubPath == path);
     bool dim = (prefabEditObj && !selectable) || !parentEnabled || !node.enabled;
@@ -511,7 +513,7 @@ namespace
     ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow
       | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_FramePadding
       | ImGuiTreeNodeFlags_SpanAllColumns;
-    if(src->children.empty())flag |= ImGuiTreeNodeFlags_Leaf;
+    if(src->children.empty() && !hasAdded)flag |= ImGuiTreeNodeFlags_Leaf;
     if(isSelected)flag |= ImGuiTreeNodeFlags_Selected;
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.f, 3_px));
@@ -546,6 +548,14 @@ namespace
       for(auto &child : src->children) {
         drawPrefabDefNode(*child, depth + 1, rootUuid, path, childSelectable,
                           parentEnabled && node.enabled);
+      }
+      // Objects added to a nested instance belong to the instance node's file: selectable in
+      // edit mode whenever the node itself is.
+      if(hasAdded) {
+        for(auto &child : node.children) {
+          drawPrefabDefNode(*child, depth + 1, rootUuid, path, selectable,
+                            parentEnabled && node.enabled);
+        }
       }
       ImGui::TreePop();
     }

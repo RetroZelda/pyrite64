@@ -539,6 +539,8 @@ void Editor::ObjectInspector::draw() {
   // alive in 'nested' so its edits keep authoring to the right override owner.
   Editor::SelectionUtils::NestedTarget nested;
   if(isPrefabInst) Editor::SelectionUtils::resolveNestedTarget(nested, obj.get(), prefab.get());
+  // An object added to a nested prefab instance can only be changed in that prefab's file.
+  ImTable::ReadOnlyScope readOnlyScope(nested.readOnly);
 
   // The inspected target: the nested node when one is selected, else the root object.
   Project::Object* tableObj = nested.isNested ? nested.node : obj.get();    // backs the override map
@@ -555,6 +557,11 @@ void Editor::ObjectInspector::draw() {
         // A nested node's name belongs to the prefab definition, so it is read-only here.
         ImTable::add("Name");
         ImGui::TextUnformatted(nested.node->name.c_str());
+        if(nested.readOnly) {
+          ImTable::add("");
+          ImGui::TextDisabled(ICON_MDI_LOCK " Added inside a nested prefab: edit '%s' to change it",
+                              srcObj->name.c_str());
+        }
       } else {
         // The name belongs to the object itself, not the prefab, so it stays editable even
         // on a locked prefab instance.
@@ -767,7 +774,10 @@ void Editor::ObjectInspector::draw() {
       ImGui::GetStyle().FramePadding.x,
       checkboxPaddingY
     });
-    if (ImGui::Checkbox("##Enabled", &enabled)) {
+    if (ImTable::readOnly)ImGui::BeginDisabled();
+    const bool enabledToggled = ImGui::Checkbox("##Enabled", &enabled);
+    if (ImTable::readOnly)ImGui::EndDisabled();
+    if (enabledToggled) {
       // Snapshot the scene before writing either the base value or an instance override
       Editor::UndoRedo::getHistory().markChanged(enabled ? "Enable Component" : "Disable Component");
       // Locked prefab components cannot alter their definition; create an override slot
@@ -855,6 +865,12 @@ void Editor::ObjectInspector::draw() {
     // Draw the insertion boundary after the last instance-owned component
     drawComponentInsertTarget(obj.get(), obj->components.size(), previousComponentCollapsed, compReorder);
     srcObj = obj.get();
+  }
+
+  if (nested.readOnly) { // nothing below an object added to a nested instance is editable here
+    compReorder = {};
+    compCopy = nullptr;
+    compDelUUID = 0;
   }
 
   // Apply the queued move after all component lists have finished drawing

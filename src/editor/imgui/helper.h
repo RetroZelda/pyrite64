@@ -206,6 +206,19 @@ namespace ImTable
     ~ForceLockScope() { forcePrefabLocked = prev; }
   };
 
+  // Read-only view: the rows of every table started meanwhile are shown but disabled.
+  inline bool readOnly{false};
+  inline std::vector<bool> readOnlyTables{}; // per started table, whether start() disabled it
+
+  struct ReadOnlyScope
+  {
+    bool prev{readOnly};
+    explicit ReadOnlyScope(bool v) { readOnly = prev || v; }
+    ~ReadOnlyScope() { readOnly = prev; }
+    ReadOnlyScope(const ReadOnlyScope&) = delete;
+    ReadOnlyScope& operator=(const ReadOnlyScope&) = delete;
+  };
+
   struct PrefabEditScope
   {
     bool prev{false};
@@ -238,11 +251,17 @@ namespace ImTable
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(1);
     ImGui::PushItemWidth(widths[1] >= 0 ? widths[1] : -FLT_MIN);
+    readOnlyTables.push_back(readOnly);
+    if(readOnly)ImGui::BeginDisabled();
     return true;
   }
 
   inline void end() {
     obj = nullptr;
+    if(!readOnlyTables.empty()) {
+      if(readOnlyTables.back())ImGui::EndDisabled();
+      readOnlyTables.pop_back();
+    }
     ImGui::EndTable();
   }
 
