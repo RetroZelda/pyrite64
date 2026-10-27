@@ -143,13 +143,14 @@ bool Build::buildProject(const std::string &configPath)
         || entry.type == Project::FileType::CODE_OBJ
         || entry.type == Project::FileType::CODE_GLOBAL
         || entry.type == Project::FileType::CANVAS  // code-gen only, no ROM binary
+        || entry.type == Project::FileType::EDITOR_SCRIPT
       ) continue;
       sceneCtx.addAsset(entry);
     }
   }
 
-  // Check if the ROM asset list changed (add/remove/rename/reorder). Asset indices are
-  // baked into artifacts at build time — compiled code via assetTable.h ("..."_asset is
+  // Check if the ROM asset list changed (add/remove/rename/reorder/exclude/type). Asset indices
+  // are baked into artifacts at build time — compiled code via assetTable.h ("..."_asset is
   // consteval!), .t3dm/.pf files — so any index shift must force those to rebuild.
   // Compare the UNSORTED list: an index is a position in assetList, so order changes
   // matter just as much as content changes. (sceneCtx.files can't be used here, it is
@@ -157,7 +158,7 @@ bool Build::buildProject(const std::string &configPath)
   {
     std::string fileStr{};
     for (auto &entry : sceneCtx.assetList) {
-      fileStr += entry.path;
+      fileStr += entry.path + ":" + std::to_string(entry.type);
       fileStr += '\n';
     }
 

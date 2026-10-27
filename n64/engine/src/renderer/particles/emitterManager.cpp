@@ -127,6 +127,14 @@ void P64::EmitterManager::draw(float camBaseSize)
   }
 }
 
+bool P64::EmitterManager::hasDrawable()
+{
+  for(auto &s : slots) {
+    if(s.used && s.playing) return true;
+  }
+  return false;
+}
+
 void P64::EmitterManager::destroyAll()
 {
   for(auto &s : slots) {

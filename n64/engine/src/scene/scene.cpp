@@ -353,8 +353,7 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
   ticksDraw = get_ticks();
 
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_PRE_DRAW);
-  renderPipeline->preDraw();
-  DrawLayer::draw(0);
+  renderPipeline->beginFrame();
 
   // 3D Pass, for every active camera
   uint64_t componentTicksStart, componentTicksEnd;
@@ -365,17 +364,11 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
     if(!cam->attach())continue;
     camMain = cam;
 
+    rdpq_mode_push(); // drawing the layers changes modes, keep each camera's pass self-contained
+    DrawLayer::draw(0); // layers drawn for the previous camera may have changed the layer 0 state
     lighting.apply();
     t3d_matrix_push_pos(1);
-
-    for(int i=1; i<conf.layerSetup.layerCount3D; ++i) 
-    {
-      DrawLayer::use3D(i);
-        cam->applyTargetImages();
-        cam->reApplyScissor();
-        t3d_matrix_push_pos(1);
-      DrawLayer::useDefault();
-    }
+    renderPipeline->beginCamera(*cam);
 
     GlobalScript::callHooks(GlobalScript::HookType::SCENE_PRE_DRAW_3D);
 
@@ -423,12 +416,13 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
     ticksGlobalDraw += get_user_ticks() - t;
 
     t3d_matrix_pop(1);
-    for(int i=1; i<conf.layerSetup.layerCount3D; ++i) {
-      DrawLayer::use3D(i);
-        t3d_matrix_pop(1);
-        cam->restoreTargetImages();
-      DrawLayer::useDefault();
+    renderPipeline->endCamera(*cam);
+    if(cam->onDrawEnd) {
+      t = get_user_ticks();
+      cam->onDrawEnd(*cam);
+      ticksGlobalDraw += get_user_ticks() - t;
     }
+    rdpq_mode_pop();
 
     cam->detach();
   }
@@ -439,7 +433,7 @@ void P64::Scene::draw([[maybe_unused]] float deltaTime)
   DrawLayer::useDefault();
   ticksGlobalDraw += get_user_ticks() - t;
 
-  renderPipeline->draw();
+  renderPipeline->endFrame();
 
   restoreInterpolatedTransforms();
 

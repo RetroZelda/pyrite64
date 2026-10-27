@@ -18,7 +18,11 @@ namespace
 {
   struct Layer
   {
-    rspq_queue_t *queue{};
+    // A queue can only be run once per frame (its end marker gets overwritten by further recording),
+    // so every run (e.g. one per camera) gets its own queue, created on demand and reused across frames.
+    std::vector<rspq_queue_t*> queues{};
+    uint32_t runIdx{0}; // queue currently recorded into
+    bool used{false};   // commands were recorded since the last run
   };
 
   constexpr uint32_t LAYER_BUFFER_COUNT = 3;
@@ -28,6 +32,12 @@ namespace
   constinit uint8_t frameIdx{0};
   constinit uint8_t currLayerIdx{0};
   constinit uint8_t lastLightMode{T3D_LIGHTING_MODE_MUL};
+
+  Layer& layerAt(uint32_t idx)
+  {
+    assertf(idx > 0 && idx <= layers.size(), "Invalid layer index %lu", idx);
+    return layers[idx-1][frameIdx];
+  }
 }
 
 void P64::DrawLayer::init(Setup &setup)
@@ -35,41 +45,86 @@ void P64::DrawLayer::init(Setup &setup)
   reset();
   layerSetup = &setup;
   uint32_t layerCount = setup.layerCount3D + setup.layerCountPtx + setup.layerCount2D;
-  assert(layerCount > 0);
+  assert(setup.layerCount3D > 0 && layerCount <= 16);
 
   currLayerIdx = 0;
-  layers = {};
+  frameIdx = 0;
   layers.resize(layerCount-1);
-
   Log::info("DrawLayer count: %d", layers.size());
-  for(auto &layer : layers)
-  {
-    for(auto &l : layer) {
-      l.queue = rspq_queue_create();
-    }
-  }
 }
 
 void P64::DrawLayer::use(uint32_t idx)
 {
   if(idx == currLayerIdx)return;
-
-  rspq_queue_switch(idx == 0 ? nullptr : layers[idx-1][frameIdx].queue);
   currLayerIdx = idx;
+
+  if(idx == 0) {
+    rspq_queue_switch(nullptr);
+    return;
+  }
+
+  auto &layer = layerAt(idx);
+  if(layer.runIdx == layer.queues.size())layer.queues.push_back(rspq_queue_create());
+  layer.used = true;
+  rspq_queue_switch(layer.queues[layer.runIdx]);
 }
 
-void P64::DrawLayer::usePtx(uint32_t idx)
+namespace
 {
+  uint8_t resolveIn(uint32_t ref, uint32_t start, uint32_t count)
+  {
+    if(ref <= P64::DrawLayer::MAX_INDEX_REF) {
+      return (ref < count) ? ref : 0;
+    }
+
+    for(uint32_t i=0; i<count; ++i) {
+      if(layerSetup->layerConf[start + i].key == ref)return i;
+    }
+    P64::Log::warn("Draw-layer %08lX does not exist, using the first one", ref);
+    return 0;
+  }
+}
+
+uint8_t P64::DrawLayer::resolve3D(uint32_t ref)
+{
+  return resolveIn(ref, 0, layerSetup->layerCount3D);
+}
+
+uint8_t P64::DrawLayer::resolvePtx(uint32_t ref)
+{
+  return resolveIn(ref, layerSetup->layerCount3D, layerSetup->layerCountPtx);
+}
+
+uint8_t P64::DrawLayer::resolve2D(uint32_t ref)
+{
+  return resolveIn(ref, layerSetup->layerCount3D + layerSetup->layerCountPtx, layerSetup->layerCount2D);
+}
+
+uint8_t P64::DrawLayer::use3D(uint32_t ref)
+{
+  auto idx = resolve3D(ref);
+  use(idx);
+  return idx;
+}
+
+uint8_t P64::DrawLayer::usePtx(uint32_t ref)
+{
+  auto idx = resolvePtx(ref);
   use(idx + layerSetup->layerCount3D);
+  return idx;
 }
 
-void P64::DrawLayer::use2D(uint32_t idx)
+uint8_t P64::DrawLayer::use2D(uint32_t ref)
 {
+  auto idx = resolve2D(ref);
   use(idx + layerSetup->layerCount3D + layerSetup->layerCountPtx);
+  return idx;
 }
 
 void P64::DrawLayer::draw(uint32_t layerIdx)
 {
+  if(layerIdx != 0 && !layerAt(layerIdx).used)return;
+
   auto &setup = layerSetup->layerConf[layerIdx];
   rdpq_mode_begin();
     rdpq_mode_zbuf(
@@ -101,14 +156,18 @@ void P64::DrawLayer::draw(uint32_t layerIdx)
   }
 
   if(layerIdx == 0)return;
-  assertf(layerIdx-1 < layers.size(), "Invalid layer index %lu", layerIdx);
+  auto &layer = layerAt(layerIdx);
+  auto queue = layer.queues[layer.runIdx++];
+  layer.used = false;
 
-  auto &layer = layers[layerIdx-1];
-
-  //debugf("Draw-Layer: %lu, frame: %lu\n", layerIdx-1, frameIdx);
-  //rspq_queue_debug(layer[frameIdx].queue);
-  rspq_queue_run(layer[frameIdx].queue);
-  //rspq_wait();
+  // 3D layers set model matrices relative to the current stack position, give them their own slot
+  if(layerIdx < layerSetup->layerCount3D) {
+    t3d_matrix_push_pos(1);
+      rspq_queue_run(queue);
+    t3d_matrix_pop(1);
+  } else {
+    rspq_queue_run(queue);
+  }
 }
 
 void P64::DrawLayer::draw3D()
@@ -120,6 +179,15 @@ void P64::DrawLayer::draw3D()
 
 void P64::DrawLayer::drawPtx()
 {
+  int idxStart = layerSetup->layerCount3D;
+  bool hasParticles = false;
+  for(int i=0; i<layerSetup->layerCountPtx; ++i) {
+    hasParticles |= layerAt(idxStart + i).used;
+  }
+  // live emitters are drawn here too, they don't go through the PTX layers
+  const bool hasEmitters = EmitterManager::hasDrawable();
+  if(!hasParticles && !hasEmitters)return;
+
   rdpq_set_mode_standard();
 
   rdpq_mode_begin();
@@ -134,7 +202,6 @@ void P64::DrawLayer::drawPtx()
   tpx_state_set_scale(1.0f, 1.0f);
   tpx_state_set_base_size(128);
 
-  int idxStart = layerSetup->layerCount3D;
   for(int i=0; i<layerSetup->layerCountPtx; ++i) {
     draw(idxStart + i);
   }
@@ -147,6 +214,7 @@ void P64::DrawLayer::drawPtx()
   // SIZE_TO_METERS meters in any render scale, that base is scaled by SIZE_TO_METERS * renderScale / 8,
   // which leaves 64 * 500 * SIZE_TO_METERS / (8 * far in meters). Each emitter then multiplies this
   // by its own size-normalization factor (EmitterInstance::draw). The baked PTX layers keep their 128.
+  if(!hasEmitters)return;
   float emitFar = 50.0f; // meters
   if(Camera* cam = SceneManager::getCurrent().getActiveCameraPtr()) {
     if(cam->far > 0.01f) emitFar = cam->far;
@@ -170,19 +238,23 @@ void P64::DrawLayer::nextFrame()
   currLayerIdx = 0;
 
   for(auto &layer : layers) {
-    rspq_queue_clear(layer[frameIdx].queue);
+    auto &l = layer[frameIdx];
+    for(auto queue : l.queues)rspq_queue_clear(queue);
+    l.runIdx = 0;
+    l.used = false;
   }
 }
 
 void P64::DrawLayer::reset()
 {
+  rspq_queue_switch(nullptr);
   for(auto &layer : layers)
   {
     for(auto &l : layer) {
-      rspq_queue_destroy(l.queue);
-      l.queue = nullptr;
+      for(auto queue : l.queues)rspq_queue_destroy(queue);
     }
   }
+  layers.clear();
 
   layerSetup = nullptr;
   currLayerIdx = 0;

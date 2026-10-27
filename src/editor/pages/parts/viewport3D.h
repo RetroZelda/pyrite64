@@ -67,6 +67,7 @@ namespace Editor
       bool showCollObj{true};
       bool showIcons{true};
       bool previewTransforms{true};
+      bool previewFog{true};
       bool iconsVisible{true}; 
       bool cleanPreview{false};
 
@@ -147,6 +148,7 @@ namespace Editor
       }
 
       bool isViewHovered() const { return isMouseHover; }
+      bool isFogPreviewed() const { return previewFog; }
 
       /**
        * World point at the centre of this viewport's view: the free camera's orbit pivot, or a point

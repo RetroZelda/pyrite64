@@ -46,6 +46,7 @@ namespace Project
     MUSIC_XM,
     CANVAS,
     EMITTER,
+    EDITOR_SCRIPT,
 
     _SIZE
   };
@@ -85,9 +86,11 @@ namespace Project
     std::string outPath{};
     std::string romPath{};
     FileType type{};
+    uint64_t fileAge{0};
     std::shared_ptr<Renderer::Texture> texture{nullptr};
     Assets::Model3D model{};
     std::shared_ptr<Renderer::N64Mesh> mesh3D{};
+    std::shared_ptr<Renderer::N64Mesh> meshColl3D{}; // also contains meshes without materials
     std::shared_ptr<Prefab> prefab{nullptr};
     std::shared_ptr<Canvas> canvas{nullptr};
     std::shared_ptr<Assets::Emitter> emitter{nullptr};
@@ -123,6 +126,8 @@ namespace Project
       std::unordered_map<uint64_t, std::string> dirtyNodeGraphState{};
 
       std::string defaultObjScript{};
+      std::string defaultObjSharedScript{};
+      std::string defaultObjDataHeader{};
       std::string defaultGlobalScript{};
       std::shared_ptr<Renderer::Texture> fallbackTex{};
       bool reloadRequested{false};
@@ -211,7 +216,7 @@ namespace Project
 
       void save();
 
-      bool createScript(const std::string &name, bool isGlobal, const std::string &subDir = {});
+      bool createScript(const std::string &name, bool isGlobal, const std::string &subDir = {}, bool sharedData = false);
       uint64_t createNodeGraph(const std::string &name);
   };
 }

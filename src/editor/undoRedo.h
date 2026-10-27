@@ -40,8 +40,12 @@ namespace Editor::UndoRedo
       Project::Scene* snapshotScene{nullptr};
       std::vector<uint32_t> snapshotSelUUIDs{};
       std::string nextChangedReason{};
+      uint32_t pendingActiveId{0};
+      bool hasPendingActiveId{false};
       std::optional<std::string> savedState{};
-      uint64_t generation{0};
+      uint64_t generation{0}; // bumped whenever the scene is replaced (undo/redo/clear)
+
+      void commit();
 
     public:
       /**

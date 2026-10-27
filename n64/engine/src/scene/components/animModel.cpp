@@ -7,7 +7,6 @@
 #include "scene/components/animModel.h"
 #include "assets/assetManager.h"
 #include <t3d/t3dmodel.h>
-#include <libdragon.h> // asset_fopen / fclose for lazy animation file handles
 
 #include "../../renderer/bigtex/bigtex.h"
 #include "renderer/material.h"
@@ -19,11 +18,17 @@
 
 namespace
 {
+  // Keyframes are streamed from ROM by DMA into a buffer per animation (split in two halves),
+  // tiny3d's default is 512 bytes. Every animation of every object owns one for its whole
+  // lifetime, so keep it small.
+  constexpr uint32_t ANIM_STREAM_BUFFER_SIZE = 256;
+
   struct InitData
   {
     uint16_t assetIdx;
-    uint8_t layer;
     uint8_t flags;
+    uint8_t padding;
+    uint32_t layerRef;
     P64::Renderer::MaterialInstance material;
   };
 }
@@ -31,20 +36,8 @@ namespace
 namespace P64::Comp
 {
   void AnimModel::activateAnim(int16_t idx, T3DSkeleton* skel) {
-    if (anims[idx].file == nullptr) {
-      anims[idx].file = asset_fopen(anims[idx].animRef->filePath, nullptr);
-    }
     t3d_anim_attach(&anims[idx], skel);
     t3d_anim_set_time(&anims[idx], 0.0f); // restart from frame 0 on (re)selection
-  }
-
-  void AnimModel::deactivateAnim(int16_t idx) {
-    if (idx < 0) return;
-    if (idx == animIdxMain || idx == animIdxBlend) return; // still in use by the other slot
-    if (anims[idx].file) {
-      fclose(anims[idx].file);
-      anims[idx].file = nullptr;
-    }
   }
 
   void AnimModel::setMainAnim(int16_t idx) {
@@ -52,24 +45,19 @@ namespace P64::Comp
       mainAnimDuration = idx >= 0 ? anims[idx].animRef->duration : 0.0f;
       return;
     }
-    int16_t old = animIdxMain;
-    animIdxMain = idx; // set before deactivate so its guard sees the new selection
+    animIdxMain = idx;
     if (idx >= 0) activateAnim(idx, &skelMain);
-    deactivateAnim(old);
     mainAnimDuration = idx >= 0 ? anims[idx].animRef->duration : 0.0f;
   }
 
   void AnimModel::setBlendAnim(int16_t idx) {
     if (idx < 0) {
-      int16_t old = animIdxBlend;
       animIdxBlend = -1;
       blendAnimDuration = 0.0f;
-      deactivateAnim(old);
       return;
     }
     if (animIdxBlend != idx) {
-      int16_t old = animIdxBlend;
-      animIdxBlend = idx; // set before deactivate so its guard sees the new selection
+      animIdxBlend = idx;
 
       activateAnim(idx, &skelAnim[idx]); // blend attaches to its per-anim skeleton clone
 
@@ -79,8 +67,6 @@ namespace P64::Comp
         float blendDur = anims[idx].animRef->duration;
         t3d_anim_set_time(&anims[idx], normPhase * blendDur);
       }
-
-      deactivateAnim(old);
     }
     blendAnimDuration = anims[idx].animRef->duration;
   }
@@ -124,9 +110,8 @@ namespace P64::Comp
     uint32_t i = 0;
     while(t3d_model_iter_next(&it)) {
       skelAnim[i] = t3d_skeleton_clone(&skelMain, false);
-      anims[i]    = t3d_anim_create(model, it.anim->name);
-      // Lazy file handles: release until the anim is selected (see activateAnim/deactivateAnim)
-      if (anims[i].file) { fclose(anims[i].file); anims[i].file = nullptr; }
+      // attached when selected (see activateAnim)
+      anims[i]    = t3d_anim_create_buffered(model, it.anim->name, ANIM_STREAM_BUFFER_SIZE);
       ++i;
     }
 
@@ -177,7 +162,7 @@ namespace P64::Comp
     data->model = (T3DModel*)AssetManager::acquire(initData->assetIdx);
     assert(data->model != nullptr);
     data->vertexScale = AssetManager::getVertexScale(initData->assetIdx);
-    data->layerIdx = initData->layer;
+    data->layerRef = initData->layerRef;
     data->flags = initData->flags;
 
     // struct has move/copy removed for safety and to avoid accidental copies.
@@ -216,12 +201,10 @@ namespace P64::Comp
     //debugf("AnimModel: count=%lu\n", animCount);
     while(t3d_model_iter_next(&it)) {
       data->skelAnim[i] = t3d_skeleton_clone(&data->skelMain, false);
-      data->anims[i] = t3d_anim_create(data->model, it.anim->name); // @TOOD: add  create by-index to t3d API
-      // Lazy file handles: only the selected main/blend anim keeps its .sdata FILE* open
-      // (see activateAnim/deactivateAnim). Release the handle t3d_anim_create just opened and
-      // defer attach until selection — otherwise every anim of every object eats one of
-      // libdragon's 64 libc-lock slots and a busy scene exhausts the pool.
-      if (data->anims[i].file) { fclose(data->anims[i].file); data->anims[i].file = nullptr; }
+      // @TOOD: add  create by-index to t3d API
+      // Attached when selected (see activateAnim), so only the playing animations prime and
+      // allocate their targets.
+      data->anims[i] = t3d_anim_create_buffered(data->model, it.anim->name, ANIM_STREAM_BUFFER_SIZE);
       //debugf(" - %s: %lu\n", it.anim->name, i);
       ++i;
     }
@@ -303,7 +286,7 @@ namespace P64::Comp
     auto mat = data->matFP.getNext();
     Renderer::fillModelMatrixFP(mat, obj.scale, obj.rot, obj.pos, data->vertexScale);
 
-    if(data->layerIdx)DrawLayer::use3D(data->layerIdx);
+    if(data->layerRef)data->layerRef = DrawLayer::use3D(data->layerRef);
 
     data->material.begin(obj);
 
@@ -312,6 +295,6 @@ namespace P64::Comp
     rspq_block_run(data->model->userBlock);
 
     data->material.end();
-    if(data->layerIdx)DrawLayer::useDefault();
+    if(data->layerRef)DrawLayer::useDefault();
   }
 }

@@ -127,7 +127,7 @@ void Editor::drawEmitterSettings(Project::Assets::Emitter &em)
   // Texture Animation section instead.
   if(ImGui::CollapsingSubHeader("Texture", ImGuiTreeNodeFlags_DefaultOpen) && ImTable::start("Texture", nullptr, labelWidth))
   {
-    TextureEditor::draw(em.material.tex0, /*tileParams*/ false);
+    TextureEditor::draw(em.material.tex0, em.uuid, /*tileParams*/ false);
 
     // TMEM check: the RDP can only hold ~4KB of texture (whole sheet is uploaded at once).
     // The source-image size is a worst-case estimate (RGBA16 = 2B/px; CI formats are smaller).

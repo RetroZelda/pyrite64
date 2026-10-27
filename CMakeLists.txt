@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(pyrite64 VERSION 0.9.0)
+project(pyrite64 VERSION 0.11.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -205,6 +205,7 @@ add_executable(pyrite64 src/main.cpp
         src/build/projectBuilder.cpp
         src/build/romMetaBuilder.h
         src/build/romMetaBuilder.cpp
+        src/build/vscodeProject.cpp
         src/utils/fs.h
         src/utils/string.h
         src/utils/proc.h
@@ -321,6 +322,8 @@ add_executable(pyrite64 src/main.cpp
         src/project/graph/nodeRegistry.cpp
         src/project/graph/jsNodeHost.h
         src/project/graph/jsNodeHost.cpp
+        src/editor/script/scriptHost.h
+        src/editor/script/scriptHost.cpp
         src/project/graph/valueTypes.h
         src/project/graph/valueTypes.cpp
         src/project/graph/graph.h
@@ -342,6 +345,8 @@ add_executable(pyrite64 src/main.cpp
         src/editor/preferences.h
         src/editor/preferences.cpp
         src/editor/pages/parts/assets/modelEditor.cpp
+        src/editor/pages/parts/assets/scriptEditor.h
+        src/editor/pages/parts/assets/scriptEditor.cpp
         src/project/assets/material.h
         src/project/assets/material.cpp
         src/project/assets/emitter.h
@@ -393,6 +398,21 @@ target_include_directories(pyrite64 PRIVATE
     src/n64
     n64
 )
+
+option(PYRITE64_BUILD_TESTS "Build the unit tests" ON)
+if(PYRITE64_BUILD_TESTS)
+    enable_testing()
+    add_executable(pyrite64_tests
+        tests/main.cpp
+        tests/codeParser.cpp
+        tests/codeParserFork.cpp
+        tests/layer.cpp
+        src/utils/codeParser.cpp
+        src/utils/logger.cpp
+    )
+    target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include)
+    add_test(NAME pyrite64_tests COMMAND pyrite64_tests)
+endif()
 
 
 # target_link_libraries(pyrite64 PRIVATE SDL3::SDL3)

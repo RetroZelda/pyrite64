@@ -93,7 +93,7 @@ cd ..
 if [ -e "tiny3d" ]; then
     echo "Tiny3D already downloaded"
 else
-    git clone -b main https://github.com/RetroZelda/tiny3d.git
+    git clone -b full-frontal https://github.com/RetroZelda/tiny3d.git
 fi
 
 cd tiny3d

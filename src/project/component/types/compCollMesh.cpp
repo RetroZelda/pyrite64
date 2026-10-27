@@ -72,9 +72,9 @@ namespace Project::Component::CollMesh
     // we need a part of a collision mesh, by default (and for perf. reasons)
     // the entire mesh is converted by default.
     // generate a unique file for that instance (and do so via a hash to allow sharing)
-    auto meshes = data.filter.filterT3DM(t3dm->model.t3dm.models, obj, false);
+    auto meshes = data.filter.filterT3DM(t3dm->model.t3dm.modelsNoMat, obj, false);
     if(meshes.empty()) { // take all by default
-      for(uint32_t i=0; i<t3dm->model.t3dm.models.size(); ++i) {
+      for(uint32_t i=0; i<t3dm->model.t3dm.modelsNoMat.size(); ++i) {
         meshes.push_back(i);
       }
     }
@@ -94,7 +94,7 @@ namespace Project::Component::CollMesh
     {
       std::unordered_set<std::string> meshNames{};
       for(auto meshIdx : meshes) {
-        meshNames.insert(t3dm->model.t3dm.models[meshIdx].name);
+        meshNames.insert(t3dm->model.t3dm.modelsNoMat[meshIdx].name);
       }
 
       Build::buildT3DCollision(*ctx.project, ctx, meshNames, t3dm->getId(), modelUUID);
@@ -148,7 +148,7 @@ namespace Project::Component::CollMesh
               bool selected = (*val & (1u << i)) != 0;
               auto label = std::string{selected ? ICON_MDI_CHECKBOX_MARKED " " : ICON_MDI_CHECKBOX_BLANK_OUTLINE " "}
                          + layerNames[i] + "##" + std::to_string(i);
-              if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_DontClosePopups)) {
+              if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_NoAutoClosePopups)) {
                 if (!selected) *val |= (1u << i); else *val &= ~(1u << i);
                 changed = true;
               }
@@ -193,13 +193,13 @@ namespace Project::Component::CollMesh
         bool changed = ImTable::addObjProp("Filter", data.filter.meshFilter);
 
         if(changed || data.filter.cache.empty()) {
-          data.filter.filterT3DM(selModel->model.t3dm.models, obj, false);
+          data.filter.filterT3DM(selModel->model.t3dm.modelsNoMat, obj, false);
         }
 
         for(auto idx : data.filter.cache) {
           ImGui::Text("%s@%s",
-            selModel->model.t3dm.models[idx].name.c_str(),
-            selModel->model.t3dm.models[idx].materialName.c_str()
+            selModel->model.t3dm.modelsNoMat[idx].name.c_str(),
+            selModel->model.t3dm.modelsNoMat[idx].materialName.c_str()
           );
         }
 
@@ -213,12 +213,12 @@ namespace Project::Component::CollMesh
     Data &data = *static_cast<Data*>(entry.data.get());
     if (!data.obj3D.isMeshLoaded()) {
       auto asset = ctx.project->getAssets().getEntryByUUID(data.modelUUID.resolve(obj.propOverrides));
-      if (asset && asset->mesh3D) {
-        if (!asset->mesh3D->isLoaded()) {
-          asset->mesh3D->recreate(*ctx.scene);
+      if (asset && asset->meshColl3D) {
+        if (!asset->meshColl3D->isLoaded()) {
+          asset->meshColl3D->recreate(*ctx.scene);
         }
-        data.aabb = asset->mesh3D->getAABB();
-        data.obj3D.setMesh(asset->mesh3D);
+        data.aabb = asset->meshColl3D->getAABB();
+        data.obj3D.setMesh(asset->meshColl3D);
       }
     }
 
@@ -226,12 +226,12 @@ namespace Project::Component::CollMesh
     //data.obj3D.setPos(obj.pos);
 
     auto asset = ctx.project->getAssets().getEntryByUUID(data.modelUUID.value);
-    if (!asset || !asset->mesh3D) {
+    if (!asset || !asset->meshColl3D) {
       return;
     }
 
     data.obj3D.uniform.modelMat = makeModelMatrix(obj, 1.0f / asset->model.autoBaseScale);
-    auto &meshes = data.filter.filterT3DM(asset->model.t3dm.models, obj, false);
+    auto &meshes = data.filter.filterT3DM(asset->model.t3dm.modelsNoMat, obj, false);
 
     data.obj3D.draw(pass, cmdBuff, {
       .partsIndices = meshes,

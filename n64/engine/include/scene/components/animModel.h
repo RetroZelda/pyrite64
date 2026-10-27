@@ -35,14 +35,12 @@ namespace P64::Comp
 
       RingMat4FP matFP{};
       float vertexScale{1.0f};
-      uint8_t layerIdx{0};
+      uint32_t layerRef{0};
       uint8_t flags{0};
 
-      // Lazy file handles: only the selected main/blend anim keeps its .sdata FILE* open.
-      // 'activate' opens (if needed) + attaches + resets to frame 0; 'deactivate' closes the
-      // file unless it is still referenced by the other (main/blend) slot.
+      // Attaches the animation to the skeleton and resets it to frame 0, done on selection
+      // (keyframes stream from ROM, so unselected animations hold no file handles).
       void activateAnim(int16_t idx, T3DSkeleton* skel);
-      void deactivateAnim(int16_t idx);
 
     public:
       // Stagger fields written by AnimController::setAnimStagger

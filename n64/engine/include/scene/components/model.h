@@ -24,8 +24,8 @@ namespace P64::Comp
     T3DModel *model{};
     RingMat4FP matFP{};
     float vertexScale{1.0f};
-    uint16_t assetIdx{0};
-    uint8_t layerIdx{0};
+    uint32_t layerRef{0};
+    uint16_t assetIdx{0}; // the acquired asset, released again on delete
     uint8_t flags{0};
     uint8_t meshIdxCount{0};
     uint8_t meshIndices[];

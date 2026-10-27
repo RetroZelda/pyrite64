@@ -98,7 +98,7 @@ namespace
     // Optional border
     if (style.FrameBorderSize > 0.0f) {
         ImU32 border_col = ImGui::GetColorU32(ImGuiCol_Border);
-        draw_list->AddRect(a, b, border_col, rounding, (int)round_flags, style.FrameBorderSize);
+        draw_list->AddRect(a, b, border_col, rounding, style.FrameBorderSize, round_flags);
     }
 
     // Draw the label text centered inside the rect
@@ -469,6 +469,7 @@ nlohmann::json Editor::Viewport3D::saveState() const
     {"showIcons", showIcons},
     {"showSplines", showSplines},
     {"previewTransforms", previewTransforms},
+    {"previewFog", previewFog},
     {"boundCam", boundCameraUUID},
     {"camRes", useCameraRes},
   };
@@ -482,6 +483,7 @@ void Editor::Viewport3D::loadState(const nlohmann::json &j)
   showIcons = j.value("showIcons", showIcons);
   showSplines = j.value("showSplines", showSplines);
   previewTransforms = j.value("previewTransforms", previewTransforms);
+  previewFog = j.value("previewFog", previewFog);
   boundCameraUUID = j.value("boundCam", (uint64_t)0);
   useCameraRes = j.value("camRes", false);
 }
@@ -973,7 +975,7 @@ void Editor::Viewport3D::draw()
         PropScope::Dispatch enabledScope(camObj->propOverrides, comp.uuid);
         if (comp.enabled.resolve(*camObj) && comp.id == 3) {
           camView = Project::Component::Camera::getView(*camObj, comp);
-          camera.pos = camObj->pos.resolve(camObj->propOverrides);
+          camera.pos = camObj->pos.resolve(camObj->propOverrides) + camView.worldOffset;
           camera.rot = glm::normalize(camObj->rot.resolve(camObj->propOverrides));
           camera.fov = camView.fov;
           camera.isOrtho = camView.isOrtho;
@@ -1334,6 +1336,13 @@ void Editor::Viewport3D::draw()
 
   ImGui::SameLine();
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 4_px);
+  if(ConnectedToggleButton(ICON_MDI_WEATHER_FOG, previewFog, true, true, ImVec2(32_px, 24_px))) {
+    previewFog = !previewFog;
+  }
+  ImGui::SetItemTooltip("%s Fog", previewFog ? "Hide" : "Preview");
+
+  ImGui::SameLine();
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() - 4_px);
   if(ConnectedToggleButton(ICON_MDI_IMAGE_OUTLINE, showIcons && !cleanPreview, true, true, ImVec2(32_px, 24_px))) {
     showIcons = !showIcons;
   }
@@ -1494,7 +1503,7 @@ void Editor::Viewport3D::draw()
     ImU32 fillCol = ImGui::GetColorU32(ImGuiCol_DragDropTarget, 0.15f);
     ImU32 borderCol = ImGui::GetColorU32(ImGuiCol_DragDropTarget, 0.85f);
     drawList->AddRectFilled(rectStartScreen, rectEndScreen, fillCol);
-    drawList->AddRect(rectStartScreen, rectEndScreen, borderCol, 0.0f, 0, 1.5f);
+    drawList->AddRect(rectStartScreen, rectEndScreen, borderCol, 0.0f, 1.5f);
   }
 
   ImDrawList* draw_list = ImGui::GetWindowDrawList();

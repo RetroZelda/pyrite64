@@ -73,7 +73,8 @@ bool Editor::ModelEditor::draw(ImGuiID defDockId)
 
       auto oldMat = mat;
 
-      Editor::Helpers::drawMaterialSettings(mat, labelWidth, /*includeTextures*/ true, /*usePlaceholder*/ true);
+      Editor::Helpers::drawMaterialSettings(mat, labelWidth, /*includeTextures*/ true, /*usePlaceholder*/ true,
+        /*emitterMode*/ false, /*ownerUUID*/ assetUUID);
 
       ImGui::Dummy({0, 2_px});
 

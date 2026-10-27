@@ -1,0 +1,66 @@
+#include "script/userScript.h"
+#include "scene/sceneManager.h"
+#include "__STRUCT__.h"
+
+namespace P64::Script::__UUID__
+{
+  P64_DATA_TYPE(User::__STRUCT__);
+
+  // The following functions are called by the engine at different points in the object's lifecycle.
+  // If you don't need a specific function you can remove it.
+
+  void init(Object& obj, Data *data)
+  {
+    // initialization, this is called once when the object spawns
+  }
+
+  void destroy(Object& obj, Data *data)
+  {
+    // clean-up, this is called when the object gets deleted
+  }
+
+  void update(Object& obj, Data *data, float deltaTime)
+  {
+    // this is called once every frame, put your main logic here
+  }
+
+  void fixedUpdate(Object& obj, Data *data, float fixedDeltaTime)
+  {
+    // this is called on the fixed physics timestep before collision/physics are stepped
+  }
+
+  void draw(Object& obj, Data *data, float deltaTime)
+  {
+    // this is called once every frame, and for every active camera.
+    // Put your drawing code here
+  }
+
+  void onEnable(Object& obj, Data *data)
+  {
+    // this is called when the object is enabled and active in scene
+  }
+
+  void onDisable(Object& obj, Data *data)
+  {
+    // this is called when the object is disabled and inactive in scene
+  }
+
+  void onReady(Object& obj, Data *data)
+  {
+    // object is fully initialized, no update call has happened yet
+  }
+
+  void onEvent(Object& obj, Data *data, const ObjectEvent &event)
+  {
+    // generic events an object can receive
+    switch(event.type)
+    {
+      // you can check for your own custom types here
+    }
+  }
+
+  void onCollision(Object& obj, Data *data, const Coll::CollEvent& event)
+  {
+    // collision callbacks, only used if any collider is attached
+  }
+}

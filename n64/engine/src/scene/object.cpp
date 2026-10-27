@@ -7,6 +7,7 @@
 #include "scene/componentTable.h"
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
+#include "scene/components/code.h"
 
 P64::Object::~Object()
 {
@@ -21,6 +22,17 @@ P64::Object::~Object()
 
     compDef.initDel(*this, dataPtr, nullptr);
   }
+}
+
+void* P64::Object::getScriptDataByType(const void* typeTag) const
+{
+  auto compRefs = getCompRefs();
+  for (uint32_t i=0; i<compCount; ++i) {
+    if(compRefs[i].type != Comp::Code::ID)continue;
+    auto code = (Comp::Code*)((char*)this + compRefs[i].offset);
+    if(*code->script->dataType == typeTag)return code->getCodeData();
+  }
+  return nullptr;
 }
 
 void P64::Object::setEnabled(bool isEnabled)

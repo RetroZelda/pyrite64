@@ -59,6 +59,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
 
     srcDecl += "  namespace " + uuidStr + " {\nstruct Data;\n";
     srcDecl += " extern uint16_t DATA_SIZE;\n";
+    srcDecl += " extern const void* DATA_TYPE;\n";
     if(hasInit)srcDecl += "void init(Object& obj, Data *data);\n";
     if(hasDestroy)srcDecl += "void destroy(Object& obj, Data *data);\n";
     if(hasReady)srcDecl += "void onReady(Object& obj, Data *data);\n";
@@ -78,8 +79,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasInit)srcEntries += " .init = (FuncObjInit)" + uuidStr + "::init,\n";
     if(hasDestroy)srcEntries += " .destroy = (FuncObjInit)" + uuidStr + "::destroy,\n";
     if(hasEnable)srcEntries += " .onEnable = (FuncObjInit)" + uuidStr + "::onEnable,\n";
-    if(hasReady)srcEntries += " .onReady = (FuncObjInit)" + uuidStr + "::onReady,\n";
     if(hasDisable)srcEntries += " .onDisable = (FuncObjInit)" + uuidStr + "::onDisable,\n";
+    if(hasReady)srcEntries += " .onReady = (FuncObjInit)" + uuidStr + "::onReady,\n";
     if(hasUpdate)srcEntries += " .update = (FuncObjDataDelta)" + uuidStr + "::update,\n";
     if(hasFixedUpdate)srcEntries += " .fixedUpdate = (FuncObjDataDelta)" + uuidStr + "::fixedUpdate,\n";
     if(hasDraw)srcEntries += " .draw = (FuncObjDataDelta)" + uuidStr + "::draw,\n";
@@ -88,6 +89,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasFocus)srcEntries += " .onFocus = (FuncObjInit)" + uuidStr + "::onFocus,\n";
     if(hasBlur)srcEntries += " .onBlur = (FuncObjInit)" + uuidStr + "::onBlur,\n";
     if(hasActivate)srcEntries += " .onActivate = (FuncObjInit)" + uuidStr + "::onActivate,\n";
+    srcEntries += " .dataType = &" + uuidStr + "::DATA_TYPE,\n";
     srcEntries += "},\n";
 
     scriptNames += "\t\t[";

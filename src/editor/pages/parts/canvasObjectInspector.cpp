@@ -524,8 +524,8 @@ namespace
         if (!drawBindBadge(p)) {
             int cur = findBlendMode(p.value);
             ImGui::SetNextItemWidth(-80.0f);
-            if (ImGui::Combo("##v", &cur, [](void*, int n, const char** out) {
-                *out = BLEND_MODES[n].label; return true;
+            if (ImGui::Combo("##v", &cur, [](void*, int n) -> const char* {
+                return BLEND_MODES[n].label;
             }, nullptr, BLEND_MODE_COUNT)) {
                 if (cur == 0) p.value = 0;
                 else p.value = std::string(BLEND_MODES[cur].constant);
@@ -545,8 +545,8 @@ namespace
         if (!drawBindBadge(p)) {
             int cur = findCombiner(p.value);
             ImGui::SetNextItemWidth(-80.0f);
-            if (ImGui::Combo("##v", &cur, [](void*, int n, const char** out) {
-                *out = COMBINERS[n].label; return true;
+            if (ImGui::Combo("##v", &cur, [](void*, int n) -> const char* {
+                return COMBINERS[n].label;
             }, nullptr, COMBINER_COUNT)) {
                 p.value = std::string(COMBINERS[cur].constant);
                 Editor::CanvasHistory::markChanged("Edit Combiner");

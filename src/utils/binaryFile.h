@@ -4,6 +4,7 @@
 */
 #pragma once
 
+#include <algorithm>
 #include <cstdio>
 #include <unordered_map>
 #include <bit>
@@ -28,7 +29,9 @@ namespace Utils
     ASSET_SPRITE,
     OBJECT_REF,
     PREFAB,
-    ASSET_EMITTER, // append only — values are baked into shipped scenes/components
+    BOOL,  // 1 byte, stored as "0"/"1"
+    COLOR, // 4 bytes (color_t: r,g,b,a), stored as "r,g,b,a" in 0-255
+    ASSET_EMITTER, // editor-side only (parsed from the script source each time), the value is never stored
   };
 
   class BinaryFile
@@ -121,6 +124,14 @@ namespace Utils
           case s8: write<int8_t>(std::stol(str)); break;
           case OBJECT_REF: write<uint32_t>(std::stoul(str)); break;
           case PREFAB: write<uint32_t>(std::stoul(str)); break;
+          case BOOL: write<uint8_t>((str == "1" || str == "true") ? 1 : 0); break;
+          case COLOR: {
+            auto values = parseFloatList(str);
+            values.resize(4, 255.0f);
+            for(size_t i=0; i<4; ++i) {
+              write<uint8_t>(static_cast<uint8_t>(std::clamp(values[i], 0.0f, 255.0f)));
+            }
+          } break;
           case VEC3:
           case QUAT: {
             auto values = parseFloatList(str);

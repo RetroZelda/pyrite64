@@ -42,6 +42,7 @@ namespace Renderer
     uint32_t otherModeH;
     uint32_t flags;
 
+    glm::vec4 fogColor;
     std::array<glm::vec4, 6> lightColor;
     std::array<glm::vec4, 6> lightDir;
     glm::vec4 colPrim;
@@ -56,11 +57,13 @@ namespace Renderer
     glm::u32vec2 blender;
     float alphaClip;
     float depthOffset; // clip-space, emulates 't3d_state_set_depth_offset'
+
+    glm::vec2 fogRange;
   };
 
   struct UniformsObject
   {
-    glm::mat4 modelMat{};
+    glm::mat4 modelMat{1.0f};
     UniformN64Material mat{};
     uint32_t objectID{};
   };

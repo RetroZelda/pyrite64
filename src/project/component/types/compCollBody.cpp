@@ -255,7 +255,7 @@ namespace Project::Component::CollBody
               bool selected = (*val & (1u << i)) != 0;
               auto label = std::string{selected ? ICON_MDI_CHECKBOX_MARKED " " : ICON_MDI_CHECKBOX_BLANK_OUTLINE " "}
                          + layerNames[i] + "##" + std::to_string(i);
-              if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_DontClosePopups)) {
+              if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_NoAutoClosePopups)) {
                 if (!selected) *val |= (1u << i); else *val &= ~(1u << i);
                 changed = true;
               }

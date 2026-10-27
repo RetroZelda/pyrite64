@@ -83,6 +83,7 @@ namespace
 
   std::string scriptName{};
   int scriptType{0};
+  bool scriptSharedData{false};
 }
 
 void Editor::AssetsBrowser::draw() {
@@ -215,7 +216,7 @@ void Editor::AssetsBrowser::draw() {
     },
     TabDef{
       .name = ICON_MDI_SCRIPT_OUTLINE "  Scripts",
-      .fileTypes = {FileType::CODE_OBJ, FileType::CODE_GLOBAL, FileType::NODE_GRAPH}
+      .fileTypes = {FileType::CODE_OBJ, FileType::CODE_GLOBAL, FileType::NODE_GRAPH, FileType::EDITOR_SCRIPT}
     },
     TabDef{
       .name = ICON_MDI_PACKAGE_VARIANT_CLOSED "  Prefabs",
@@ -668,6 +669,8 @@ void Editor::AssetsBrowser::draw() {
         iconTxt = ICON_MDI_LAYERS_OUTLINE;
       } else if (asset.type == FileType::EMITTER) {
         iconTxt = ICON_MDI_CREATION;
+      } else if (asset.type == FileType::EDITOR_SCRIPT) {
+        iconTxt = ICON_MDI_LANGUAGE_JAVASCRIPT;
       }
     }
 
@@ -1002,13 +1005,19 @@ void Editor::AssetsBrowser::draw() {
     ImTable::add("Name");
     ImGui::InputText("##ScriptName", &scriptName);
 
+    if(scriptType == 0) {
+      ImTable::add("Shared Data");
+      ImGui::Checkbox("##SharedData", &scriptSharedData);
+      ImGui::SetItemTooltip("Puts the script data into a header, so other scripts can access it");
+    }
+
     ImTable::end();
     // right align buttons
     ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 112_px);
     if (ImGui::Button("Create"))
     {
       bool res{false};
-      if(scriptType == 0)res = ctx.project->getAssets().createScript(scriptName, false, newScriptDir);
+      if(scriptType == 0)res = ctx.project->getAssets().createScript(scriptName, false, newScriptDir, scriptSharedData);
       if(scriptType == 1)res = ctx.project->getAssets().createScript(scriptName, true, newScriptDir);
       if(scriptType == 2)res = ctx.project->getAssets().createNodeGraph(scriptName) != 0;
 

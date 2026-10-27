@@ -4,6 +4,7 @@
 */
 #include "actions.h"
 #include "pyrite64_version.h"
+#include "script/scriptHost.h"
 
 #include <cstdlib>
 #include <unordered_set>
@@ -37,6 +38,13 @@ namespace
     #else
       setenv("PATH", path.c_str(), 1);
     #endif
+  }
+
+  fs::path getToolchainPath(const std::string &projectN64Inst)
+  {
+    // the project path may be an MSYS2 path on Windows, only use it if valid natively
+    if(!projectN64Inst.empty() && fs::exists(projectN64Inst))return projectN64Inst;
+    return ctx.toolchain.getState().toolchainPath;
   }
 
   /// Saves the project and kicks off the build on a worker thread. See Type::PROJECT_BUILD.
@@ -102,10 +110,12 @@ namespace Editor::Actions
        Utils::Logger::log("Open Project: " + path);
        // Remember the outgoing project's open windows before it is torn down.
        if(ctx.editorScene && ctx.project) ctx.editorScene->onProjectClosing();
+       ScriptHost::stop();
        delete ctx.project;
        UndoRedo::getHistory().clear();
        try {
          ctx.project = new Project::Project(path);
+         ScriptHost::start(*ctx.project);
          // Custom node definitions (<project>/nodes/*.js) are loaded by the Project ctor.
          if(ctx.project) {
            // The one place a project is checked for outdated files: everything past this point
@@ -177,6 +187,20 @@ namespace Editor::Actions
       });
     });
 
+    registerAction(Type::PROJECT_GEN_VSCODE, [](const std::string&) {
+      if (!ctx.project)return false;
+      bool res = Build::generateVSCodeProject(
+        ctx.project->getPath(), ctx.project->getConfigPath(),
+        getToolchainPath(ctx.project->conf.pathN64Inst)
+      );
+      if(res) {
+        Editor::Noti::add(Editor::Noti::Type::SUCCESS, "VSCode project generated!");
+      } else {
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to generate VSCode project, see log");
+      }
+      return res;
+    });
+
     registerAction(Type::PROJECT_CREATE, [](const std::string &payload)
     {
       if(ctx.project)return false;
@@ -199,15 +223,30 @@ namespace Editor::Actions
       }
       
       // copy example project as template
-      fs::copy("n64/examples/empty", newPath, 
+      std::string templateName = args.value("template", "empty");
+      fs::path templatePath = fs::path{"n64/examples"} / templateName;
+      if(templateName.empty() || templateName.find_first_of("/\\.") != std::string::npos
+        || !fs::exists(templatePath / "project.p64proj"))
+      {
+        Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to create project, invalid template: " + templateName);
+        return false;
+      }
+
+      fs::copy(templatePath, newPath,
         fs::copy_options::recursive | fs::copy_options::overwrite_existing
       );
 
-      // clear some temp files
-      fs::remove(newPath / "p64_project.z64");
+      // clear build outputs the template may contain
+      for(auto &entry : fs::directory_iterator{newPath}) {
+        auto ext = entry.path().extension();
+        if(ext == ".z64" || ext == ".pak" || ext == ".ram")fs::remove(entry.path());
+      }
       fs::remove(newPath / "Makefile");
       fs::remove_all(newPath / "build");
       fs::remove_all(newPath / "filesystem");
+      fs::remove_all(newPath / "metadata");
+      fs::remove_all(newPath / ".vscode");
+      fs::remove_all(newPath / "engine" / "build");
 
       // open project.json and patch name
       auto configPath = (newPath / "project.p64proj").string();
@@ -216,6 +255,7 @@ namespace Editor::Actions
       configJSON["romName"] = args["rom"];
       Utils::FS::saveTextFile(configPath, configJSON.dump(2));
 
+      Build::generateVSCodeProject(newPath, configPath, getToolchainPath(""));
       return true;
     });
 

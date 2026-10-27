@@ -10,9 +10,14 @@ namespace P64::Script::__UUID__
     // Types that can be set in the editor:
     // - uint8_t, int8_t, uint16_t, int16_t, uint32_t, int32_t
     // - float
+    // - bool (checkbox)
+    // - color_t (color picker, default e.g. `color_t tint = {255, 0, 0, 255};`)
     // - fm_vec3_t, fm_quat_t
     // - AssetRef<sprite_t>
     // - ObjectRef (only objects placed directly in a scene: it is 0 inside prefabs and for spawned objects)
+    //
+    // For numbers you can add [[P64::Range(0, 10)]] to edit them as a slider,
+    // or [[P64::Min(0)]] / [[P64::Max(10)]] to only clamp the entered value.
     //
     // For unsigned integers (uint8_t/uint16_t/uint32_t) you can add a
     // [[P64::Bitmask("0=Fire, 1=Water, 2=Earth")]] attribute to edit them as a
@@ -24,6 +29,9 @@ namespace P64::Script::__UUID__
     //
     // Avoid member names the object already uses (pos, rot, scale, ...):
     // prefab instances can't override such a member while that property is overridden.
+    //
+    // [[P64::Group("Your Name")]] puts this and all following members into a group.
+    // Until the next or an empty group ends it.
     //
     // Other types can be used but are not exposed in the editor.
   );

@@ -120,13 +120,16 @@ namespace Editor::Helpers
    * @param emitterMode     only show the settings the emitter build actually bakes into
    *                        .emit64 (combiner, filter, alpha-clip, blend, fog, prim/env) —
    *                        everything else would be dead UI for particles.
+   * @param ownerUUID       asset the material belongs to (0 = none), the texture picker
+   *                        opens in its folder
    */
   inline void drawMaterialSettings(
     Project::Assets::Material &mat,
     const ImVec2 &labelWidth,
     bool includeTextures = true,
     bool usePlaceholder = true,
-    bool emitterMode = false)
+    bool emitterMode = false,
+    uint64_t ownerUUID = 0)
   {
     auto subSection = [&labelWidth](const char* name, auto cb)
     {
@@ -232,10 +235,10 @@ namespace Editor::Helpers
           if(tex.dynType.value == tex.DYN_TYPE_FULL) {
             ImTable::addProp("Size", tex.texSize);
           } else {
-            TextureEditor::draw(tex);
+            TextureEditor::draw(tex, ownerUUID);
           }
         } else {
-          TextureEditor::draw(tex);
+          TextureEditor::draw(tex, ownerUUID);
         }
 
         ImGui::PopID();

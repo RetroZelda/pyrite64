@@ -178,7 +178,7 @@ namespace P64
 
       [[nodiscard]] SceneConf& getConf() { return conf; }
       [[nodiscard]] uint16_t getId() const { return id; }
-      [[nodiscard]] Camera* getCamera(uint32_t index = 0) { return cameras[index]; }
+      [[nodiscard]] Camera* getCamera(uint32_t index = 0) { return index < cameras.size() ? cameras[index] : nullptr; }
       [[nodiscard]] Camera& getActiveCamera() { return *camMain; }
       [[nodiscard]] Camera* getActiveCameraPtr() { return camMain; } // null-safe (may be nullptr)
 

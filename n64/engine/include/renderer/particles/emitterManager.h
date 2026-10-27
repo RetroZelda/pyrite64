@@ -65,6 +65,8 @@ namespace P64::EmitterManager
   // `camBaseSize` = camera-far-derived tpx base size (see DrawLayer::drawPtx); emitters
   // scale it per-instance for their normalized size bytes.
   void draw(float camBaseSize);
+  // true if draw() would draw anything (a playing emitter)
+  [[nodiscard]] bool hasDrawable();
   void destroyAll();
 
   // create(): preloaded & NOT playing, refCount=1 — the caller MUST destroy() it.

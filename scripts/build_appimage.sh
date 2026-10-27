@@ -11,7 +11,7 @@
 # Notes:
 #  - data/ and n64/ are placed next to the binary so SDL_GetBasePath() finds them.
 #  - linuxdeploy bundles libstdc++/libgcc; glibc is NOT bundled, so build on the
-#    oldest glibc you want to support (CI uses ubuntu-22.04 => glibc 2.35).
+#    oldest glibc you want to support (CI uses ubuntu-24.04 => glibc 2.39).
 #  - Tool AppImages run without FUSE via APPIMAGE_EXTRACT_AND_RUN.
 set -euo pipefail
 
