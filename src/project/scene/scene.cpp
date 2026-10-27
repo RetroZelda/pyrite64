@@ -431,10 +431,10 @@ void Project::Scene::unpackPrefabInstance(uint32_t uuid)
 
     addObject(*parent, child);
 
-    if(!defNode.isPrefabInstance()) {
-      for(const auto &gc : defNode.children) {
-        build(*gc, child, cwPos, cwRot, cwScale);
-      }
+    // A plain node's children, or for a nested instance the objects added to it in the prefab
+    // (its own definition stays thin). They become world-placed scene objects under it.
+    for(const auto &gc : defNode.children) {
+      build(*gc, child, cwPos, cwRot, cwScale);
     }
   };
 
