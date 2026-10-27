@@ -167,6 +167,8 @@ void P64::Camera::setLookAt(const fm_vec3_t &newPos, const fm_vec3_t &newTarget,
   // render units: a hard FP-cast-overflow crash. A misbehaving camera (e.g. a follow script that
   // flings the camera far from origin on its first frame) must NOT take down the whole game, so
   // clamp the eye into range and warn. The level itself stays put; only the bad camera is reined in.
+  // The stored position is clamped as well: whatever follows the camera (e.g. a skybox with a
+  // copy-camera constraint) builds its own model matrix from getPos() and would overflow the same way.
   {
     float l2 = eye.x*eye.x + eye.y*eye.y + eye.z*eye.z;
     constexpr float SAFE = 30000.0f;
@@ -178,6 +180,7 @@ void P64::Camera::setLookAt(const fm_vec3_t &newPos, const fm_vec3_t &newTarget,
       }
       float s = SAFE / sqrtf(l2);
       eye.x *= s; eye.y *= s; eye.z *= s;
+      pos = newPos * s;
     }
   }
 
@@ -190,6 +193,7 @@ void P64::Camera::setLookAt(const fm_vec3_t &newPos, const fm_vec3_t &newTarget,
   if(fx*fx + fy*fy + fz*fz < 1e-3f) {            // eye ~ target -> look toward -Z
     safeTarget = eye; safeTarget.z -= 1.0f;
     fx = 0.0f; fy = 0.0f; fz = -1.0f;
+    target = safeTarget * Renderer::getInvRenderScale();
   }
   if(safeUp.x*safeUp.x + safeUp.y*safeUp.y + safeUp.z*safeUp.z < 1e-6f) { // up ~0 -> +Y
     safeUp.x = 0.0f; safeUp.y = 1.0f; safeUp.z = 0.0f;
@@ -204,6 +208,7 @@ void P64::Camera::setLookAt(const fm_vec3_t &newPos, const fm_vec3_t &newTarget,
     if(fabsf(ny) > 0.9f) { safeUp.x = 0.0f; safeUp.y = 0.0f; safeUp.z = -1.0f; }
     else                 { safeUp.x = 0.0f; safeUp.y = 1.0f; safeUp.z = 0.0f; }
   }
+  up = safeUp;
 
   t3d_mat4_look_at(&viewMatrix, &eye, &safeTarget, &safeUp);
   needsProjUpdate = true;
