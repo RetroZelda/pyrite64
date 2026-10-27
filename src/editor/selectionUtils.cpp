@@ -69,6 +69,21 @@ namespace Editor::SelectionUtils
     AuthTarget out;
     out.authNode = rootInstance;
     out.relPath = ctx.selSubPath;
+
+    // The build writes an object added to a nested instance with a fresh scope, so no override
+    // from above (the scene instance, or an instance of the edited prefab) reaches it or anything
+    // below it. Such a node is shown the way the build resolves it, from the last added object
+    // down, without any override to edit.
+    int lastAdded = -1;
+    for(size_t i = 0; i < steps.size(); i++) {
+      if(steps[i].additive) lastAdded = (int)i;
+    }
+    auto showReadOnly = [&]() {
+      out.readOnly = true;
+      out.authNode = steps[lastAdded].node;
+      out.relPath.assign(ctx.selSubPath.begin() + lastAdded + 1, ctx.selSubPath.end());
+    };
+
     if(ctx.isPrefabEditing(rootInstance->uuid)) {
       // The first instance whose definition the path descends into (excluding the target
       // itself). Objects added to an instance stay in the edited file, so those steps
@@ -77,25 +92,16 @@ namespace Editor::SelectionUtils
       for(size_t i = 0; i + 1 < steps.size(); i++) {
         if(steps[i].node->isPrefabInstance() && !steps[i + 1].additive) { ai = (int)i; break; }
       }
-      if(ai >= 0) {
+      if(ai < 0) {
+        out.directDefEdit = true; // the path stays in the edited prefab's file
+      } else if(lastAdded > ai) {
+        showReadOnly();           // added inside the nested prefab: its overrides never get there
+      } else {
         out.authNode = steps[ai].node;
         out.relPath.assign(ctx.selSubPath.begin() + ai + 1, ctx.selSubPath.end());
-      } else {
-        out.directDefEdit = true;
       }
-    } else {
-      // The build writes an object added to a nested instance with a fresh scope, so the
-      // scene instance's overrides never reach it or anything below it. Show it the way the
-      // build resolves it: from the last such object down, without any override to edit.
-      int last = -1;
-      for(size_t i = 0; i < steps.size(); i++) {
-        if(steps[i].additive) last = (int)i;
-      }
-      if(last >= 0) {
-        out.readOnly = true;
-        out.authNode = steps[last].node;
-        out.relPath.assign(ctx.selSubPath.begin() + last + 1, ctx.selSubPath.end());
-      }
+    } else if(lastAdded >= 0) {
+      showReadOnly();
     }
     return out;
   }
