@@ -126,6 +126,11 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     add(static_cast<Rec>(reinterpret_cast<uintptr_t>(user)), ev);
   }
 
+  void onLogic(const Events::Event& ev, void* user)
+  {
+    add(Rec::Logic, ev, static_cast<uint16_t>(reinterpret_cast<uintptr_t>(user)));
+  }
+
   void onCurrentSceneLoaded(const Events::Event& ev, [[maybe_unused]] void* user)
   {
     add(Rec::CurrentSceneLoaded, ev);
@@ -298,6 +303,119 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return expectExactly(e);
   }
 
+  uint32_t frameOf(Rec type)
+  {
+    for(const auto &r : records) if(r.type == type) return r.frame;
+    return ANY;
+  }
+
+  uint32_t countOf(Rec type)
+  {
+    uint32_t n = 0;
+    for(const auto &r : records) n += r.type == type ? 1 : 0;
+    return n;
+  }
+
+  const Record* findRec(Rec type)
+  {
+    for(const auto &r : records) if(r.type == type) return &r;
+    return nullptr;
+  }
+
+  bool checkContacts()
+  {
+    constexpr uint16_t ZONE = 2, MOVER = 3, LAMP = 4, DOOMED = 5;
+    bool ok = true;
+    for(auto rec : {Rec::ZoneEnter, Rec::ZoneExit, Rec::ZoneOccupied, Rec::ZoneEmptied, Rec::ZoneEnterCb,
+                    Rec::ZoneExitCb, Rec::LampReady, Rec::LampDisabled, Rec::LampEnabled, Rec::DoomedDestroyed,
+                    Rec::ChainRelayed, Rec::ChainDelayed}) {
+      if(countOf(rec) != 1) {
+        debugf("  %s recorded %lu times, expected once\n", REC_NAMES[(uint32_t)rec], (unsigned long)countOf(rec));
+        ok = false;
+      }
+    }
+    if(!ok) { printRecords(); return false; }
+
+    const uint32_t enter = frameOf(Rec::ZoneEnter);
+    const uint32_t exit = frameOf(Rec::ZoneExit);
+    ok &= expectTrue(enter > 2 && exit > enter, "the mover enters, then leaves");
+    ok &= expectTrue(findRec(Rec::ZoneEnter)->value == MOVER && findRec(Rec::ZoneEnter)->sender == ZONE, "Enter: value is the mover, sender the zone");
+    ok &= expectTrue(findRec(Rec::ZoneEnter)->instigator == MOVER, "Enter: the mover is the instigator");
+    ok &= expectTrue(findRec(Rec::ZoneExit)->value == MOVER, "Exit: value is the mover");
+    ok &= expectTrue(frameOf(Rec::ZoneOccupied) == enter && frameOf(Rec::ZoneEmptied) == exit, "Occupied with the first enter, Emptied with the last exit");
+    ok &= expectTrue(frameOf(Rec::ZoneEnterCb) == enter && findRec(Rec::ZoneEnterCb)->value == MOVER, "onCollisionEnter with the mover's id");
+    ok &= expectTrue(frameOf(Rec::ZoneExitCb) == exit && findRec(Rec::ZoneExitCb)->value == MOVER, "onCollisionExit with the mover's id");
+    ok &= expectTrue(frameOf(Rec::LampReady) == 1 && findRec(Rec::LampReady)->value == LAMP, "Ready in the first frame");
+    ok &= expectTrue(frameOf(Rec::LampDisabled) == enter + 1, "Disable input applies at the next frame's state change");
+    ok &= expectTrue(frameOf(Rec::LampEnabled) == exit + 1, "a disabled object still receives Enable");
+    ok &= expectTrue(frameOf(Rec::DoomedDestroyed) == exit && findRec(Rec::DoomedDestroyed)->value == DOOMED, "Destroyed fires when removal is requested");
+    ok &= expectTrue(frameOf(Rec::ChainRelayed) == enter, "Relay passes Enter on in the same drain");
+    ok &= expectTrue(frameOf(Rec::ChainDelayed) == enter + 3, "Frame Delay of 3 frames");
+    ok &= expectTrue(findRec(Rec::ChainDelayed)->instigator == MOVER, "the delay keeps the instigator");
+    ok &= expectTrue(SceneManager::getCurrent().getObjectById(DOOMED) == nullptr, "the destroyed object is gone");
+    if(!ok) printRecords();
+    return ok;
+  }
+
+  // the (frame, value) pairs recorded for one built-in object output
+  bool expectLogic(uint16_t tag, std::initializer_list<std::pair<uint32_t, uint32_t>> expected)
+  {
+    std::vector<std::pair<uint32_t, uint32_t>> got{};
+    for(const auto &r : records) {
+      if(r.type == Rec::Logic && r.obj == tag) got.push_back({r.frame, r.value});
+    }
+    bool ok = got.size() == expected.size();
+    size_t i = 0;
+    for(const auto &e : expected) {
+      if(!ok)break;
+      ok = (e.first == ANY || got[i].first == e.first) && (e.second == ANY || got[i].second == e.second);
+      ++i;
+    }
+    if(!ok) {
+      const char* name = "?";
+      for(const auto &n : LOGIC_NAMES) if(n.tag == tag) name = n.name;
+      debugf("  %s: expected %lu outputs, got %lu:", name, (unsigned long)expected.size(), (unsigned long)got.size());
+      for(const auto &g : got) debugf(" (frame %lu, value %lu)", (unsigned long)g.first, (unsigned long)g.second);
+      debugf("\n");
+    }
+    return ok;
+  }
+
+  bool checkLogic()
+  {
+    bool ok = true;
+    ok &= expectLogic(1,  {{2, 1}, {5, 3}});           // Once: Reset re-arms it
+    ok &= expectLogic(2,  {{2, 1}, {3, 2}, {4, 1}});   // Counter.Changed
+    ok &= expectLogic(3,  {{3, 2}});                   // Counter.Reached at the target
+    ok &= expectLogic(4,  {{3, 0}, {5, 0}});           // All: A+B, then B+A after the auto reset
+    ok &= expectLogic(5,  {{3, 10}});                  // Compare.Equal
+    ok &= expectLogic(6,  {{2, 5}});                   // Compare.Less
+    ok &= expectLogic(7,  {{4, 20}});                  // Compare.Greater
+    ok &= expectLogic(8,  {{2, 1}, {6, 3}});           // Gate.Passed before Close and after Reset
+    ok &= expectLogic(9,  {{4, 2}});                   // Gate.Blocked while closed
+    ok &= expectLogic(10, {{2, 0}, {4, 0}, {6, 0}});   // Toggle.A
+    ok &= expectLogic(11, {{3, 0}});                   // Toggle.B
+    ok &= expectLogic(12, {{2, 0}, {5, 0}});           // Sequence.Step1, looping after 3 steps
+    ok &= expectLogic(13, {{3, 0}});
+    ok &= expectLogic(14, {{4, 0}});
+    ok &= expectLogic(15, {{2, 0}});                   // Random with one output
+    ok &= expectLogic(16, {{ANY, 9}});                 // Delay: once, later, with Start's value
+    ok &= expectLogic(17, {{2, 4}, {6, 6}});           // Relay: nothing while disabled
+    ok &= expectLogic(18, {{3, 77}});                  // Message Bridge: message out, message in
+    ok &= expectLogic(19, {{2, ANY}});                 // Spawner.Spawned
+    ok &= expectLogic(20, {{5, 55}});                  // Frame Delay of 3 frames
+    for(const auto &r : records) {
+      if(r.type == Rec::Logic && r.obj == 16) ok &= expectTrue(r.frame >= 3 && r.frame <= 6, "Delay of 0.05 s elapses after a few frames");
+    }
+
+    const Record* blip = findRec(Rec::BlipSpawned);
+    uint32_t spawnedId = 0;
+    for(const auto &r : records) if(r.type == Rec::Logic && r.obj == 19) spawnedId = r.value;
+    ok &= expectTrue(blip && blip->frame == 3 && blip->value == spawnedId && spawnedId >= 0x100, "the spawned prefab exists next frame with the reported id");
+    if(!ok) printRecords();
+    return ok;
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -307,6 +425,8 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Scene change keeps global only", 2, 3,  checkCarry},
     {"Post from an interrupt",        2, 8,  checkIrq},
     {"Pins, bindings and send()",     3, 6,  checkDoor},
+    {"Collider enter/exit, object pins", 4, 26, checkContacts},
+    {"Built-in event objects",        5, 9,  checkLogic},
   };
 
   void runStep()
@@ -365,6 +485,21 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     Events::listen(STALE,       onRecord, tag(Rec::Stale));
     Events::listen(IRQ,         onRecord, tag(Rec::Irq));
     Events::listen(TRIGGER_SPAWNED, onRecord, tag(Rec::TriggerSpawned));
+
+    // phase 3
+    Events::listen("scene::Zone.Enter"_event,      onRecord, tag(Rec::ZoneEnter));
+    Events::listen("scene::Zone.Exit"_event,       onRecord, tag(Rec::ZoneExit));
+    Events::listen("scene::Zone.Occupied"_event,   onRecord, tag(Rec::ZoneOccupied));
+    Events::listen("scene::Zone.Emptied"_event,    onRecord, tag(Rec::ZoneEmptied));
+    Events::listen("scene::Lamp.Ready"_event,      onRecord, tag(Rec::LampReady));
+    Events::listen("scene::Lamp.Disabled"_event,   onRecord, tag(Rec::LampDisabled));
+    Events::listen("scene::Lamp.Enabled"_event,    onRecord, tag(Rec::LampEnabled));
+    Events::listen("scene::Doomed.Destroyed"_event,onRecord, tag(Rec::DoomedDestroyed));
+    Events::listen("scene::Chain.Relayed"_event,   onRecord, tag(Rec::ChainRelayed));
+    Events::listen("scene::Chain.Delayed"_event,   onRecord, tag(Rec::ChainDelayed));
+    for(const auto &logic : LOGIC_NAMES) {
+      Events::listen(logic.id, onLogic, reinterpret_cast<void*>(static_cast<uintptr_t>(logic.tag)));
+    }
   }
 
   void onScenePreLoad()

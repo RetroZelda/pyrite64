@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "uuid": 735700001,
+  "obj": {
+    "children": [],
+    "components": [
+      {
+        "id": 0,
+        "name": "Code",
+        "uuid": 5016,
+        "enabled": true,
+        "data": {
+          "args": {},
+          "script": 14119916324418767194
+        }
+      }
+    ],
+    "enabled": true,
+    "name": "Blip",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "selectable": true,
+    "uuid": 5017,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

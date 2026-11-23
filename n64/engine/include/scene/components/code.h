@@ -5,6 +5,7 @@
 #pragma once
 #include "script/scriptTable.h"
 #include "scene/object.h"
+#include "scene/objectFlags.h"
 
 namespace Coll
 {
@@ -26,6 +27,8 @@ namespace P64::Comp
     static constexpr uint32_t FN_ON_DISABLE   = 1 << 6;
     static constexpr uint32_t FN_ON_READY     = 1 << 7;
     static constexpr uint32_t FN_INPUT        = 1 << 8; // Fork: event graph
+    static constexpr uint32_t FN_COLL_ENTER   = 1 << 9;
+    static constexpr uint32_t FN_COLL_EXIT    = 1 << 10;
 
     // store direct pointer to avoid lookup each time
     Script::ScriptEntry *script;
@@ -75,6 +78,9 @@ namespace P64::Comp
       if(data->script->onDisable) data->usedFunctions |= FN_ON_DISABLE;
       if(data->script->onReady) data->usedFunctions |= FN_ON_READY;
       if(data->script->onInput) data->usedFunctions |= FN_INPUT;
+      if(data->script->onCollEnter) data->usedFunctions |= FN_COLL_ENTER;
+      if(data->script->onCollExit) data->usedFunctions |= FN_COLL_EXIT;
+      if(data->usedFunctions & (FN_COLL_ENTER | FN_COLL_EXIT)) obj.setFlag(ObjectFlags::WANTS_CONTACTS, true);
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
@@ -134,6 +140,14 @@ namespace P64::Comp
       if(data->usedFunctions & FN_INPUT) {
         data->script->onInput(obj, data->getCodeData(), pin, event);
       }
+    }
+
+    // Fork: event graph, collision enter/exit (not part of the component table)
+    static void onCollEnter(Object& obj, Code* data, uint16_t otherId) {
+      if(data->usedFunctions & FN_COLL_ENTER) data->script->onCollEnter(obj, data->getCodeData(), otherId);
+    }
+    static void onCollExit(Object& obj, Code* data, uint16_t otherId) {
+      if(data->usedFunctions & FN_COLL_EXIT) data->script->onCollExit(obj, data->getCodeData(), otherId);
     }
   };
 }

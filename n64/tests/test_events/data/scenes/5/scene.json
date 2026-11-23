@@ -1,0 +1,958 @@
+{
+  "conf": {
+    "audioFreq": 32000,
+    "clearColor": [
+      0.1416493058204651,
+      0.16373443603515625,
+      0.2661290168762207,
+      1.0
+    ],
+    "doClearColor": true,
+    "doClearDepth": true,
+    "fbFormat": 0,
+    "fbHeight": 240,
+    "fbWidth": 320,
+    "filter": 1,
+    "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
+    "interpolatePhysicsTransforms": true,
+    "layers2D": [
+      {
+        "blender": 0,
+        "depthCompare": false,
+        "depthWrite": false,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "2D"
+      }
+    ],
+    "layers3D": [
+      {
+        "blender": 0,
+        "depthCompare": true,
+        "depthWrite": true,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "3D Opaque"
+      },
+      {
+        "blender": 5242944,
+        "depthCompare": true,
+        "depthWrite": false,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "3D Transp."
+      }
+    ],
+    "layersPtx": [
+      {
+        "blender": 0,
+        "depthCompare": true,
+        "depthWrite": true,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "PTX Opaque"
+      }
+    ],
+    "name": "Events 5",
+    "physicsTickRate": 11,
+    "positionSolverIterations": 6,
+    "renderPipeline": 0,
+    "renderScale": 100.0,
+    "velocitySolverIterations": 7
+  },
+  "graph": {
+    "children": [
+      {
+        "children": [],
+        "components": [
+          {
+            "data": {
+              "aspect": 0.0,
+              "far": 50.0,
+              "fov": 65.0,
+              "mode": 0,
+              "near": 1.0,
+              "orthoSize": 0.029999999329447746,
+              "projection": 0,
+              "targetMode": 0,
+              "targetObjUUID": 0,
+              "visMask": 255,
+              "vpOffset": [
+                0,
+                0
+              ],
+              "vpSize": [
+                320,
+                240
+              ],
+              "worldOffset": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "enabled": true,
+            "id": 3,
+            "name": "Camera",
+            "uuid": 5022
+          }
+        ],
+        "enabled": true,
+        "name": "Camera",
+        "pos": [
+          0.0,
+          0.0,
+          2.7144417762756348
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          0.9999967217445374,
+          0.9999942183494568,
+          0.9999811053276062
+        ],
+        "selectable": true,
+        "uuid": 5021,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5023,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14124720164021295723
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Driver",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5024,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5025,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350660
+            },
+            "events": {
+              "out": {
+                "Fired": [
+                  "scene::L.Once.Fired"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Once",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5026,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5027,
+            "enabled": true,
+            "data": {
+              "args": {
+                "start": "0",
+                "target": "2"
+              },
+              "script": 13898108450065350661
+            },
+            "events": {
+              "out": {
+                "Changed": [
+                  "scene::L.Counter.Changed"
+                ],
+                "Reached": [
+                  "scene::L.Counter.Reached"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Counter",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5028,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5029,
+            "enabled": true,
+            "data": {
+              "args": {
+                "needed": "2",
+                "autoReset": "1"
+              },
+              "script": 13898108450065350662
+            },
+            "events": {
+              "out": {
+                "Complete": [
+                  "scene::L.All.Complete"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "All",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5030,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5031,
+            "enabled": true,
+            "data": {
+              "args": {
+                "constant": "10"
+              },
+              "script": 13898108450065350663
+            },
+            "events": {
+              "out": {
+                "Equal": [
+                  "scene::L.Compare.Equal"
+                ],
+                "Less": [
+                  "scene::L.Compare.Less"
+                ],
+                "Greater": [
+                  "scene::L.Compare.Greater"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Compare",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5032,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5033,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350664
+            },
+            "events": {
+              "out": {
+                "Passed": [
+                  "scene::L.Gate.Passed"
+                ],
+                "Blocked": [
+                  "scene::L.Gate.Blocked"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Gate",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5034,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5035,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350665
+            },
+            "events": {
+              "out": {
+                "A": [
+                  "scene::L.Toggle.A"
+                ],
+                "B": [
+                  "scene::L.Toggle.B"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Toggle",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5036,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5037,
+            "enabled": true,
+            "data": {
+              "args": {
+                "steps": "3",
+                "loop": "1"
+              },
+              "script": 13898108450065350666
+            },
+            "events": {
+              "out": {
+                "Step1": [
+                  "scene::L.Sequence.Step1"
+                ],
+                "Step2": [
+                  "scene::L.Sequence.Step2"
+                ],
+                "Step3": [
+                  "scene::L.Sequence.Step3"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Sequence",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5038,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5039,
+            "enabled": true,
+            "data": {
+              "args": {
+                "outputs": "1"
+              },
+              "script": 13898108450065350667
+            },
+            "events": {
+              "out": {
+                "Out1": [
+                  "scene::L.Random.Out1"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Random",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5040,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5041,
+            "enabled": true,
+            "data": {
+              "args": {
+                "seconds": "0.05"
+              },
+              "script": 13898108450065350658
+            },
+            "events": {
+              "out": {
+                "Elapsed": [
+                  "scene::L.Delay.Elapsed"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Delay",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5042,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5043,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350657
+            },
+            "events": {
+              "out": {
+                "Fired": [
+                  "scene::L.Relay.Fired"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Relay",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5044,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5045,
+            "enabled": true,
+            "data": {
+              "args": {
+                "text": "logic test"
+              },
+              "script": 13898108450065350668
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Log",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5046,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "components": [
+              {
+                "id": 0,
+                "name": "Code",
+                "uuid": 5019,
+                "enabled": true,
+                "data": {
+                  "args": {
+                    "messageType": "291",
+                    "target": "0"
+                  },
+                  "script": 13898108450065350671
+                },
+                "events": {
+                  "out": {
+                    "Received": [
+                      "scene::L.BridgeB.Received"
+                    ]
+                  }
+                }
+              }
+            ],
+            "enabled": true,
+            "name": "BridgeB",
+            "pos": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "propOverrides": {},
+            "proportionalScale": false,
+            "rot": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "selectable": true,
+            "uuid": 5020,
+            "uuidPrefab": 0,
+            "visMask": 1
+          }
+        ],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5047,
+            "enabled": true,
+            "data": {
+              "args": {
+                "messageType": "291",
+                "target": "2"
+              },
+              "script": 13898108450065350671
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "BridgeA",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5048,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5049,
+            "enabled": true,
+            "data": {
+              "args": {
+                "prefab": "735700001"
+              },
+              "script": 13898108450065350670
+            },
+            "events": {
+              "out": {
+                "Spawned": [
+                  "scene::L.Spawner.Spawned"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Spawner",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5050,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5051,
+            "enabled": true,
+            "data": {
+              "args": {
+                "frames": "3"
+              },
+              "script": 13898108450065350659
+            },
+            "events": {
+              "out": {
+                "Elapsed": [
+                  "scene::L.FrameDelay.Elapsed"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "FrameDelay",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5052,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "Scene",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "scale": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "selectable": true,
+    "uuid": 5018,
+    "uuidPrefab": 0,
+    "visMask": 1
+  },
+  "version": 2
+}

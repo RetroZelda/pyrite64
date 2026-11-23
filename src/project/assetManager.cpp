@@ -504,6 +504,19 @@ void Project::AssetManager::reload() {
     }
   }
 
+  // Fork: event graph. Scripts shipped with the engine (built-in event objects) are copied into
+  // <project>/engine/scripts with the rest of the engine; they are listed like project scripts.
+  auto engineScriptPath = fs::path{project->getPath()} / "engine" / "scripts";
+  if (fs::exists(engineScriptPath)) {
+    for (const auto &entry : fs::directory_iterator{engineScriptPath}) {
+      if (!entry.is_regular_file() || entry.path().extension().string() != ".cpp") continue;
+      AssetManagerEntry codeEntry{};
+      if (!buildCodeEntry(project, entry.path(), codeEntry)) continue;
+      codeEntry.engineScript = true;
+      entries[(int)codeEntry.type].push_back(codeEntry);
+    }
+  }
+
   auto editorScriptPath = getEditorScriptPath(project);
   if (fs::exists(editorScriptPath)) {
     for (const auto &entry : fs::recursive_directory_iterator{editorScriptPath}) {

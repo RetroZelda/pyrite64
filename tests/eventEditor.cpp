@@ -12,6 +12,7 @@
 #include "utils/codeParser.h"
 #include "project/events/eventBindings.h"
 #include "project/events/eventRules.h"
+#include "events/pins.h"
 
 namespace fs = std::filesystem;
 using namespace Project::Events;
@@ -275,5 +276,30 @@ TEST_SUITE("event rules")
     index.add("scene::Loaded", UseKind::EngineOut, "engine");
     index.add("bad name", UseKind::Code, "c");
     CHECK(index.allNames() == std::vector<std::string>{"prefab::Alarm", "scene::Loaded"});
+  }
+}
+
+TEST_SUITE("engine pins")
+{
+  TEST_CASE("every object has the same pins, in a fixed order") {
+    using namespace P64::Events::Pins;
+    CHECK(OBJECT_IN_LIST.count == 6);
+    CHECK(std::string(OBJECT_IN[(int)ObjectIn::Destroy]) == "Destroy");
+    CHECK(std::string(OBJECT_OUT[(int)ObjectOut::Ready]) == "Ready");
+    CHECK(OBJECT_OUT_LIST.count == 4);
+  }
+
+  TEST_CASE("engine components") {
+    using namespace P64::Events::Pins;
+    const auto *collider = find(5);
+    REQUIRE(collider != nullptr);
+    CHECK(collider->in.count == 0);
+    REQUIRE(collider->out.count == 4);
+    CHECK(std::string(collider->out.names[(int)ColliderOut::Emptied]) == "Emptied");
+    CHECK(find(4)->out.names == collider->out.names); // collision mesh: the same outputs
+    CHECK(std::string(find(6)->in.names[(int)AudioIn::Stop]) == "Stop");
+    CHECK(std::string(find(10)->out.names[0]) == "MainFinished");
+    CHECK(find(0) == nullptr);  // Code: the script declares its pins
+    CHECK(find(11) == nullptr); // Rigid-Body: none yet
   }
 }

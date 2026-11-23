@@ -8,6 +8,7 @@
 
 #include "../project.h"
 #include "../component/components.h"
+#include "../../../n64/engine/include/events/pins.h"
 
 int Project::Events::PinList::indexOf(bool input, const std::string &pin) const
 {
@@ -26,6 +27,13 @@ Project::Events::PinList Project::Events::pinsOf(Project &project, const Compone
       res.in = script->pins.in;
       res.out = script->pins.out;
     }
+    return res;
+  }
+
+  // engine components: the table the runtime uses too
+  if(const auto *pins = P64::Events::Pins::find((uint32_t)comp.id)) {
+    for(uint8_t i = 0; i < pins->in.count; ++i) res.in.emplace_back(pins->in.names[i]);
+    for(uint8_t i = 0; i < pins->out.count; ++i) res.out.emplace_back(pins->out.names[i]);
   }
   return res;
 }
@@ -44,6 +52,11 @@ std::string Project::Events::displayName(Project &project, const Component::Entr
 
 const Project::Events::PinList& Project::Events::objectPins()
 {
-  static const PinList pins{};
+  static const PinList pins = []{
+    PinList res{};
+    for(const char* name : P64::Events::Pins::OBJECT_IN) res.in.emplace_back(name);
+    for(const char* name : P64::Events::Pins::OBJECT_OUT) res.out.emplace_back(name);
+    return res;
+  }();
   return pins;
 }

@@ -2,6 +2,8 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include "events/bus.h"
+#include "events/pins.h"
 #include "assets/assetManager.h"
 #include "scene/object.h"
 #include "scene/components/animModel.h"
@@ -275,6 +277,29 @@ namespace P64::Comp
     }
 
     t3d_skeleton_update(&data->skelMain);
+
+    // Fork: event graph, MainFinished when a non-looping main animation stops
+    const bool playing = data->anims[data->animIdxMain].isPlaying != 0;
+    if(data->mainWasPlaying && !playing) {
+      Events::fire(obj, data, static_cast<uint8_t>(Events::Pins::AnimOut::MainFinished), static_cast<uint32_t>(data->animIdxMain));
+    }
+    data->mainWasPlaying = playing ? 1 : 0;
+  }
+
+  // Fork: event graph pins, see events/pins.h. The value is the clip index.
+  void AnimModel::onInput([[maybe_unused]] Object &obj, AnimModel* data, uint8_t pin, const Events::Event& ev)
+  {
+    using In = Events::Pins::AnimIn;
+    const auto clip = static_cast<int16_t>(ev.value);
+    if(pin == static_cast<uint8_t>(In::PlayMain)) {
+      data->setMainAnim(clip);
+      if(auto *anim = data->getMainAnim()) {
+        t3d_anim_set_time(anim, 0.0f);
+        t3d_anim_set_playing(anim, true);
+      }
+    } else {
+      data->setBlendAnim(clip);
+    }
   }
 
   void AnimModel::draw(Object &obj, AnimModel* data, float deltaTime)

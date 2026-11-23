@@ -3,6 +3,8 @@
  * @author Kevin Reier <https://github.com/Byterset>
  * @brief Defines the Collision Scene which keeps track of physics participants and updates them (see collisionScene.h)
  */
+#include "../events/contactEvents.h" // Fork: event graph
+#include "scene/objectFlags.h"
 #include "collision/collisionScene.h"
 #include "collision/collide.h"
 #include "collision/contactUtils.h"
@@ -146,6 +148,7 @@ namespace P64::Coll {
   // ── Reset / Init ──────────────────────────────────────────────────
 
   void CollisionScene::reset() {
+    Events::Contacts::reset(); // Fork: event graph
     colliderAABBTree.destroy();
     meshColliderAABBTree.destroy();
 
@@ -374,6 +377,7 @@ namespace P64::Coll {
   }
 
   void CollisionScene::removeCollider(Collider *collider) {
+    Events::Contacts::forget(collider); // Fork: event graph
     if(!collider) return;
     Object *owner = collider->owner_;
 
@@ -426,6 +430,7 @@ namespace P64::Coll {
   }
 
   void CollisionScene::removeMeshCollider(MeshCollider *mesh) {
+    Events::Contacts::forget(mesh); // Fork: event graph
     if(!mesh) return;
 
     std::vector<RigidBody *> &wakeCandidates = wakeCandidateScratch_;
@@ -601,12 +606,25 @@ namespace P64::Coll {
   void CollisionScene::dispatchCollisionCallbacks() {
     pendingDispatchKeys_.clear();
     pendingDispatchScratch_.clear();
+    Events::Contacts::beginStep(); // Fork: event graph
 
     for(int i = 0; i < cachedConstraintCount_; ++i) {
       const ContactConstraint &constraint = cachedConstraints_[i];
       if(!constraint.isActive || constraint.pointCount <= 0) continue;
       if(!constraint.objectA || !constraint.objectB) continue;
       if(!constraint.objectA->isEnabled() || !constraint.objectB->isEnabled()) continue;
+
+      // Fork: event graph, enter/exit tracking for each side that reads the other
+      for(int direction = 0; direction < 2; ++direction) {
+        const bool mirrored = direction == 1;
+        Object *selfObj = constraintSideObject(constraint, mirrored);
+        Object *otherObj = constraintSideObject(constraint, !mirrored);
+        if(!selfObj || !otherObj || !(selfObj->flags & ObjectFlags::WANTS_CONTACTS)) continue;
+        if(!constraintMasksOverlap(constraint, mirrored)) continue;
+        Events::Contacts::touch(mirrored ? constraint.colliderB : constraint.colliderA,
+                                mirrored ? constraint.meshColliderB : constraint.meshColliderA,
+                                *selfObj, *otherObj, constraint.isTrigger);
+      }
 
       const auto key = makeObjectPairKey(constraint.objectA, constraint.objectB);
 
@@ -679,6 +697,7 @@ namespace P64::Coll {
         SceneManager::getCurrent().onObjectCollision(dispatch.secondEvent);
       }
     }
+    Events::Contacts::endStep(); // Fork: event graph
   }
 
 

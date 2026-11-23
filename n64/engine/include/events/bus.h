@@ -149,6 +149,7 @@ namespace P64::Events
     void postImmediate(EventId id, uint32_t value = 0);
     void onSceneDestroyed();
     void onObjectDestroyed(Object& obj);
+    void onObjectRemoving(Object& obj); // remove() was called: fires Destroyed
 
     // used by the EventLinks component
     uint16_t resolveInstance(Object& obj, Scope scope, uint8_t up);

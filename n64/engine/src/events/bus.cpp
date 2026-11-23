@@ -16,6 +16,8 @@
 #include "scene/objectFlags.h"
 #include "scene/components/code.h"
 #include "scene/components/eventLinks.h"
+#include "events/pins.h"
+#include "contactEvents.h"
 
 namespace
 {
@@ -394,9 +396,26 @@ P64::Events::Listener P64::Events::Internal::listenBound(uint32_t hash, [[maybe_
   return {handle.slot, handle.gen};
 }
 
-void P64::Events::Internal::objectInput([[maybe_unused]] Object& obj, [[maybe_unused]] uint8_t pin, [[maybe_unused]] const Event& ev)
+void P64::Events::Internal::objectInput(Object& obj, uint8_t pin, [[maybe_unused]] const Event& ev)
 {
-  // phase 3: the object's own pins (Enable, Disable, Destroy, Show, Hide)
+  using In = Pins::ObjectIn;
+  switch(static_cast<In>(pin))
+  {
+    case In::Enable:        obj.setEnabled(true); break;
+    case In::Disable:       obj.setEnabled(false); break;
+    case In::ToggleEnabled: obj.setEnabled(!obj.isSelfEnabled()); break;
+    case In::Destroy:       obj.remove(); break;
+    case In::Show:          obj.setVisible(true); break;
+    case In::Hide:          obj.setVisible(false); break;
+  }
+}
+
+void P64::Events::Internal::onObjectRemoving(Object& obj)
+{
+  // fires when removal is requested, so listeners still find the object this frame
+  if(obj.getComponent<Comp::EventLinks>()) {
+    fire(obj, nullptr, static_cast<uint8_t>(Pins::ObjectOut::Destroyed), obj.id);
+  }
 }
 
 void P64::Events::Internal::onObjectDestroyed(Object& obj)
@@ -412,4 +431,5 @@ void P64::Events::Internal::onSceneDestroyed()
   // scene, prefab and object events belong to the scene that is gone; global and ui ones stay
   bus.dropQueuedSceneEvents();
   bus.unsubscribeAllInstances();
+  Contacts::reset();
 }

@@ -5,6 +5,7 @@
 #pragma once
 #include <libdragon.h>
 #include <vector>
+#include <algorithm>
 #include <functional>
 #include <unordered_map>
 
@@ -197,6 +198,14 @@ namespace P64
 
       void addCamera(Camera *cam) {
         cameras.push_back(cam);
+      }
+
+      // Fork: event graph, Camera's Activate input: the camera becomes the first (main) one
+      void setMainCamera(Camera *cam) {
+        auto it = std::find(cameras.begin(), cameras.end(), cam);
+        if(it == cameras.end())return;
+        std::rotate(cameras.begin(), it, it + 1);
+        camMain = cam;
       }
 
       void removeCamera(Camera *cam) {

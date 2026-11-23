@@ -20,6 +20,7 @@ namespace P64::ObjectFlags
   constexpr uint16_t PARENTS_HIDDEN     = 1 << 7; // true if all ancestors are hidden, used to determine final hidden state
   // Fork: event graph. Bits 8 and up belong to the fork.
   constexpr uint16_t EVENT_SCOPE        = 1 << 9; // event listeners are keyed to this object (its object:: or prefab:: scope)
+  constexpr uint16_t WANTS_CONTACTS     = 1 << 10; // collision enter/exit is tracked for this object (bound collider pins or script callbacks)
 
   constexpr uint16_t ACTIVE = SELF_ACTIVE | PARENTS_ACTIVE;
   constexpr uint16_t HIDDEN = SELF_HIDDEN | PARENTS_HIDDEN;

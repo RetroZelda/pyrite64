@@ -4,6 +4,7 @@
 */
 #pragma once
 
+#include "events/types.h"
 #include "assets/assetManager.h"
 #include "scene/object.h"
 #include "scene/sceneManager.h"
@@ -72,6 +73,7 @@ namespace P64::Comp
     static void initDelete([[maybe_unused]] Object& obj, Camera* data, InitData* initData);
 
     static void onEvent(Object& obj, Camera* data, const ObjectEvent& event);
+    static void onInput(Object& obj, Camera* data, uint8_t pin, const Events::Event& ev); // Fork: event graph
 
     static void update([[maybe_unused]] Object& obj, [[maybe_unused]] Camera* data, [[maybe_unused]] float deltaTime);
 

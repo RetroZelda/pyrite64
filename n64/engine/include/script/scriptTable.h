@@ -17,6 +17,7 @@ namespace P64::Script
   typedef void(*FuncObjDataEvent)(Object&, void*, const ObjectEvent&);
   typedef void(*FuncObjDataColl)(Object&, void*, const P64::Coll::CollEvent&);
   typedef void(*FuncObjDataInput)(Object&, void*, uint8_t, const Events::Event&);
+  typedef void(*FuncObjContact)(Object&, void*, uint16_t otherId);
 
   struct ScriptEntry
   {
@@ -45,6 +46,10 @@ namespace P64::Script
     FuncObjDataInput onInput;
     const uint32_t* inputHashes;
     uint8_t inputCount;
+
+    // Fork: event graph. Collision enter/exit, see events/contactEvents.h.
+    FuncObjContact onCollEnter;
+    FuncObjContact onCollExit;
   };
 
   // Note: generated and implement in the project:

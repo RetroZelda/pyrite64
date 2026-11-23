@@ -79,9 +79,9 @@ nodes that generate C++.
 - [x] Fold the answers into PLAN.md (draft 2), delete the reminders and close the board request
 - [x] Owner approves the plan (2026-11-23: "the plan looks good. lets start implementation and testing")
 - [x] Phase 1: runtime event bus (see "Implementation log" below)
-- [ ] Phase 2: script pins, bindings, direct sends, inspector section (code done and tested,
-  Kentucky Castle compile check running, then commit)
-- [ ] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
+- [x] Phase 2: script pins, bindings, direct sends, inspector section (commit fc57e44; game
+  rename commit 2941954 in kentucky-castle)
+- [x] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
 - [ ] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
 - [ ] Phase 5: Event Graph window
 - [ ] Phase 6: UI canvases
@@ -260,3 +260,16 @@ all in the final report.
    and the other only fired, so deliberate families like Wave1/Wave2 stay quiet.
 8. (Phase 2) send() uses an internal scope value (`Scope::Direct`) on the same queue, so its
    timing matches every other event.
+9. (Phase 3) Collider enter/exit is tracked per (collider, other object) and only for objects that
+   need it (bound collider pins or onCollisionEnter/Exit); the flag is `WANTS_CONTACTS` (bit 10).
+   onCollisionEnter/Exit take the other object's id, because on exit it may already be gone.
+10. (Phase 3) The object's Enabled/Disabled outputs only report changes after onReady, not the
+   initial enable at spawn. Disable/Enable inputs take effect at the next frame's state change,
+   like obj.setEnabled().
+11. (Phase 3) Built-in objects are engine scripts in `n64/engine/scripts/` with fixed UUIDs
+   `C0E0000000000001` (Relay) to `C0E000000000000F` (Message Bridge); the project Makefile compiles
+   them with the project's flags. Counter steps by one; Compare compares the value as signed;
+   Toggle fires the current side then switches; Message Bridge ignores messages it sent itself.
+12. (Phase 3) Pins added to engine components: Light TurnOn/TurnOff, Camera Activate, Audio (2D)
+   Play/Stop/Finished, Particle Play/Stop, Model (Animated) PlayMain/PlayBlend/MainFinished.
+   Culling, Rigid-Body and Character-Body pins stay "later" as planned.

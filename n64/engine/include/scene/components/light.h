@@ -3,6 +3,8 @@
 * @license MIT
 */
 #pragma once
+#include "events/pins.h"
+#include "events/types.h"
 #include <t3d/t3dmodel.h>
 
 #include "assets/assetManager.h"
@@ -31,6 +33,7 @@ namespace P64::Comp
     color_t color{};
     uint8_t type{};
     uint8_t index{};
+    bool off{false}; // Fork: event graph, TurnOff input
 
     static uint32_t getAllocSize([[maybe_unused]] InitData* initData)
     {
@@ -57,6 +60,7 @@ namespace P64::Comp
     }
 
     static void update([[maybe_unused]] Object& obj, Light* data, float deltaTime) {
+      if(data->off)return;
       auto &light = SceneManager::getCurrent().getLighting();
       switch(data->type)
       {
@@ -69,6 +73,11 @@ namespace P64::Comp
 
     static void draw([[maybe_unused]] Object& obj, [[maybe_unused]] Light* data, float deltaTime) {
 
+    }
+
+    // Fork: event graph pins, see events/pins.h
+    static void onInput([[maybe_unused]] Object& obj, Light* data, uint8_t pin, [[maybe_unused]] const Events::Event& ev) {
+      data->off = pin == static_cast<uint8_t>(Events::Pins::LightIn::TurnOff);
     }
   };
 }

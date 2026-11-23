@@ -3,6 +3,7 @@
 * @license MIT
 */
 #pragma once
+#include "events/types.h"
 #include "assets/assetManager.h"
 #include "scene/object.h"
 #include "renderer/particles/emitterManager.h"
@@ -32,5 +33,6 @@ namespace P64::Comp
     // Non-auto-play emitters (re)play when the object receives EVENT_TYPE_PARTICLE_PLAY, letting
     // a ParticleSync coordinator start several emitters on one object together.
     static void onEvent(Object& obj, Particle* data, const ObjectEvent& event);
+    static void onInput(Object& obj, Particle* data, uint8_t pin, const Events::Event& ev); // Fork: event graph
   };
 }

@@ -61,6 +61,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
       Utils::Logger::log(script.name + " declares input pins but has no onInput(); its inputs do nothing", Utils::Logger::LEVEL_WARN);
     }
     const bool registerInputs = hasInput && !inputPins.empty();
+    bool hasCollEnter = Utils::CPP::hasFunction(src, "void", "onCollisionEnter");
+    bool hasCollExit  = Utils::CPP::hasFunction(src, "void", "onCollisionExit");
 
     auto uuidStr = std::format("{:016X}", script.getUUID());
 
@@ -89,6 +91,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
       for(const auto &pin : inputPins) srcDecl += std::format("0x{:08X}u, ", Utils::Hash::crc32(pin));
       srcDecl += "};\n";
     }
+    if(hasCollEnter)srcDecl += "void onCollisionEnter(Object& obj, Data *data, uint16_t otherId);\n";
+    if(hasCollExit)srcDecl += "void onCollisionExit(Object& obj, Data *data, uint16_t otherId);\n";
     srcDecl += "}\n";
 
     srcEntries += "{\n";
@@ -111,6 +115,8 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
       srcEntries += " .inputHashes = " + uuidStr + "::INPUT_HASHES,\n";
       srcEntries += " .inputCount = " + std::to_string(inputPins.size()) + ",\n";
     }
+    if(hasCollEnter)srcEntries += " .onCollEnter = (FuncObjContact)" + uuidStr + "::onCollisionEnter,\n";
+    if(hasCollExit)srcEntries += " .onCollExit = (FuncObjContact)" + uuidStr + "::onCollisionExit,\n";
     srcEntries += "},\n";
 
     scriptNames += "\t\t[";

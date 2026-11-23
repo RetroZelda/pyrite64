@@ -29,8 +29,11 @@ CXXFLAGS += -MP
 
 # Allow custom attributes, otherwise GCC (rightfully) complains unknown ones
 $(BUILD_DIR)/src/user/%.o: N64_CXXFLAGS += -Wno-attributes
+$(BUILD_DIR)/$(ENGINE_DIR)/scripts/%.o: N64_CXXFLAGS += -Wno-attributes
 
 src =  $(wildcard src/*.cpp) $(wildcard src/p64/*.cpp) $(wildcard src/user/*.cpp)
+# scripts shipped with the engine (built-in event objects), compiled like project scripts
+src += $(wildcard $(ENGINE_DIR)/scripts/*.cpp)
 
 {{USER_CODE_DIRS}}
 

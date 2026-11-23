@@ -50,7 +50,8 @@ namespace P64::Comp
     };
 
     uint16_t count{};
-    uint16_t pad{};
+    uint8_t ready{}; // onReady ran: Enabled / Disabled fire from now on
+    uint8_t pad{};
 
     Binding* bindings() { return reinterpret_cast<Binding*>(this + 1); }
     const Binding* bindings() const { return reinterpret_cast<const Binding*>(this + 1); }
@@ -61,5 +62,10 @@ namespace P64::Comp
     }
 
     static void initDelete(Object& obj, EventLinks* data, uint16_t* initData);
+
+    // the object's own outputs: Ready, Enabled, Disabled
+    static void onReady(Object& obj, EventLinks* data);
+    static void onEnable(Object& obj, EventLinks* data);
+    static void onDisable(Object& obj, EventLinks* data);
   };
 }

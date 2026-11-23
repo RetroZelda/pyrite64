@@ -59,6 +59,7 @@ void P64::Object::remove(bool keepChildren)
 {
   if(flags & ObjectFlags::PENDING_REMOVE)return;
   flags |= ObjectFlags::PENDING_REMOVE;
+  Events::Internal::onObjectRemoving(*this); // Fork: event graph
   SceneManager::getCurrent().removeObject(*this);
 
   if(!keepChildren)

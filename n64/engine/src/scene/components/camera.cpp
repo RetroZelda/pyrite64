@@ -58,3 +58,11 @@ void P64::Comp::Camera::update(Object &obj, Camera* data, float deltaTime)
     data->camera.setPosRot(obj.pos + data->worldOffset, obj.rot);
   }
 }
+
+// Fork: event graph pins, see events/pins.h
+void P64::Comp::Camera::onInput([[maybe_unused]] Object &obj, Camera* data, uint8_t pin, [[maybe_unused]] const Events::Event& ev)
+{
+  if(pin == 0) { // Activate
+    SceneManager::getCurrent().setMainCamera(&data->camera);
+  }
+}

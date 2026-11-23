@@ -728,6 +728,12 @@ void Editor::ObjectInspector::draw() {
     }
   }
 
+  // Fork: event graph, the pins every object has (Enable, Destroy, Ready, ...). Prefab content is
+  // read-only here until prefab instance overrides of bindings exist.
+  if(ImGui::CollapsingHeader(ICON_MDI_TRANSIT_CONNECTION_VARIANT "  Object Events")) {
+    Editor::EventInspector::drawObject(*compSrc, ImTable::readOnly || compSrc != obj.get());
+  }
+
   uint64_t compDelUUID = 0;
   Project::Component::Entry *compCopy = nullptr;
   // Store a deferred reorder request so the component vector is not modified while drawing

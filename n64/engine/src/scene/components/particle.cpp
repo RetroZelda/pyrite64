@@ -83,4 +83,15 @@ namespace P64::Comp
       data->handle.replay();
     }
   }
+
+  // Fork: event graph pins, see events/pins.h
+  void Particle::onInput(Object &obj, Particle* data, uint8_t pin, [[maybe_unused]] const Events::Event& ev)
+  {
+    if(pin == 0) { // Play
+      data->handle.setPos(obj.pos);
+      data->handle.replay();
+    } else {       // Stop
+      data->handle.stop();
+    }
+  }
 }

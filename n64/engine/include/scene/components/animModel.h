@@ -3,6 +3,7 @@
 * @license MIT
 */
 #pragma once
+#include "events/types.h"
 #include <t3d/t3dmodel.h>
 #include <t3d/t3danim.h>
 
@@ -37,6 +38,7 @@ namespace P64::Comp
       float vertexScale{1.0f};
       uint32_t layerRef{0};
       uint8_t flags{0};
+      uint8_t mainWasPlaying{0}; // Fork: event graph, for the MainFinished output
 
       // Attaches the animation to the skeleton and resets it to frame 0, done on selection
       // (keyframes stream from ROM, so unselected animations hold no file handles).
@@ -110,6 +112,7 @@ namespace P64::Comp
     static void initDelete([[maybe_unused]] Object& obj, AnimModel* data, void* initData);
 
     static void update(Object& obj, AnimModel* data, [[maybe_unused]] float deltaTime);
+    static void onInput(Object& obj, AnimModel* data, uint8_t pin, const Events::Event& ev); // Fork: event graph
 
     static void draw([[maybe_unused]] Object& obj, AnimModel* data, [[maybe_unused]] float deltaTime);
   };

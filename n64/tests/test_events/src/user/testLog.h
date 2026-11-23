@@ -32,13 +32,23 @@ namespace P64::User::EventTest
     Knock,      // a door's Knock input, reached with send()
     Light,      // a lamp's Light input (object:: scope)
     SysDoorOpened, // the runner's global input pin EventTest.DoorOpened
+    // phase 3
+    ZoneEnter, ZoneExit, ZoneOccupied, ZoneEmptied, // the zone's collider pins, bound to scene::Zone.*
+    ZoneEnterCb, ZoneExitCb, // the zone script's onCollisionEnter / onCollisionExit
+    LampReady, LampDisabled, LampEnabled, // the lamp's object pins
+    DoomedDestroyed,         // Destroy input, Destroyed output
+    ChainRelayed, ChainDelayed, // Zone.Enter -> Relay -> Frame Delay
+    BlipSpawned,             // a prefab spawned by the Spawner ran init()
+    Logic,                   // a built-in object's output; 'obj' holds the LOGIC_* tag
   };
 
   constexpr const char* const REC_NAMES[] = {
     "GameInit", "SceneLoading", "SceneLoaded", "scene::Loaded", "SceneUnloading",
     "scene::Unloading", "SceneUnloaded", "Ping", "Pong", "Fixed", "FromFixed", "Update",
     "FromUpdate", "Loop", "Carried", "Stale", "Irq", "TriggerSpawned", "Open", "Close",
-    "Knock", "Light", "SysDoorOpened",
+    "Knock", "Light", "SysDoorOpened", "ZoneEnter", "ZoneExit", "ZoneOccupied", "ZoneEmptied",
+    "ZoneEnterCb", "ZoneExitCb", "LampReady", "LampDisabled", "LampEnabled", "DoomedDestroyed",
+    "ChainRelayed", "ChainDelayed", "BlipSpawned", "Logic",
   };
 
   struct Record
@@ -62,6 +72,8 @@ namespace P64::User::EventTest
     T_CARRY,  // global events survive a scene change, scene events do not
     T_IRQ,    // postFromInterrupt from a real interrupt arrives at the next frame start
     T_DOOR,   // phase 2: pins, bindings, object scope, global input pins, send(), fire() in init()
+    T_CONTACTS, // phase 3: collider enter/exit pins and callbacks, object pins, Relay and Frame Delay
+    T_LOGIC,    // phase 3: every built-in event object, driven with send()
     T_COUNT
   };
 
@@ -87,4 +99,29 @@ namespace P64::User::EventTest
   inline constexpr auto STALE       = "scene::Test.Stale"_event;
   inline constexpr auto IRQ         = "global::Test.Irq"_event;
   inline constexpr auto TRIGGER_SPAWNED = "scene::Trigger.Spawned"_event;
+
+  // outputs of the built-in objects in scene 5, recorded with their tag in Record::obj
+  struct LogicName { const char* name; Events::EventId id; uint16_t tag; };
+  inline constexpr LogicName LOGIC_NAMES[] = {
+    {"Once.Fired",        "scene::L.Once.Fired"_event,        1},
+    {"Counter.Changed",   "scene::L.Counter.Changed"_event,   2},
+    {"Counter.Reached",   "scene::L.Counter.Reached"_event,   3},
+    {"All.Complete",      "scene::L.All.Complete"_event,      4},
+    {"Compare.Equal",     "scene::L.Compare.Equal"_event,     5},
+    {"Compare.Less",      "scene::L.Compare.Less"_event,      6},
+    {"Compare.Greater",   "scene::L.Compare.Greater"_event,   7},
+    {"Gate.Passed",       "scene::L.Gate.Passed"_event,       8},
+    {"Gate.Blocked",      "scene::L.Gate.Blocked"_event,      9},
+    {"Toggle.A",          "scene::L.Toggle.A"_event,          10},
+    {"Toggle.B",          "scene::L.Toggle.B"_event,          11},
+    {"Sequence.Step1",    "scene::L.Sequence.Step1"_event,    12},
+    {"Sequence.Step2",    "scene::L.Sequence.Step2"_event,    13},
+    {"Sequence.Step3",    "scene::L.Sequence.Step3"_event,    14},
+    {"Random.Out1",       "scene::L.Random.Out1"_event,       15},
+    {"Delay.Elapsed",     "scene::L.Delay.Elapsed"_event,     16},
+    {"Relay.Fired",       "scene::L.Relay.Fired"_event,       17},
+    {"BridgeB.Received",  "scene::L.BridgeB.Received"_event,  18},
+    {"Spawner.Spawned",   "scene::L.Spawner.Spawned"_event,   19},
+    {"FrameDelay.Elapsed","scene::L.FrameDelay.Elapsed"_event,20},
+  };
 }

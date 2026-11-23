@@ -9,6 +9,10 @@
 
 #include "scene/componentTable.h"
 #include "scene/scene.h"
+#include "scene/objectFlags.h"
+#include "scene/components/collBody.h"
+#include "scene/components/collMesh.h"
+#include "events/pins.h"
 
 namespace
 {
@@ -57,6 +61,27 @@ void P64::Comp::EventLinks::initDelete(Object& obj, EventLinks* data, uint16_t* 
     if(binding.isInput()) {
       binding.listener = Events::Internal::listenBound(
         binding.rec.hash, binding.scope(), binding.instance, onBoundInput, &binding);
+    } else if(binding.rec.comp < obj.compCount) {
+      // a bound collider output: collision enter/exit has to be tracked for this object
+      const auto type = obj.getCompRefs()[binding.rec.comp].type;
+      if(type == CollBody::ID || type == CollMesh::ID) obj.setFlag(ObjectFlags::WANTS_CONTACTS, true);
     }
   }
+}
+
+void P64::Comp::EventLinks::onReady(Object& obj, EventLinks* data)
+{
+  data->ready = 1;
+  Events::fire(obj, nullptr, static_cast<uint8_t>(Events::Pins::ObjectOut::Ready), obj.id);
+}
+
+void P64::Comp::EventLinks::onEnable(Object& obj, EventLinks* data)
+{
+  // also called during the object's init: only report later changes
+  if(data->ready) Events::fire(obj, nullptr, static_cast<uint8_t>(Events::Pins::ObjectOut::Enabled), obj.id);
+}
+
+void P64::Comp::EventLinks::onDisable(Object& obj, EventLinks* data)
+{
+  if(data->ready) Events::fire(obj, nullptr, static_cast<uint8_t>(Events::Pins::ObjectOut::Disabled), obj.id);
 }

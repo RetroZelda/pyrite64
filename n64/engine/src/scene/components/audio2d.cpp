@@ -7,6 +7,8 @@
 
 #include "audio/audioManager.h"
 #include "scene/sceneManager.h"
+#include "events/bus.h"
+#include "events/pins.h"
 
 namespace
 {
@@ -51,5 +53,27 @@ namespace P64::Comp
     }
 
     if(autoPlay)data->handle.setVolume(data->volume);
+    data->playing = autoPlay;
+  }
+
+  void Audio2D::update(Object& obj, Audio2D* data, [[maybe_unused]] float deltaTime)
+  {
+    // Fork: event graph, the Finished output
+    if(data->playing && data->handle.isDone()) {
+      data->playing = false;
+      Events::fire(obj, data, static_cast<uint8_t>(Events::Pins::AudioOut::Finished));
+    }
+  }
+
+  void Audio2D::onInput([[maybe_unused]] Object& obj, Audio2D* data, uint8_t pin, [[maybe_unused]] const Events::Event& ev)
+  {
+    using In = Events::Pins::AudioIn;
+    data->handle.stop();
+    data->playing = false;
+    if(pin != static_cast<uint8_t>(In::Play))return;
+
+    data->handle = data->isXM() ? AudioManager::play2D(data->audioXM) : AudioManager::play2D(data->audioWAV);
+    data->handle.setVolume(data->volume);
+    data->playing = true;
   }
 }
