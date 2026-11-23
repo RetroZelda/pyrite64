@@ -1,0 +1,235 @@
+# Event graph: planning state
+
+Read this file first when resuming the planning work. It records what was asked, what is done,
+and what is next. The plan itself is [PLAN.md](PLAN.md). Raw investigation notes are in
+[FINDINGS.md](FINDINGS.md).
+
+- **Status:** PLAN APPROVED 2026-11-23. PHASE 1 (runtime event bus) DONE AND TESTED. Phase 2 is
+  next and has not started. Nothing is committed. Earlier status: planning done, PLAN.md draft 7. Waiting for the owner's approval before any implementation starts.
+- **Started:** 2026-11-23
+- **Branches:** `feature/event-graph` in `pyrite64` (from `stream/full-frontal`) and in
+  `kentucky-castle` (from `main`). Nothing is committed yet.
+- **Status board:** http://mini-debian:8765/r/n29b4r (request `n29b4r`)
+- **Reminders:** a session-only recurring cron job (`4 1,6,11,16,21 * * *`, created 2026-11-23
+  04:12, id d0d881b2) wakes the session every 5 hours so the work resumes after a usage reset. It
+  dies with the session and expires after 7 days. Delete it once everything is done.
+- **Working mode (owner, 2026-11-23 04:12):** "you are going to be working autonomously so complete
+  the entire plan. if you have questions, use the recommended and then at the end we can followup
+  when I return - so leave all that in a final report." Commit each phase on `feature/event-graph`
+  with no co-author lines. Log every autonomous choice under "Decisions made autonomously" below.
+
+## The brief (owner's request, restated)
+
+An "event graph": a view similar to the node-graph editor, but a graph of events instead of logic
+nodes that generate C++.
+
+- **Scopes.** Scene (a scene event graph), prefab (a prefab event graph), level (the levels that
+  load and unload inside a scene), object (local, object-only events), and UI. The UI part must
+  work with the existing UI data connection so that events trigger UI functionality; UI is
+  "essentially read only".
+- **Declared pins.** Objects, through their components, declare input events and output events,
+  so the output of one object can be wired to the input of another. Example: a collider has
+  object-enter and object-exit outputs, a door has open and close inputs; enter opens the door and
+  exit closes it.
+- **Automatic scene events.** Scenes fire events by themselves: finished loading, closing, a level
+  transition, and so on. The engine defines a default set and any game can add more.
+- **Automatic prefab events.** The same for prefabs: created, destroyed, and so on.
+- The scene graph offers everything relative to the scene; the prefab graph offers everything
+  relative to the prefab.
+- **Prefab-local events.** Five instances of a collider-plus-door prefab must each handle their
+  own connection without affecting the other instances. This is done with event namespacing.
+- **Namespaces**, written `namespace::event`:
+  - `global`: game-wide broadcasts (triggering saves, triggering UI, game load/save, hardware
+    events such as DMA done)
+  - `scene`: scene broadcasts (levels loading/unloading, lighting changes, loading started/ended)
+  - `level`: broadcasts within a loaded level
+  - `prefab`: one prefab instance only
+  - `object`: only on the object, to reach the other scripts attached to it
+  - `ui`: user-interface communication
+  - `custom`: a "player-defined" global, for example mission-specific events
+- **Authoring.** Making a connection in a graph automatically creates an event at the scope of the
+  graph being edited. An event can also be typed in manually as a string. Names are stored as plain
+  text including the namespace (for debugging and text merges) and compiled to an integer for
+  speed.
+- **Built-in event objects.** The engine ships a few objects for event logic. Example: an event
+  repeater with one input and several outputs, used when a prefab expects an input event from the
+  level or scene and re-fires it as an internal prefab event.
+- **Script hook.** C++ scripts declare their input and output events. An `event_repeater` C++
+  class should be all that is needed for the repeater logic.
+- **Graph node layout.** All scripts on an object form ONE node showing every input and output.
+  Each script is a collapsible category; when collapsed, pins without connections are hidden.
+- **Self-sends.** A node may send events to itself. Loose recursion detection may be needed.
+- **Deliverables.** A plan on a new branch in both repos, all open questions asked, and any
+  features the owner missed.
+
+## Steps
+
+- [x] Set reminders (06:04 and 11:07)
+- [x] Create `feature/event-graph` in both repos
+- [x] Investigation by five read-only explorers (results go to FINDINGS.md as they arrive):
+  - [x] node-graph editor (board task n29b4r-2)
+  - [x] scene/prefab model, build pipeline, runtime loader (n29b4r-3)
+  - [x] UI canvas system and its data binding (n29b4r-4)
+  - [x] Kentucky Castle systems: levels, existing events, triggers, AI, spawning (n29b4r-5)
+  - [x] script parsing/codegen, tests, CLI, docs and fork conventions (n29b4r-6)
+- [x] Own check: can the collision scene produce enter/exit events? (yes, see FINDINGS section 0)
+- [x] Verify the load-bearing findings by reading the code directly
+- [x] Draft PLAN.md (n29b4r-7), draft 1 assumes every recommended answer
+- [x] Put the open questions to the owner (n29b4r-8): six rounds, all answered, see the end of this file
+- [x] Fold the answers into PLAN.md (draft 2), delete the reminders and close the board request
+- [x] Owner approves the plan (2026-11-23: "the plan looks good. lets start implementation and testing")
+- [x] Phase 1: runtime event bus (see "Implementation log" below)
+- [ ] Phase 2: script pins, bindings, direct sends, inspector section
+
+## Notes for whoever resumes
+
+- Do not start implementing. The owner asked for a plan only.
+- Do not commit unless the owner asks. Never add co-author or AI attribution lines.
+- The existing engine event system and what it lacks are summarised at the top of FINDINGS.md.
+
+## Owner's answers (2026-11-23)
+
+Question numbers refer to PLAN.md section 14.
+
+- Q1 delivery timing: same frame, queued (recommended)
+- Q2 payload: sender, instigator, value (recommended)
+- Q3 nested prefabs: isolated (recommended)
+- Q4 instance interface: root pins plus exposed pins (recommended)
+- Q5 levels: a flag on the prefab; LevelDriver stays game code (recommended)
+- Q7 custom namespaces: ONLY namespaces a game declares (for example `mission::`); there is no
+  literal `custom::` namespace
+- Q13 hardware events by default: reset button, controller plug/unplug, pak inserted/removed.
+  No DMA-done event.
+- Q14 saves: nothing in the engine. In the owner's words: "game projects should be able to declare
+  them, which is essentially just typing global::something in any output and input event space".
+  Consequence for the plan: typing a name IS declaring it. A catalog entry must never be required,
+  and a name must not be reported just for being absent from a catalog.
+- Q8 pin syntax: two list macros and one `onInput` switch (recommended)
+- Q6 per-wire options: NONE. Wires stay plain; delay and once-only behaviour use helper objects.
+  Consequence: a binding is just a name, and the bus needs no timer table.
+- Q9 built-in objects: shipped as engine scripts (recommended). ALL four groups in the first
+  version: Delay, Once, Counter, All, Compare, Gate, Toggle, Sequence, Random, Scene Loader,
+  Spawner, Log, plus the repeater and the message bridge. Owner added: "lets have time delay and
+  frame delay. and make sure to give an in event to reset."
+- Q11 UI: receives and emits; canvas data stays one-way (recommended)
+- Q12 UI inputs in the first version: show/hide a canvas, play/stop a clip, send a canvas event.
+  Owner added: "output events on a clip timeline" (timeline markers fire output events).
+  Setting a canvas variable from an event is NOT wanted.
+- Q15 graph layout: sidecar file (recommended)
+- Q16 order: runtime and inspector first, graph window after prefab scoping (recommended)
+- Q17 old messages: AIM TO RETIRE the old system. Both exist for now with a bridge, but the new
+  system must be able to replace every use, including addressed and payload flows.
+- Q18 Kentucky Castle scope: all of it (level events, engine triggers, pins on game scripts, HUD
+  hookups and AI opcodes)
+- Q19 node graphs: LEAVE THEM ALONE. Owner: "kentucky castle doesnt use node graphs. also node
+  graph functionality should remain the same - this is something new". No pins, no new nodes, no
+  restart change.
+- Q20 upstream: FORK ONLY. The owner first picked "keep it upstreamable" and then changed it in a
+  follow-up message: "actually lets make it fork only and not upstreamable". Small marked hooks in
+  upstream files are fine, and the work may build on fork-only features.
+- Q10 enter/exit: scripts also get `onCollisionEnter` / `onCollisionExit` (recommended)
+- Direct sends (new question raised by Q17): code can send to one object's input by pin name;
+  nothing has to be authored in the editor (recommended)
+- Retire depth (new question raised by Q17): Kentucky Castle moves off the old messages, then
+  `sendEvent` / `onEvent` get a deprecation warning in the fork. They are not removed.
+- Smaller defaults D1, D3, D6: all accepted as planned
+- CHANGE AFTER DRAFT 2 (same day): the owner dropped the `level` scope. In the owner's words:
+  "actually because levels are prefabs, lets remove level because its functionally the same thing
+  as prefab, which should leave the level loading a game only feature". This replaces the Q5 answer
+  above. Consequences in PLAN.md draft 3: no `level::` namespace, no `LEVEL_ROOT` flag, no
+  `markLevelRoot`, no engine-fired level events; a level-wide broadcast uses a `scene::` name.
+- SECOND CHANGE AFTER DRAFT 2 (same day): nested prefabs may hear their parents. In the owner's
+  words: "lets allow nested prefabs to hear their parents events. we can have a numbering system
+  so we can trace where they come from. so prefab will be the current prefab, prefab_0 will also
+  mirror that; prefab_1 will be the parent, prefab_2 the grand parent, etc this should help show
+  where they come from". This replaces the Q3 answer above. In PLAN.md draft 4 the number is not
+  part of the event's id; it only selects how many prefab roots to go up. Firing into a parent
+  scope by number is the planner's assumption, not something the owner asked for.
+- THIRD CHANGE (same day): the owner confirmed firing into a parent and added a requirement. In
+  the owner's words: "having a nested prefab fire into its parent is good and what I expected. we
+  do need to make sure we handle when we nest a prefab into another one by making sure its events
+  get offset to retain the same scope at the new depth". PLAN.md draft 5 answers this in 3.4
+  ("Keeping the scope when nesting changes"): parent links are repointed per instance, and the
+  editor applies the offset in To Prefab, Unpack and moves across a prefab boundary. Storing the
+  offset as a repointed link, and the copy/paste and To Prefab details, are the planner's design.
+- FOURTH CHANGE (same day): pins on global scripts. In the owner's words: "lets let global
+  scripts also have pins where their inputs and outputs always use the global namespace. we can
+  then have the even scripts utilize a Global object that can be added that will expose all the
+  inputs and outputs." PLAN.md draft 6 answers this in 5.5 and 8.2. The planner's own choices
+  there: a pin named X is the event `global::X` with no script name in it; the Global "object" is
+  a node in the graph and not an object in the scene; separate macro names for global scripts.
+- FIFTH CHANGE (same day): system names in global events. In the owner's words: "global events
+  should include the name of the system that declared it so there are NO ambiguities. ideally the
+  global node in the editor will have each system's events as a collapsable region". PLAN.md draft 7
+  answers this in 3.2, 5.5 and 8.2: a pin X of system S is `global::S.X`. The planner's own choices
+  there: the system name is the first macro argument (not the file name) and one global script may
+  declare several systems; every `global::` name must belong to a system or to the engine, so free
+  `global::` names are rejected (this narrows the earlier "just typing global::something" answer);
+  the engine's events use the system name `Engine`; pin direction is enforced.
+
+## Implementation log
+
+### Phase 1: runtime event bus (done 2026-11-23)
+
+The owner also asked for a README with a how-to guide (mostly for people) and a technical overview
+for AI agents, with screenshots and videos where needed. On 2026-11-23 they said it is only needed
+once everything is done and tested, and that it should live in the kentucky-castle repo for now:
+the draft is `kentucky-castle/docs/EventGraph/README.md` (uncommitted until the end). Finish it
+after phase 9, with editor screenshots and short videos.
+
+**What was built** (all uncommitted on `feature/event-graph` in `pyrite64`):
+
+- `n64/engine/include/events/{types.h,config.h,bus.h}`, `n64/engine/src/events/{busCore.h,busCore.cpp,bus.cpp}`
+- hooks marked `// Fork: event bus` in `n64/engine/src/main.cpp`, `src/scene/sceneManager.cpp`,
+  `src/scene/scene.cpp`, and `src/events` added to `n64/engine/Makefile`
+- `tests/eventBus.cpp` and the test target changes in `CMakeLists.txt`
+- runtime test project `n64/tests/test_events` (scenes migrated with `--cmd migrate`)
+- README draft and `img/test_events_results.png`, moved to `kentucky-castle/docs/EventGraph/`
+
+**Verified:**
+
+- The engine builds with the N64 toolchain and its `-Werror` flags.
+- `pyrite64_tests`: 60 of 60 cases pass (28 new event cases).
+- Malformed `_event` names fail to compile with a message naming the rule.
+- `test_events.z64` in ares: 7 of 7 tests OK (boot events, same-frame chain, drain after physics
+  and after update, hop limit, drain budget, scene change keeps only global events, post from a
+  real VI interrupt).
+- Regression: `test_obj_states` gives identical output with and without the event bus. Its 15
+  mismatches are older than this work: its expectations predate the fork's onEnable/onReady.
+
+**Differences from PLAN.md:**
+
+- A subscription is 20 bytes, not 16; the bus is 13,600 bytes in total (PLAN 4.2 updated).
+- Extra API: `getLimits()` (game code cannot see the engine's `P64_EVENT_*` overrides),
+  `listenerCount()`, `setNameTable()` / `nameOf()`.
+- `scene::Loaded` and `scene::Unloading` are `Builtin::CurrentSceneLoaded` and
+  `Builtin::CurrentSceneUnloading` in C++, to keep them apart from the `global::Engine.*` events.
+- `post()` and `listen()` refuse `prefab::` and `object::` names until phase 4 adds `postTo` and
+  `listenIn`.
+- Controllers already connected at boot send no event; an accessory still being identified
+  (UNKNOWN) is ignored until libdragon knows its type.
+- Order around an unload: pre-unload hook, `global::Engine.SceneUnloading`, `scene::Unloading`,
+  delete the scene, drop scene-local queued events and instance listeners,
+  `global::Engine.SceneUnloaded`, post-unload hook. Loading: pre-load hook,
+  `global::Engine.SceneLoading`, create the scene, post-load hook, then `SceneLoaded` and
+  `scene::Loaded` are queued for the first frame.
+
+**Notes for phase 2:**
+
+- **Kentucky Castle name clash.** 16 game files alias `namespace Events = P64::User::Globals::Events;`
+  and use `Events::EVENT_...` inside `P64::Script::...`. Once a file includes `events/bus.h`, the
+  lookup of `Events` finds `P64::Events` first and those lines stop compiling. Either keep
+  `events/bus.h` out of `userScript.h`, or rename the game alias (for example `GameEvents`) on the
+  game branch before including it.
+- The CLI build takes the path of `project.p64proj`, not the folder, and needs `N64_INST` in the
+  environment when the project does not set `pathN64Inst`.
+- ares works for unattended runs (`--setting Audio/Mute=true --setting Input/Defocus=Allow`,
+  wait for `[event test] DONE` on stdout), but it opens a window on the owner's display.
+
+## Decisions made autonomously
+
+Questions that came up while the owner was away, answered with the recommended option. List them
+all in the final report.
+
+1. (Phase 1, 2026-11-23) The how-to guide draft moved to `kentucky-castle/docs/EventGraph/` as
+   asked; the planning documents stay in `pyrite64/docs/todo/event-graph/`.
