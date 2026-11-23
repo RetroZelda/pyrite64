@@ -301,8 +301,9 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     e.push_back({Rec::Light, 2, DOOR_A, DOOR_A, 77, DOOR_A});
     e.push_back({Rec::SysDoorOpened, 2, DOOR_A, DOOR_A, 77});
     e.push_back({Rec::Light, 2, DOOR_B, DOOR_B, 77, DOOR_B});
-    // frame 3: send() by input name, frame 4: Exit reaches door A only
+    // frame 3: send() by input name, to an object and to an id (an id of 0 sends nothing), frame 4: Exit reaches door A only
     e.push_back({Rec::Knock, 3, 5, TRIGGER_ID, TRIGGER_ID, DOOR_A});
+    e.push_back({Rec::Knock, 3, 6, TRIGGER_ID, TRIGGER_ID, DOOR_B});
     e.push_back({Rec::Close, 4, 0, TRIGGER_ID, TRIGGER_ID, DOOR_A});
     return expectExactly(e);
   }

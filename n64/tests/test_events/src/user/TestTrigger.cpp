@@ -26,6 +26,8 @@ namespace P64::Script::C7A41B2C3D4E5F60
       if(auto *door = SceneManager::getCurrent().getObjectById(3)) {
         Events::send(*door, "Knock"_pin, 5, obj.id); // by input name, nothing bound
       }
+      Events::send(uint16_t{4}, "Knock"_pin, 6, obj.id); // by object id: door B, looked up when delivered
+      Events::send(uint16_t{0}, "Knock"_pin, 7, obj.id); // id 0: no object, nothing is queued
     }
     if(currFrame == 4) fire(obj, data, Out::Exit);
   }

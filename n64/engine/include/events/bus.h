@@ -84,6 +84,13 @@ namespace P64::Events
    */
   void send(Object& target, PinName input, uint32_t value = 0, uint16_t sender = 0);
 
+  /**
+   * The same by object id, for code that keeps ids (ObjectRef::id) rather than objects. The id is
+   * looked up when the event is delivered, so the target may be created or initialised later in
+   * the same frame; nothing happens if it is gone by then.
+   */
+  void send(uint16_t targetId, PinName input, uint32_t value = 0, uint16_t sender = 0);
+
   /** Number of listeners 'id' has right now. */
   uint32_t listenerCount(EventId id);
 

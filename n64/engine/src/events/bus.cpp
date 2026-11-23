@@ -357,6 +357,12 @@ void P64::Events::send(Object& target, PinName input, uint32_t value, uint16_t s
   bus.post(input.hash, Scope::Direct, target.id, value, sender);
 }
 
+void P64::Events::send(uint16_t targetId, PinName input, uint32_t value, uint16_t sender)
+{
+  if(targetId == 0) return;
+  bus.post(input.hash, Scope::Direct, targetId, value, sender);
+}
+
 uint32_t P64::Events::listenerCount(EventId id)
 {
   return bus.listenerCount(id.hash, 0);
