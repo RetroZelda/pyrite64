@@ -4,12 +4,14 @@ Read this file first when resuming the planning work. It records what was asked,
 and what is next. The plan itself is [PLAN.md](PLAN.md). Raw investigation notes are in
 [FINDINGS.md](FINDINGS.md).
 
-- **Status:** PLAN APPROVED 2026-11-23. PHASE 1 (runtime event bus) DONE AND TESTED. Phase 2 is
-  next and has not started. Nothing is committed. Earlier status: planning done, PLAN.md draft 7. Waiting for the owner's approval before any implementation starts.
+- **Status:** PHASES 1 TO 9 DONE, TESTED AND COMMITTED (2026-11-23). Left: the guide in
+  `kentucky-castle/docs/EventGraph/README.md` and the final report. Earlier status: plan approved
+  2026-11-23 (PLAN.md draft 7).
 - **Started:** 2026-11-23
 - **Branches:** `feature/event-graph` in `pyrite64` (from `stream/full-frontal`) and in
-  `kentucky-castle` (from `main`). Nothing is committed yet.
-- **Status board:** http://mini-debian:8765/r/n29b4r (request `n29b4r`)
+  `kentucky-castle` (from `main`). Each phase is committed there (see the steps below).
+- **Status board:** planning was request `n29b4r`; the implementation is request `fjk5nk`
+  (http://mini-debian:8765/r/fjk5nk)
 - **Reminders:** a session-only recurring cron job (`4 1,6,11,16,21 * * *`, created 2026-11-23
   04:12, id d0d881b2) wakes the session every 5 hours so the work resumes after a usage reset. It
   dies with the session and expires after 7 days. Delete it once everything is done.
@@ -86,8 +88,9 @@ nodes that generate C++.
 - [x] Phase 5: Event Graph window
 - [x] Phase 6: UI canvases
 - [x] Phase 7: tools (debug page, event browser), example project (the manual is the final guide)
-- [ ] Phase 8: Kentucky Castle adoption
-- [ ] Phase 9: retire the old messages
+- [x] Phase 8: Kentucky Castle adoption (engine `send()` by id: pyrite64 dcca6d9; the game:
+  kentucky-castle f7c41fe, together with its phase 9 part)
+- [x] Phase 9: retire the old messages (pyrite64 2f768b0; the game's part in f7c41fe)
 - [ ] Final: finish the guide in kentucky-castle/docs/EventGraph/README.md, final report, delete the cron job
 
 ## Notes for whoever resumes
@@ -322,6 +325,50 @@ ticks, the Counter opens the door on the third tick, the banner shows, the Score
 rename on a copy keeps the wires and reports code uses; the browser and its rename are visible in
 the editor. The debug page was compiled, not looked at: opening the overlay needs a controller.
 
+### Phase 8: Kentucky Castle adoption (done 2026-11-23)
+
+**Built (kentucky-castle f7c41fe, pyrite64 dcca6d9):** every addressed message became a named input
+(`src/user/global/GameInputs.h`) sent with `P64::Events::send()`; the engine gained `send()` to an
+object id. The LevelDriver system declares `TransitionStarted`, `TransitionFinished`,
+`PlayerControl` and `PlayerPlaced`; the SpawnDirector listens to the transition events and spawners
+read its state. Pins on EncounterVolume, EnemySpawner, Damagable, Player and CameraBoom, wired in
+`Player.prefab`, `BoomCamera.prefab` and `EncounterVolume.prefab` (the player's camera relays are
+gone). LevelTransition, VisibilityVolume, StatusEffectVolume and EncounterPlayer use engine
+enter/exit. The HUD is shown and hidden through `ui::Hud.Show` / `ui::Hud.Hide`. The AI compiler and
+the guard have `FireEvent(name)` and `IfEvent(name, label)`. The game's docs (AIScripting,
+EnemySpawning, LevelSystem) describe the new names.
+
+**Verified:**
+
+- The game builds (scratch copy) with only its two old warnings (`SimpleCollisionRead`, a debug
+  printout in `CombatEncounter`) and boots in ares with the level, the player and the HUD drawn
+  (the HUD's Show input works), with no bus warnings.
+- A scratch-only probe (never committed): the boot scene loaded `level_hyrule_field`, its
+  spawners spawned guards running a probe list, and a code responder logged their events. 13 of 13
+  guards: `FireEvent(scene::)` reached the responder, `IfEvent(scene::)` matched its reply,
+  `FireEvent(prefab::)` + `IfEvent(prefab::)` matched once in the guard's own instance and the
+  second test was false (consumed). No bus warnings.
+- `test_events.z64` 14 of 14, with a new case for `send()` by id (and id 0 sending nothing).
+- The compiler: name checks mirror `parseName` (11 bad names rejected with the `.ai` line), the
+  reachable-name masks, the 8-names-per-list limit, the manual's recipe compiles with the
+  built-in lists.
+- Not tested: playing the game. The emulator gets no input while the screen is locked, so
+  encounters, transitions, camera modes and status effects were not played through.
+
+### Phase 9: retire the old messages (done 2026-11-23)
+
+**Built (pyrite64 2f768b0; the game's part in f7c41fe):** `Scene::sendEvent` has `[[deprecated]]`;
+the engine's own notifications, the Message Bridge and the node-graph "Send Event" node use
+`Scene::sendEventInternal` (same behaviour). The build warns about scripts that define `onEvent`,
+except engine scripts and UI element scripts. The new-script templates have no `onEvent`. The engine
+Makefile has `-Wno-error=deprecated-declarations`. The game deleted `CustomEvents.h` and names the
+inputs in its comments; it had no Message Bridge objects.
+
+**Verified:** Kentucky Castle builds with no deprecation warning and no `onEvent` warning and boots;
+`test_events.z64` 14 of 14 after a clean engine build (the Message Bridge test included); a copy of
+the upstream `jam25` example builds, warns about its ten `onEvent` scripts and compiles its two
+graphs' "Send Event" nodes against `sendEventInternal`; editor unit tests 1759 of 1759.
+
 ## Decisions made autonomously
 
 Questions that came up while the owner was away, answered with the recommended option. List them
@@ -439,3 +486,46 @@ all in the final report.
    are written at once; the open scene changes in memory (undoable) and is saved as usual.
 42. (Phase 7) A new wire between two pins never reuses a global:: name (found with the example: an
    input cannot listen to a system input).
+43. (Phase 8) The game's input names are `PinName` constants in `src/user/global/GameInputs.h`
+   (`Inputs::Died`), so a typo fails to compile and the editor still sees the `"..."_pin` literals.
+44. (Phase 8) Messages whose receiver is only known at run time (a volume's children, the object a
+   hit landed on, a corpse) became direct sends by input name, not wires. Wires are used where the
+   receiver is fixed in the data: level driver to player and camera, player to camera, encounter to
+   camera, player to HUD.
+45. (Phase 8) The engine got `Events::send(uint16_t targetId, ...)`: the game holds object ids, and
+   looking the target up on delivery keeps the old behaviour for targets created later that frame.
+46. (Phase 8) `TransitionStarted` is posted by `loadLevel` only when the driver was idle, and by
+   `transitionToLevel`; `TransitionFinished` whenever the driver returns to idle. Both carry the
+   level hash. Spawning now resumes one frame later than with the old polling.
+47. (Phase 8) Spawners read `SpawnDirector::isTransitionRunning()`, which follows the two events,
+   instead of each spawner listening: 160 spawners times 2 listeners would use most of the 512
+   subscription slots. `LevelDriver::isTransitioning()` stays, unused, as part of the system's API.
+48. (Phase 8) The encounter's camera wires use `scene::Encounter.*`, so every encounter in the
+   scene drives the camera. With one player that is the same as before: a volume only begins when
+   the player is inside it.
+49. (Phase 8) EncounterPlayer remembers up to four volumes it is inside (`volume0`..`volume3`,
+   separate fields because the editor's data parser only sizes `char[]` arrays) and sends `Died`
+   to each.
+50. (Phase 8) The AI compiler writes event names into `ailists.h` as `"..."_event` literals, so the
+   C++ compiler computes the ids exactly as the engine does; Python only validates the names (the
+   plan had Python compute `zlib.crc32`). `prefab_0::` is folded into `prefab::`.
+51. (Phase 8) A guard listens for the `IfEvent` names of every list it can reach from its start list
+   (through `SetList` / `SetReturnList`, computed by the compiler), at most 8 per list, 32 in all;
+   the Start Alerted jump to `combat_melee` adds that list's names. A VM restart (enable, encounter
+   reset) forgets what arrived; a disabled guard does not listen.
+52. (Phase 8) From a guard's list `prefab::` is the guard's own prefab instance, because placed and
+   spawned guards are instances of their enemy prefab. The manual tells authors to use `prefab_1::`
+   for the room around the guard and `scene::` for the level.
+53. (Phase 8) The editor does not read `.ai` files, so names only AI lists use get the build's
+   "nothing fires it" warning or "nothing listens" note and have no wires in the Events window.
+   Documented in AIScripting.md; a follow-up could let the catalog or the code scan know them.
+54. (Phase 8/9) The game's phase 8 and 9 changes are one commit: the phase 9 comment renames touch
+   the same files and could not be split without interactive staging.
+55. (Phase 9) The deprecated function stays and forwards to `Scene::sendEventInternal`; the name says
+   it is internal. Upstream examples (`jam25` and four others) keep their `onEvent` scripts and now
+   build with the warning.
+56. (Phase 9) The `onEvent` warning skips engine scripts and UI element scripts (scripts used by a
+   canvas element or defining `onFocus` / `onBlur` / `onActivate`): canvas events still reach UI
+   scripts through `onEvent`, and that path is not deprecated.
+57. (Phase 9) The new-script templates no longer contain `onEvent`; otherwise every new script would
+   start with the warning.
