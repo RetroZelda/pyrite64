@@ -83,6 +83,7 @@ namespace P64::User::EventTest
     T_LOGIC,    // phase 3: every built-in event object, driven with send()
     T_PREFABS,  // phase 4: prefab scope per instance, nesting, numbered names, overrides, links, spawning
     T_NESTING,  // phase 4: scene 7, the same records before and after To Prefab and Unpack (nestingChecks.sh)
+    T_GRAPH,    // phase 5: scene 8, wired only with the Events window's operations (graphChecks.sh)
     T_COUNT
   };
 

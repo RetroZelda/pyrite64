@@ -455,6 +455,23 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return expectExactly(e);
   }
 
+  // scene 8, wired only by graph operations: Driver.Go -> Relay -> Door.Open, the door's Opened
+  // output into a global system input, Driver.Shut -> Door.Close, Closed -> the lamp on the same
+  // object (object::), and scene::Loaded from the scope node -> Door.Knock
+  bool checkGraph()
+  {
+    std::vector<Expect> e{};
+    addSceneChange(e, 7, 8);
+    e.push_back({Rec::SceneLoaded,        1, 8, 0});
+    e.push_back({Rec::CurrentSceneLoaded, 1, 8, 0});
+    e.push_back({Rec::Knock,              1, 8});
+    e.push_back({Rec::Open,               2});
+    e.push_back({Rec::SysDoorOpened,      2});
+    e.push_back({Rec::Close,              4});
+    e.push_back({Rec::Light,              4});
+    return expectExactly(e);
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -468,6 +485,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Built-in event objects",        5, 9,  checkLogic},
     {"Prefab scope and nesting",      6, 13, checkPrefabs},
     {"Same events after To Prefab and Unpack", 7, 5, checkNesting},
+    {"Wired by the graph",            8, 6, checkGraph},
   };
 
   void runStep()

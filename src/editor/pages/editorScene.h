@@ -20,6 +20,7 @@
 #include "parts/preferenceOverlay.h"
 #include "parts/projectSettings.h"
 #include "parts/sceneGraph.h"
+#include "parts/eventGraphWindow.h"
 #include "parts/sceneInspector.h"
 #include "parts/viewport3D.h"
 #include "parts/emitterPreview.h"
@@ -70,6 +71,9 @@ namespace Editor
       LogWindow logWindow{};
       MemoryDashboard memoryDashboard{};
       SceneGraph sceneGraph{};
+      EventGraphWindow eventGraph{}; // Fork: event graph
+      bool eventsOpen{true};
+      int startFrames{0};            // Fork: --window focuses a tab once the windows exist
 
       uint64_t pendingRestoreCanvasUUID{0};
       bool dockSpaceInit{false};

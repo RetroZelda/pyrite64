@@ -4,6 +4,7 @@
 */
 #include "pyrite64_version.h"
 #include "editorScene.h"
+#include "../../cli.h"
 
 #include "IconsMaterialDesignIcons.h"
 #include "imgui.h"
@@ -283,6 +284,7 @@ void Editor::Scene::draw()
     ImGui::DockBuilderDockWindow("3D-Viewport", dockSpaceID);
     ImGui::DockBuilderDockWindow("Canvas",      dockSpaceID);
     ImGui::DockBuilderDockWindow("Particles",   dockSpaceID);
+    ImGui::DockBuilderDockWindow("Events",      dockSpaceID); // Fork: event graph
 
     // Left
     ImGui::DockBuilderDockWindow("Scene",     dockLeftID);
@@ -576,6 +578,20 @@ void Editor::Scene::draw()
     ImGui::Begin("Layers");
       layerInspector.draw();
     ImGui::End();
+
+    // Fork: event graph, a tab next to the 3D viewport
+    if(eventsOpen) {
+      // a tab beside the primary 3D viewport (its current node), like Canvas and Particles
+      ImGuiID eventsDock = dockSpaceID;
+      if (ImGuiWindow* vpWin = ImGui::FindWindowByName("3D-Viewport"))
+        if (vpWin->DockId != 0) eventsDock = vpWin->DockId;
+      ImGui::SetNextWindowDockID(eventsDock, ImGuiCond_Appearing);
+      if(ImGui::Begin(ICON_MDI_SITEMAP " Events###Events", &eventsOpen)) eventGraph.draw();
+      ImGui::End();
+    }
+    if(startFrames < 3 && ++startFrames == 3 && !CLI::getStartWindow().empty()) {
+      ImGui::SetWindowFocus(CLI::getStartWindow() == "Events" ? ICON_MDI_SITEMAP " Events###Events" : CLI::getStartWindow().c_str());
+    }
   }
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2_px, 2_px));
@@ -705,6 +721,7 @@ void Editor::Scene::draw()
       if(ImGui::BeginMenu("View"))
       {
         if(ImGui::MenuItem(ICON_MDI_PLUS " New Viewport")) wantNewViewport = true;
+        ImGui::MenuItem(ICON_MDI_SITEMAP " Events", nullptr, &eventsOpen); // Fork: event graph
         ImGui::Separator();
         if(ImGui::MenuItem(ICON_MDI_MAGNIFY_PLUS " Zoom In")) {
           ImGui::Theme::changeZoom(+1);

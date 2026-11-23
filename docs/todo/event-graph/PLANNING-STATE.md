@@ -83,7 +83,7 @@ nodes that generate C++.
   rename commit 2941954 in kentucky-castle)
 - [x] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
 - [x] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
-- [ ] Phase 5: Event Graph window
+- [x] Phase 5: Event Graph window
 - [ ] Phase 6: UI canvases
 - [ ] Phase 7: tools (debug page, event browser), example project
 - [ ] Phase 8: Kentucky Castle adoption
@@ -267,6 +267,32 @@ to open the editor with a selection.
   the editor. Parent Links on K2 and the nested plate's overrides render as designed; the mute,
   add and expose buttons were not clicked.
 
+### Phase 5: the Event Graph window (done 2026-11-23)
+
+**Built:** `src/project/events/eventGraph.*`, the graph model without UI (nodes, pins, wires
+derived from names, connect/bind/unbind/disconnect, automatic names), used by the window and by
+`--cmd graph`, `--cmd wire` and `--cmd unwire`; the Events window
+(`src/editor/pages/parts/eventGraphWindow.*`) on ImNodeFlow with one node per object and a
+collapsible section per component, instance nodes with their pins and parent links, event nodes,
+the scope node, the Global node with one region per system, layout files, selection sync, focus
+mode, the canvas and dropped-wire menus, built-in objects from the menu, red problems, a loop
+warning and highlighted wires under the pointer. `--ui-script` plays mouse and keyboard steps into
+the editor for tests and recordings; `--window`, `--edit`, `--scene` and `--object` set it up.
+
+**Verified:**
+
+- `test_events.z64`: 13 of 13. Scene 8 was wired only by the graph's operations (Driver -> Relay ->
+  Door, an output into a global system input, the scope node's scene::Loaded, an object:: wire in
+  focus mode) and runs as expected.
+- `graphChecks.sh`: 7 of 7. Removing every binding from scene 8 and drawing the same wires again
+  gives the committed file byte for byte, so wiring adds binding lines and nothing else; removing
+  wires drops the right bindings.
+- In the editor, driven by `--ui-script` (the screen was locked, so the steps go into the editor's
+  own event queue): four wires dragged, one removed with Delete, the canvas menu, an event node
+  created and wired through, the dropped-wire menu, a built-in Counter added, focus mode. The saved
+  scene had exactly the expected bindings each time; screenshots checked by eye.
+- Unit tests 1,759 assertions; `buildChecks.sh` 5 of 5.
+
 ## Decisions made autonomously
 
 Questions that came up while the owner was away, answered with the recommended option. List them
@@ -332,3 +358,26 @@ all in the final report.
    to open a scene with an object selected (`K1/Plate` continues into the prefab).
 21. (Phase 4) "Object Events" opens by itself when the object has bindings or overrides, and
    "Parent Links" when a link is repointed.
+22. (Phase 5) The graph logic lives in one UI-free module that the window and the command line
+   share, so wiring can be tested and scripted without the editor's window.
+23. (Phase 5) Removing a wire: the input stops listening; the output also stops firing the event
+   when nothing else in the graph or the game code uses it and it is in the graph's own namespace
+   (scene::, prefab:: or object::). Otherwise the output keeps it.
+24. (Phase 5) An instance node shows its prefab root's pins, pins marked exposed, any pin this
+   instance overrides (exposed or not, so no override is invisible), and its parent links: an
+   input where the prefab listens to the link, an output where it fires it.
+25. (Phase 5) An event node takes every wire of its name, so N senders and M listeners make N+M
+   wires instead of N*M. The Global and scope nodes appear by themselves while a pin uses one of
+   their events.
+26. (Phase 5) The loop warning is a heuristic: a cycle among nodes (self-wires included) that passes
+   no Delay or Frame Delay. Scripts are opaque, so it can warn about a loop that never fires.
+27. (Phase 5) New nodes are placed in columns by wire order; nodes without wires go to a grid on
+   the right. "Arrange" places everything again.
+28. (Phase 5) Layout files: `data/scenes/<id>/events.layout.json` and `<file>.prefab.events.json`,
+   written whenever the layout changed and no mouse button is held; not part of undo.
+29. (Phase 5) ImNodeFlow gained one virtual, `BaseNode::customPinLayout()` (default false), so a
+   node can place its own pins; nothing else in the library changed.
+30. (Phase 5) Undo for prefab definitions (optional in the plan) was not done: edits in prefab edit
+   mode still are not undoable, as before.
+31. (Phase 5) The Events window is a tab beside the 3D viewport (View > Events), docked there each
+   time it appears.

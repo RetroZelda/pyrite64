@@ -44,6 +44,7 @@
 
 #include "editor/undoRedo.h"
 #include "editor/selectionUtils.h"
+#include "editor/uiScript.h"
 #include "project/project.h"
 #include "editor/actions.h"
 #include "editor/script/scriptHost.h"
@@ -96,6 +97,7 @@ void selectFromCommandLine()
   }
   if(instance && !subPath.empty()) ctx.setNestedSelection(instance->uuid, subPath);
   else ctx.setObjectSelection(node->uuid);
+  if(CLI::getStartEdit() && instance) ctx.prefabEditUUID = instance->uuid;
 }
 
 bool hasUnsavedChanges()
@@ -338,6 +340,9 @@ int main(int argc, char** argv)
         selectFromCommandLine(); // Fork: --scene and --object
       }
     }
+    if(!CLI::getUiScript().empty() && !Editor::UiScript::load(CLI::getUiScript())) {
+      Utils::Logger::log("Could not read the UI script " + CLI::getUiScript(), Utils::Logger::LEVEL_ERROR);
+    }
 
     // Main loop
     bool done = false;
@@ -357,6 +362,8 @@ int main(int argc, char** argv)
       //printf("Frame Start | Time: %.2fms\n", ImGui::GetIO().DeltaTime * 1000.0f);
       SDL_Event event{};
       bool closeRequested{false};
+      Editor::UiScript::step(ctx.window); // Fork: --ui-script
+      if(Editor::UiScript::wantsQuit()) done = true;
       while (SDL_PollEvent(&event))
       {
         //convert pinch events to whole number mouse wheel events to mimic windows

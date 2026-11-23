@@ -216,7 +216,10 @@ add_executable(pyrite64 src/main.cpp
         src/project/events/eventRules.cpp
         src/project/events/eventPins.cpp
         src/project/events/eventNesting.cpp
+        src/project/events/eventGraph.cpp
         src/editor/pages/parts/eventInspector.cpp
+        src/editor/pages/parts/eventGraphWindow.cpp
+        src/editor/uiScript.cpp
         src/utils/binaryFile.h
         src/build/sceneContext.h
         src/build/stringTable.h

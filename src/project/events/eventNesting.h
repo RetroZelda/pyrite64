@@ -7,6 +7,7 @@
 // these fix-ups rewrite its event names so every binding keeps reaching what it reached before.
 #pragma once
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,16 @@ namespace Project::Events::Nesting
   void afterUnpack(Project &project, Object &sceneRoot, Object &inst,
                    const std::vector<UnpackedNode> &nodes, Report &report);
 
-  /** Numbered names (prefab_1:: and up) a prefab's content reaches above its own graph, as the prefab writes them. */
+  /** Numbered names (prefab_1:: and up) a prefab's content reaches above its own graph, as the prefab writes them. Sorted. */
   std::vector<std::string> parentLinks(Project &project, uint64_t prefabUUID);
+
+  /** How a prefab's content uses one of its parent links. */
+  struct LinkUse
+  {
+    bool listened{false}; // an input inside the prefab is bound to it
+    bool fired{false};    // an output inside the prefab is bound to it
+  };
+
+  /** parentLinks() with how each link is used. */
+  std::map<std::string, LinkUse> parentLinkUses(Project &project, uint64_t prefabUUID);
 }

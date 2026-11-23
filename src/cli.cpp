@@ -10,6 +10,8 @@
 #include "project/project.h"
 #include "project/scene/migration.h"
 #include "project/scene/scene.h"
+#include "project/scene/prefab.h"
+#include "project/events/eventGraph.h"
 #include "utils/logger.h"
 
 namespace
@@ -18,6 +20,9 @@ namespace
   bool argExperimental{false};
   int argScene{0};
   std::string argObject{};
+  std::string argWindow{};
+  bool argEdit{false};
+  std::string argUiScript{};
 
   // Fork: an object of a scene by its names from the top, "Group/Door"
   std::shared_ptr<Project::Object> findByPath(Project::Scene &scene, const std::string &path)
@@ -38,6 +43,133 @@ namespace
       start = end + 1;
     }
     return found;
+  }
+
+  // Fork: the Events window's graph without the editor: print it, or draw and remove wires
+  struct GraphArgs
+  {
+    int scene{0};
+    std::string prefab{};
+    std::string focus{};
+    std::string from{};
+    std::string to{};
+    std::string event{};
+  };
+
+  bool runGraphCommand(const std::string &cmd, const GraphArgs &args)
+  {
+    namespace G = Project::Events::Graph;
+    Project::Project project{argProgPath};
+    Project::Project *prevProject = ctx.project;
+    ctx.project = &project;
+    bool res = false;
+    try {
+      std::unique_ptr<Project::Scene> scene{};
+      std::shared_ptr<Project::Prefab> prefab{};
+      std::string prefabPath{};
+      Project::Object *root = nullptr;
+      G::Kind kind = G::Kind::Scene;
+      if(!args.prefab.empty()) {
+        for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::PREFAB)) {
+          if(entry.prefab && (entry.name == args.prefab || entry.path.ends_with("/" + args.prefab))) {
+            prefab = entry.prefab;
+            prefabPath = entry.path;
+          }
+        }
+        if(!prefab) throw std::runtime_error("no prefab '" + args.prefab + "'");
+        root = &prefab->obj;
+        kind = G::Kind::Prefab;
+      } else {
+        scene = std::make_unique<Project::Scene>(args.scene, project.getPath());
+        root = &scene->getRootObject();
+      }
+
+      uint32_t focus = 0;
+      if(!args.focus.empty()) {
+        auto model = G::collect(project, *root, kind);
+        auto ref = G::parsePin(project, *root, model, args.focus + "|Object.Enable", true);
+        if(!ref.node || !ref.path.empty()) throw std::runtime_error("no object '" + args.focus + "' to focus on");
+        focus = ref.node;
+      }
+      auto model = G::collect(project, *root, kind, focus);
+
+      if(cmd == "graph") {
+        printf("graph: %s, creates %s:: events\n", kind == G::Kind::Scene ? "scene" : "prefab", model.ns.c_str());
+        for(const auto &node : model.nodes) {
+          printf("node %s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : "",
+                 node.builtin ? " (built-in)" : "");
+          for(const auto &cat : node.categories) {
+            for(const auto &pin : cat.pins) {
+              if(pin.names.empty() && pin.muted.empty() && pin.problem.empty())continue;
+              std::string names{};
+              for(const auto &n : pin.names) names += " " + n;
+              for(const auto &n : pin.muted) names += " (muted " + n + ")";
+              printf("  %s %s:%s%s%s\n", pin.ref.input ? "in " : "out", G::describe(project, *root, pin.ref).c_str(), names.c_str(),
+                     pin.problem.empty() ? "" : ("  PROBLEM: " + pin.problem).c_str(),
+                     pin.hint.empty() ? "" : ("  NOTE: " + pin.hint).c_str());
+            }
+          }
+        }
+        for(const auto &wire : G::wires(model, {}, true, true)) {
+          auto end = [&](const G::End &e) {
+            switch(e.type) {
+              case G::End::Type::Pin: return G::describe(project, *root, e.pin);
+              case G::End::Type::Event: return std::string{"[event]"};
+              case G::End::Type::Global: return std::string{"[Global]"};
+              case G::End::Type::Scope: return std::string{"[scope]"};
+            }
+            return std::string{};
+          };
+          printf("wire %s -> %s : %s\n", end(wire.from).c_str(), end(wire.to).c_str(), wire.name.c_str());
+        }
+        res = true;
+      } else {
+        G::PinRef from{}, to{};
+        if(!args.from.empty()) {
+          from = G::parsePin(project, *root, model, args.from, false);
+          if(!from.node) throw std::runtime_error("no output pin '" + args.from + "'");
+        }
+        if(!args.to.empty()) {
+          to = G::parsePin(project, *root, model, args.to, true);
+          if(!to.node) throw std::runtime_error("no input pin '" + args.to + "'");
+        }
+        if(cmd == "wire") {
+          if(from.node && to.node) {
+            auto name = G::connect(project, *root, model, from, to);
+            printf("wired with %s\n", name.c_str());
+            res = !name.empty();
+          } else if(!args.event.empty() && (from.node || to.node)) {
+            res = G::bind(project, *root, model, from.node ? from : to, args.event);
+            printf("%s %s\n", res ? "bound to" : "already bound to", args.event.c_str());
+            res = true;
+          } else {
+            throw std::runtime_error("wire needs --from and --to, or one of them and --event");
+          }
+        } else {
+          for(const auto &wire : G::wires(model, {}, true, true)) {
+            const bool fromOk = from.node ? (wire.from.type == G::End::Type::Pin && wire.from.pin == from) : wire.from.type != G::End::Type::Pin;
+            const bool toOk = to.node ? (wire.to.type == G::End::Type::Pin && wire.to.pin == to) : wire.to.type != G::End::Type::Pin;
+            if(!fromOk || !toOk || (!args.event.empty() && wire.name != args.event))continue;
+            res |= G::disconnect(project, *root, model, wire);
+            printf("removed the wire of %s\n", wire.name.c_str());
+          }
+          if(!res && !args.event.empty() && (from.node || to.node)) {
+            res = G::unbind(project, *root, model, from.node ? from : to, args.event);
+            if(res) printf("unbound %s\n", args.event.c_str());
+          }
+          if(!res) throw std::runtime_error("no such wire");
+        }
+        if(res) {
+          if(scene) scene->save();
+          if(prefab) prefab->save(prefabPath);
+        }
+      }
+    } catch(const std::exception &e) {
+      fprintf(stderr, "%s failed: %s\n", cmd.c_str(), e.what());
+      res = false;
+    }
+    ctx.project = prevProject;
+    return res;
   }
 
   // Fork: "To Prefab" and "Unpack" without the editor, for scripts and tests
@@ -99,6 +231,21 @@ const std::string& CLI::getStartObject()
   return argObject;
 }
 
+const std::string& CLI::getStartWindow()
+{
+  return argWindow;
+}
+
+bool CLI::getStartEdit()
+{
+  return argEdit;
+}
+
+const std::string& CLI::getUiScript()
+{
+  return argUiScript;
+}
+
 CLI::Result CLI::run(int argc, char** argv)
 {
   argparse::ArgumentParser prog{"pyrite64", PYRITE_VERSION};
@@ -109,7 +256,7 @@ CLI::Result CLI::run(int argc, char** argv)
 
   prog.add_argument("--cmd")
     .help("Command to run")
-    .choices("build", "clean", "migrate", "to-prefab", "unpack");
+    .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire");
 
   // Fork: arguments of to-prefab and unpack
   prog.add_argument("--scene")
@@ -122,6 +269,36 @@ CLI::Result CLI::run(int argc, char** argv)
     .default_value(std::string{});
   prog.add_argument("--dir")
     .help("Folder under assets/ for the new prefab (to-prefab)")
+    .default_value(std::string{});
+
+  prog.add_argument("--edit")
+    .help("In the editor: edit the prefab of the instance given with --object")
+    .default_value(false)
+    .implicit_value(true);
+
+  prog.add_argument("--ui-script")
+    .help("In the editor: play mouse and keyboard steps from this file (see src/editor/uiScript.h)")
+    .default_value(std::string{});
+
+  prog.add_argument("--window")
+    .help("In the editor: bring this window's tab to the front at start-up (e.g. Events)")
+    .default_value(std::string{});
+
+  // Fork: arguments of graph, wire and unwire
+  prog.add_argument("--prefab")
+    .help("Use this prefab's own graph instead of a scene's (graph, wire, unwire)")
+    .default_value(std::string{});
+  prog.add_argument("--focus")
+    .help("Only this object, with object:: events (graph, wire, unwire)")
+    .default_value(std::string{});
+  prog.add_argument("--from")
+    .help("Output pin, \"Object/Path|Component.Pin\" (wire, unwire)")
+    .default_value(std::string{});
+  prog.add_argument("--to")
+    .help("Input pin, \"Object/Path|Component.Pin\" (wire, unwire)")
+    .default_value(std::string{});
+  prog.add_argument("--event")
+    .help("An event to bind one pin to, like an Event node in the window (wire, unwire)")
     .default_value(std::string{});
 
   prog.add_argument("--experimental")
@@ -148,6 +325,9 @@ CLI::Result CLI::run(int argc, char** argv)
   argProgPath = prog.get<std::string>("project");
   argScene = prog.get<int>("--scene");
   argObject = prog.get<std::string>("--object");
+  argWindow = prog.get<std::string>("--window");
+  argEdit = prog["--edit"] == true;
+  argUiScript = prog.get<std::string>("--ui-script");
 
   if (prog["--cli"] == false) {
     return Result::GUI;
@@ -193,6 +373,11 @@ CLI::Result CLI::run(int argc, char** argv)
     }
     ctx.project = prevProject;
     res = true;
+  }
+  else if (cmd == "graph" || cmd == "wire" || cmd == "unwire")
+  {
+    res = runGraphCommand(cmd, {prog.get<int>("--scene"), prog.get<std::string>("--prefab"), prog.get<std::string>("--focus"),
+                                prog.get<std::string>("--from"), prog.get<std::string>("--to"), prog.get<std::string>("--event")});
   }
   else if (cmd == "to-prefab" || cmd == "unpack")
   {

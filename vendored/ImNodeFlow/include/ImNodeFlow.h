@@ -679,6 +679,13 @@ namespace ImFlow
         virtual void drawBottom() {}
 
         /**
+         * @brief <BR>Custom pin layout (Full-Frontal fork, event graph)
+         * @details When true, update() skips the input and output columns and only calls draw(),
+         *          which must place every pin with setPos() and call its update() itself.
+         */
+        [[nodiscard]] virtual bool customPinLayout() const { return false; }
+
+        /**
          * @brief <BR>Add an Input to the node
          * @details Will add an Input pin to the node with the given name and data type.
          *          <BR> <BR> In this case the name of the pin will also be its UID.

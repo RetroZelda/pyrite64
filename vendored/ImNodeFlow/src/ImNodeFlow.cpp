@@ -242,18 +242,26 @@ namespace ImFlow {
         std::vector<std::shared_ptr<Pin>>& rightStatics = m_mirrored ? m_ins : m_outs;
         auto& rightDyn = m_mirrored ? m_dynamicIns : m_dynamicOuts;
 
-        if (!leftStatics.empty()) {
-            drawLeftColumn(leftStatics, leftDyn, !m_mirrored);
+        if (customPinLayout()) {
+            // the node places its pins itself (Full-Frontal fork)
+            ImGui::BeginGroup();
+            draw();
+            ImGui::Dummy(ImVec2(0.f, 0.f));
+            ImGui::EndGroup();
+        } else {
+            if (!leftStatics.empty()) {
+                drawLeftColumn(leftStatics, leftDyn, !m_mirrored);
+                ImGui::SameLine();
+            }
+
+            ImGui::BeginGroup();
+            draw();
+            ImGui::Dummy(ImVec2(0.f, 0.f));
+            ImGui::EndGroup();
             ImGui::SameLine();
+
+            drawRightColumn(rightStatics, rightDyn, m_mirrored);
         }
-
-        ImGui::BeginGroup();
-        draw();
-        ImGui::Dummy(ImVec2(0.f, 0.f));
-        ImGui::EndGroup();
-        ImGui::SameLine();
-
-        drawRightColumn(rightStatics, rightDyn, m_mirrored);
 
         // Full-width content under the pin rows, flush with the node's left edge.
         drawBottom();

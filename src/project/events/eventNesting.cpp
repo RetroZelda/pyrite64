@@ -93,30 +93,44 @@ namespace
     return parse(name).id.up;
   }
 
-  void linksOfPrefab(Project::Project &project, uint64_t uuid, std::set<std::string> &out, std::set<uint64_t> &visiting);
+  using LinkUses = std::map<std::string, Project::Events::Nesting::LinkUse>;
+
+  void linksOfPrefab(Project::Project &project, uint64_t uuid, LinkUses &out, std::set<uint64_t> &visiting);
+
+  void addUse(LinkUses &out, const std::string &name, bool listened, bool fired)
+  {
+    auto &use = out[name];
+    use.listened |= listened;
+    use.fired |= fired;
+  }
 
   // one node of a prefab's own graph and everything below it that is written in the same graph
-  void linksOfGraph(Project::Project &project, const Project::Object &node, std::set<std::string> &out, std::set<uint64_t> &visiting)
+  void linksOfGraph(Project::Project &project, const Project::Object &node, LinkUses &out, std::set<uint64_t> &visiting)
   {
-    std::vector<std::string> names{};
-    namesOfNode(node, names);
-    for(const auto &name : names) {
-      if(isPrefabName(name) && prefabNumber(name) >= 1) out.insert(name);
+    auto bindings = [&](const Bindings &b) {
+      for(const auto &[pin, names] : b.in) for(const auto &n : names) if(isPrefabName(n) && prefabNumber(n) >= 1) addUse(out, n, true, false);
+      for(const auto &[pin, names] : b.out) for(const auto &n : names) if(isPrefabName(n) && prefabNumber(n) >= 1) addUse(out, n, false, true);
+    };
+    bindings(node.events);
+    for(const auto &comp : node.components) bindings(comp.events);
+    for(const auto &ovr : node.eventOverrides) {
+      if(ovr.isLink())continue; // its direction comes from the nested prefab, below
+      for(const auto &n : ovr.add) if(isPrefabName(n) && prefabNumber(n) >= 1) addUse(out, n, ovr.input, !ovr.input);
     }
     if(node.isPrefabInstance()) {
-      // the nested prefab's links: repointed (counted above as link targets), or one number lower
-      std::set<std::string> inner{};
+      // the nested prefab's links: repointed, or one number lower
+      LinkUses inner{};
       linksOfPrefab(project, node.uuidPrefab.value, inner, visiting);
-      for(const auto &link : inner) {
-        if(findLink(node, link))continue;
-        auto here = shiftPrefabNumber(link, -1);
-        if(prefabNumber(here) >= 1) out.insert(here);
+      for(const auto &[link, use] : inner) {
+        const auto *ovr = findLink(node, link);
+        auto here = ovr ? ovr->to : shiftPrefabNumber(link, -1);
+        if(isPrefabName(here) && prefabNumber(here) >= 1) addUse(out, here, use.listened, use.fired);
       }
     }
     for(const auto &child : node.children) linksOfGraph(project, *child, out, visiting);
   }
 
-  void linksOfPrefab(Project::Project &project, uint64_t uuid, std::set<std::string> &out, std::set<uint64_t> &visiting)
+  void linksOfPrefab(Project::Project &project, uint64_t uuid, LinkUses &out, std::set<uint64_t> &visiting)
   {
     if(!visiting.insert(uuid).second)return; // a prefab containing itself: refused by the editor anyway
     if(auto prefab = project.getAssets().getPrefabByUUID(uuid)) linksOfGraph(project, prefab->obj, out, visiting);
@@ -129,12 +143,19 @@ namespace
   }
 }
 
-std::vector<std::string> Project::Events::Nesting::parentLinks(Project &project, uint64_t prefabUUID)
+std::map<std::string, Project::Events::Nesting::LinkUse> Project::Events::Nesting::parentLinkUses(Project &project, uint64_t prefabUUID)
 {
-  std::set<std::string> links{};
+  LinkUses links{};
   std::set<uint64_t> visiting{};
   linksOfPrefab(project, prefabUUID, links, visiting);
-  return {links.begin(), links.end()};
+  return links;
+}
+
+std::vector<std::string> Project::Events::Nesting::parentLinks(Project &project, uint64_t prefabUUID)
+{
+  std::vector<std::string> res{};
+  for(const auto &[link, use] : parentLinkUses(project, prefabUUID)) res.push_back(link);
+  return res;
 }
 
 void Project::Events::Nesting::beforeWrap(Project &project, Object &sceneRoot, Object &obj, Report &report)
