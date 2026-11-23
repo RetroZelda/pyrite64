@@ -135,7 +135,8 @@ namespace
           ImGui::SetCursorPos({start.x, y});
           ImGui::TextDisabled("%s", subtitle.c_str());
           if(!subtitleTip.empty()) ImGui::SetItemTooltip("%s", subtitleTip.c_str());
-          y += rowH;
+          // a condition lists its values, one a line
+          y += ImGui::CalcTextSize(subtitle.c_str()).y + (rowH - ImGui::GetTextLineHeight());
         }
         for(auto &sec : sections)
         {
@@ -575,7 +576,8 @@ struct Editor::EventGraphWindow::State
     node.subtitleTip = warn ? "Its outputs reach its own inputs again with no Delay or Frame Delay in between.\n"
                               "Allowed, but an event chain that keeps going is cut after 16 hops." : "";
     if(!warn && !src.summary.empty()) {
-      node.subtitle = src.summary;
+      node.subtitle.clear();
+      for(const auto &value : src.summary) node.subtitle += (node.subtitle.empty() ? "" : "\n") + value;
       node.subtitleTip = "The condition's values. They are set in the inspector and built into the game:\nthey are not pins.";
     }
     const std::string nodeKey = src.canvas ? "c" + std::to_string(src.canvas) : std::to_string(src.uuid);
@@ -737,6 +739,7 @@ struct Editor::EventGraphWindow::State
       if(k.starts_with("e:")) return 70.0f;
       const auto *node = k.starts_with("c:") ? model.findCanvas(std::stoull(k.substr(2))) : model.find((uint32_t)std::stoul(k.substr(2)));
       float h = 34.0f;
+      if(node) h += 16.0f * (float)node->summary.size(); // a condition's values, one a line
       if(node) for(const auto &cat : node->categories) {
         // a collapsed section still shows its wired pins: count the bound ones (a little high at worst)
         size_t ins = 0, outs = 0;

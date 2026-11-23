@@ -22,7 +22,8 @@ namespace Project::Events
     int conditionIn{-1};
     int conditionOut{-1};
     std::vector<std::string> conditionInputs{}; // input pins that read conditions (P64_CONDITION_INPUTS)
-    std::vector<std::string> triggers{};        // events the script binds to Check (P64_CONDITION_TRIGGERS)
+    std::vector<std::string> scriptTriggers{};  // events the script binds to Check (P64_CONDITION_TRIGGERS)
+    std::vector<std::string> triggers{};        // the same, or none when this component has "Auto Check" off
 
     [[nodiscard]] bool empty() const { return in.empty() && out.empty(); }
     [[nodiscard]] bool isCondition() const { return conditionOut >= 0; }

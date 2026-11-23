@@ -591,6 +591,10 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     // starts disabled, so the ticks do nothing; one event on Enable and Check: Enable first
     ok &= expectCond(COND_GATED_TRUE, {{7, 9}});
 
+    // "Auto Check" off: the script's trigger is not bound, so only the Check at frame 7 asks it
+    ok &= expectCond(COND_QUIET_TRUE,  {{7, 4}});
+    ok &= expectCond(COND_QUIET_FALSE, {});
+
     // a node graph's Fire Event node (Start -> Fire Event, value 42) reaches a Check input
     ok &= expectCond(COND_G_TRUE, {{1, 42}});
 

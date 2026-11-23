@@ -108,6 +108,11 @@ namespace Project::Component
     uint64_t getScriptUUID(const Entry &entry); // Fork: event graph
     /** Fork: conditions. An argument as the component stores it (no instance overrides); empty if unset. */
     std::string getStoredArg(const Entry &entry, const std::string &field);
+    /**
+     * Fork: conditions. The same while the object is being built (inside Build::writeObject): the
+     * overrides of the prefab instances around it apply. Empty if unset.
+     */
+    std::string getBuildArg(Object &obj, Entry &entry, const std::string &field);
   }
   MAKE_COMP(Model)
   MAKE_COMP(Light)

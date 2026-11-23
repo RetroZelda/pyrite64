@@ -54,6 +54,8 @@ has "a Result wired into a logic node" "wire CondA|TestCond.Result -> And|Condit
 has "a logic node wired into a logic node" "wire And|ConditionAnd.Result -> Nand|ConditionNot.Inputs : scene::C.And.Result"
 lacks "a condition without triggers has none" "CondM|TestCondManual.Check"
 has "a binding written on Check stays beside the trigger" "in  Gated|TestCond.Check: scene::C.Kick global::Test.CondTick (trigger, from the script)"
+has "Auto Check off shows on the node" "node Quiet (condition) [Auto Check off, Slot: 0]"
+lacks "and leaves the trigger out" "Quiet|TestCond.Check"
 
 # 2. wiring: a new wire reuses the Result's name; a second logic node reads the same condition
 editor --cmd wire --scene 10 --from 'CondM|TestCondManual.Result' --to 'Orphan|ConditionAnd.Inputs' || { cat "$LOG"; bad "wire M into Orphan"; }

@@ -952,6 +952,58 @@
         "uuid": 10103,
         "uuidPrefab": 0,
         "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10106,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "0",
+                "conditionAutoCheck": "0"
+              },
+              "script": 14240860050882426384
+            },
+            "events": {
+              "out": {
+                "True": [
+                  "scene::C.Quiet.True"
+                ],
+                "False": [
+                  "scene::C.Quiet.False"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Quiet",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10105,
+        "uuidPrefab": 0,
+        "visMask": 1
       }
     ],
     "components": [],

@@ -66,7 +66,8 @@ namespace P64::Script::C0FFEE0000000001
 - True, False, NewlyTrue and NewlyFalse pass on the value of the event that caused the check. A
   logic node that checks itself because one of its inputs was checked fires them with its own
   answer as the value: 1 or 0.
-- The only static field the engine adds is **Starts Enabled** (on).
+- The static fields the engine adds are **Starts Enabled** (on) and, for scripts that name
+  triggers, **Auto Check** (on).
 - When one event is bound to Enable and to Check of the same condition, Enable is handled first.
 - A disabled condition fires nothing, but it still answers when a logic node reads it.
 
@@ -76,6 +77,11 @@ namespace P64::Script::C0FFEE0000000001
 itself. The build binds them to the Check input of every object that uses the script; they are not
 stored in scenes and cannot be edited in the graph. The editor shows them on the Check pin with a
 lock. A script without the macro is only checked through its Check input or read by a logic node.
+
+**Auto Check** switches the triggers off for one object (or, as an override, for one prefab
+instance): the build then leaves the bindings out, so the condition only answers when its Check
+input fires or a logic node reads it. That is how a condition with triggers is used as a plain
+test.
 
 Any event name works. One that C++, event graphs and node graphs can all fire is an event in a
 namespace the game declares (`events/*.json`), for example `player::HealthChanged`. A system output
@@ -137,8 +143,9 @@ object), so a node graph can fire the event a condition is triggered by.
 | Tests | `tests/conditionCore.cpp`, `tests/eventEditor.cpp`, `n64/tests/test_events` |
 
 **Data layout.** `P64_CONDITION_DATA(...)` puts a 4-byte header in front of the script's fields:
-`bool startsEnabled`, `uint8_t flags` (enabled, last answer, re-check pending), 2 bytes reserved. The
-editor's parser adds the same fields in front, so "Starts Enabled" is an ordinary argument.
+`startsEnabled`, `flags` (enabled, last answer, re-check pending), `autoCheck` (read by the build
+only) and one reserved byte. The editor's parser adds the same fields in front, so "Starts Enabled"
+and "Auto Check" are ordinary arguments, with instance overrides like any other.
 
 **Pins.** A condition script's pins are its own (`P64_EVENTS_IN/OUT`, index from 0) plus the
 condition pins (index 0x80 + position). The Code component hands pins >= 0x80 to the runtime.

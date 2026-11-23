@@ -216,12 +216,12 @@ namespace
     }
   }
 
-  // Fork: conditions. The static values of a condition, as the node shows them: "Compare: Less, Value: 25"
-  std::string conditionSummary(const Ctx &c, const Project::Component::Entry &comp)
+  // Fork: conditions. The static values of a condition, as the node shows them: "Compare: Less", "Value: 25"
+  std::vector<std::string> conditionSummary(const Ctx &c, const Project::Component::Entry &comp)
   {
     auto *script = c.project.getAssets().getEntryByUUID(Project::Component::Code::getScriptUUID(comp));
     if(!script) return {};
-    std::string res{};
+    std::vector<std::string> res{};
     for(const auto &field : script->params.fields) {
       auto label = field.attr.find("P64::Name");
       if(label == field.attr.end())continue;
@@ -229,7 +229,11 @@ namespace
       if(value.empty()) value = field.defaultValue;
       if(field.name == "conditionStartsEnabled") {
         // the usual case says nothing
-        if(value == "0" || value == "false") res += (res.empty() ? "" : ", ") + std::string{"Starts disabled"};
+        if(value == "0" || value == "false") res.emplace_back("Starts disabled");
+        continue;
+      }
+      if(field.name == "conditionAutoCheck") {
+        if(value == "0" || value == "false") res.emplace_back("Auto Check off");
         continue;
       }
       if(!field.enumValues.empty()) {
@@ -242,7 +246,7 @@ namespace
       } else if(field.type == Utils::DataType::BOOL) {
         value = (value == "1" || value == "true") ? "on" : "off";
       }
-      res += (res.empty() ? "" : ", ") + label->second + ": " + value;
+      res.push_back(label->second + ": " + value);
     }
     return res;
   }

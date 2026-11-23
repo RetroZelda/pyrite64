@@ -11,13 +11,15 @@ namespace P64::Conditions
 {
   /**
    * In front of the data of every condition script (P64_CONDITION_DATA puts it there). The editor
-   * writes the same four bytes: "Starts Enabled" is the only one a designer sets.
+   * writes the same four bytes: a designer sets "Starts Enabled" and "Auto Check".
    */
   struct Header
   {
     uint8_t startsEnabled{1};
     uint8_t flags{0};      // Flag::*, set up by the engine when the object is created
-    uint16_t reserved{0};
+    uint8_t autoCheck{1};  // the script's triggers are bound to Check. Read by the build only: with 0
+                           // it leaves the bindings out, so nothing is tested while the game runs
+    uint8_t reserved{0};
   };
   static_assert(sizeof(Header) == 4);
 

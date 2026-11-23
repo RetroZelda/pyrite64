@@ -16,11 +16,12 @@
 
 ### Conditions
 * A condition is a script declared with `P64_CONDITION_DATA` that answers in `bool evaluate()`. It gets the pins Enable, Disable, Check, Reset and True, False, NewlyTrue, NewlyFalse, Result; its fields are static values, not pins
-* `P64_CONDITION_TRIGGERS("ns::Name"_event, ...)`: the events that make a condition check itself, decided in code and bound to its Check input by the build
+* `P64_CONDITION_TRIGGERS("ns::Name"_event, ...)`: the events that make a condition check itself, decided in code and bound to its Check input by the build; "Auto Check" switches them off for one object or prefab instance
 * Built-in logic nodes And, Or, Xor and Not: wire any number of Result outputs into their Inputs pin; `P64_CONDITION_INPUTS` and `Conditions::Inputs` for game scripts that combine conditions
 * `Conditions::evaluate()`, `check()`, `setEnabled()`, `reset()` from code (`events/conditions.h`)
 * Events window: condition nodes show their values, a "Condition" entry in the add menu, Result wires in their own colour, triggers shown locked on Check
 * Node graphs: a "Fire Event" node posts a named event
+* Fix: an instance override of a script argument that the prefab file never stored is now found by the build (it built the default before)
 
 ## v0.10.0
 

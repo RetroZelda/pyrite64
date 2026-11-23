@@ -85,8 +85,9 @@
 /**
  * The events that make a condition check itself, decided here in code only:
  *   P64_CONDITION_TRIGGERS("player::HealthChanged"_event, "scene::Loaded"_event);
- * The build binds them to the Check input of every object that uses the script. Without it the
- * condition is checked through its Check input, or read by a logic node.
+ * The build binds them to the Check input of every object that uses the script, unless the object
+ * has "Auto Check" switched off. Without triggers a condition is checked through its Check input,
+ * or read by a logic node.
  */
 #define P64_CONDITION_TRIGGERS(...) \
   [[maybe_unused]] inline constexpr ::P64::Events::EventId CONDITION_TRIGGERS[] = { __VA_ARGS__ }

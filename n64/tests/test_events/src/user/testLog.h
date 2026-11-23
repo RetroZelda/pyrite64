@@ -173,6 +173,7 @@ namespace P64::User::EventTest
     COND_ORPHAN_TRUE, COND_ORPHAN_FALSE,
     COND_GATED_TRUE,
     COND_G_TRUE,
+    COND_QUIET_TRUE, COND_QUIET_FALSE,
   };
   inline constexpr LogicName COND_NAMES[] = {
     {"A.True",          "scene::C.A.True"_event,          COND_A_TRUE},
@@ -199,5 +200,7 @@ namespace P64::User::EventTest
     {"Orphan.False",    "scene::C.Orphan.False"_event,    COND_ORPHAN_FALSE},
     {"Gated.True",      "scene::C.Gated.True"_event,      COND_GATED_TRUE},
     {"G.True",          "scene::C.G.True"_event,          COND_G_TRUE},
+    {"Quiet.True",      "scene::C.Quiet.True"_event,      COND_QUIET_TRUE},
+    {"Quiet.False",     "scene::C.Quiet.False"_event,     COND_QUIET_FALSE},
   };
 }

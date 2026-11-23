@@ -236,6 +236,18 @@ namespace Project::Component::Code
     return data;
   }
 
+  // Fork: conditions
+  std::string getBuildArg(Object &obj, Entry &entry, const std::string &field)
+  {
+    auto *data = static_cast<Data*>(entry.data.get());
+    if(!data) return {};
+    // an argument the file never stored still has its id, so an instance override of it is found
+    PropString unset{field, std::string{}};
+    auto it = data->args.find(field);
+    PropScope::Path compPath(entry.uuid); // override keys are relative to the component, as in build()
+    return resolveArg(obj, it == data->args.end() ? unset : it->second);
+  }
+
   void build(Object& obj, Entry &entry, Build::SceneCtx &ctx)
   {
     Data &data = *static_cast<Data*>(entry.data.get());
@@ -256,6 +268,9 @@ namespace Project::Component::Code
 
     for (auto &field : script->params.fields) {
       auto &prop = data.args[field.name];
+      // Fork: an argument the file never stored was just created without a name and id. Give it both,
+      // or an instance override of it (keyed by the id) is not found and the default is built instead.
+      if (prop.name.empty()) prop = PropString{field.name, std::string{}};
       // not prop.resolve(): an override of another property with the same name is not this arg's value
       std::string val = resolveArg(obj, prop);
       if (val.empty())val = field.defaultValue;

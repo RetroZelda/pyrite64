@@ -49,7 +49,10 @@ Project::Events::PinList Project::Events::pinsOf(Project &project, const Compone
         for(const char* name : P64::Events::Pins::CONDITION_IN) res.in.emplace_back(name);
         for(const char* name : P64::Events::Pins::CONDITION_OUT) res.out.emplace_back(name);
         res.conditionInputs = script->condition.inputs;
-        res.triggers = script->condition.triggers;
+        res.scriptTriggers = script->condition.triggers;
+        // "Auto Check" as the component stores it; the build asks again with instance overrides
+        const auto autoCheck = Component::Code::getStoredArg(comp, "conditionAutoCheck");
+        if(autoCheck != "0" && autoCheck != "false") res.triggers = res.scriptTriggers;
       }
     }
     return res;

@@ -12,7 +12,7 @@ namespace P64::Script::C5A1B2C3D4E5F614
   P64_DATA( uint32_t pad; );
 
   // runtime ids, in the order of the scene's objects
-  enum : uint16_t { COND_A = 3, COND_B, COND_M, AND, OR, XOR, NOT, NAND, ORPHAN, GATED, K10, K20, SPAWNER };
+  enum : uint16_t { COND_A = 3, COND_B, COND_M, AND, OR, XOR, NOT, NAND, ORPHAN, GATED, K10, K20, SPAWNER, GRAPH, COND_G, QUIET };
   enum : uint32_t { SLOT_A = 0, SLOT_B, SLOT_M, SLOT_GATED, SLOT_G = 5 };
 
   void to(uint16_t id, Events::PinName pin, uint32_t value = 0)
@@ -60,6 +60,8 @@ namespace P64::Script::C5A1B2C3D4E5F614
         to(ORPHAN, "Check"_pin, 1);
         condSlots[SLOT_GATED] = true;
         Events::post(COND_KICK, 9, 2);
+        // Quiet has A's script and slot with "Auto Check" off: the ticks never checked it, this does
+        to(QUIET, "Check"_pin, 4);
         break;
       case 8: // from code: evaluate() answers at once and fires nothing
         if(auto *m = scene.getObjectById(COND_M)) {

@@ -99,8 +99,11 @@ namespace Utils::CPP
   /** 'pins' are the script's own pins (parseEventPins of the same source). */
   Condition parseCondition(const std::string &sourceCode, const EventPins &pins);
 
-  /** The fields P64_CONDITION_DATA puts in front of a condition script's own (Conditions::Header). */
-  extern const char* const CONDITION_HEADER_FIELDS;
+  /**
+   * The fields P64_CONDITION_DATA puts in front of a condition script's own (Conditions::Header).
+   * "Auto Check" is only offered (has a P64::Name) when the script names triggers.
+   */
+  std::string conditionHeaderFields(bool hasTriggers);
 
   /** Systems in declaration order, IN and OUT of one system merged. Problems go to 'errors'. */
   std::vector<SystemPins> parseGlobalEventPins(const std::string &sourceCode, std::vector<std::string> *errors = nullptr);

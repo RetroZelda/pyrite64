@@ -101,9 +101,11 @@ namespace
         for(const auto &node : model.canvases) if(node.bound()) printed.push_back(&node);
         for(const auto *nodePtr : printed) {
           const auto &node = *nodePtr;
+          std::string summary{};
+          for(const auto &value : node.summary) summary += (summary.empty() ? " [" : ", ") + value;
+          if(!summary.empty()) summary += "]";
           printf("node %s%s%s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : (node.canvas ? " (UI canvas)" : ""),
-                 node.builtin ? " (built-in)" : "", node.condition ? " (condition)" : "",
-                 node.summary.empty() ? "" : (" [" + node.summary + "]").c_str());
+                 node.builtin ? " (built-in)" : "", node.condition ? " (condition)" : "", summary.c_str());
           for(const auto &cat : node.categories) {
             for(const auto &pin : cat.pins) {
               if(pin.names.empty() && pin.muted.empty() && pin.problem.empty() && pin.locked.empty())continue;

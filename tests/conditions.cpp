@@ -93,24 +93,45 @@ TEST_CASE("condition: the header is the four bytes the editor writes in front of
   CHECK(offsetof(Header, flags) == 1);
 
   // the same fields, as the editor's parser sees them
+  CHECK(offsetof(Header, autoCheck) == 2);
   auto fields = Utils::CPP::parseDataStruct(
     "P64_CONDITION_DATA(\n [[P64::Name(\"Value\")]] float value = 50.0f;\n);", "Data").fields;
-  REQUIRE(fields.size() == 4);
+  REQUIRE(fields.size() == 5);
   CHECK(fields[0].name == "conditionStartsEnabled");
   CHECK(fields[0].attr.at("P64::Name") == "Starts Enabled");
   CHECK(fields[0].defaultValue == "1"); // on by default
   CHECK(fields[1].name == "conditionFlags");
   CHECK(fields[1].attr.find("P64::Name") == fields[1].attr.end()); // hidden in the inspector
-  CHECK(fields[2].name == "conditionReserved");
-  CHECK(fields[3].name == "value");
-  uint32_t headerSize = fields[0].dataSize + fields[1].dataSize + fields[2].dataSize;
+  CHECK(fields[2].name == "conditionAutoCheck");
+  CHECK(fields[2].defaultValue == "1");
+  CHECK(fields[3].name == "conditionReserved");
+  CHECK(fields[4].name == "value");
+  uint32_t headerSize = fields[0].dataSize + fields[1].dataSize + fields[2].dataSize + fields[3].dataSize;
   CHECK(headerSize == sizeof(Header));
+}
+
+TEST_CASE("condition: Auto Check is only offered when the script names triggers")
+{
+  auto plain = Utils::CPP::parseDataStruct("P64_CONDITION_DATA();\nbool evaluate(Object& obj, Data *data) { return true; }", "Data").fields;
+  REQUIRE(plain.size() == 4);
+  CHECK(plain[2].name == "conditionAutoCheck");
+  CHECK(plain[2].attr.find("P64::Name") == plain[2].attr.end()); // nothing to switch off: hidden
+
+  auto empty = Utils::CPP::parseDataStruct("P64_CONDITION_DATA();\nP64_CONDITION_TRIGGERS();", "Data").fields;
+  REQUIRE(empty.size() == 4);
+  CHECK(empty[2].attr.find("P64::Name") == empty[2].attr.end());
+
+  auto triggered = Utils::CPP::parseDataStruct(
+    "P64_CONDITION_DATA();\nP64_CONDITION_TRIGGERS(\"scene::Loaded\"_event);", "Data").fields;
+  REQUIRE(triggered.size() == 4);
+  CHECK(triggered[2].attr.at("P64::Name") == "Auto Check");
+  CHECK(triggered[2].defaultValue == "1");
 }
 
 TEST_CASE("condition: a script without fields still has the header")
 {
   auto fields = Utils::CPP::parseDataStruct("P64_CONDITION_DATA();\nbool evaluate(Object& obj, Data *data) { return true; }", "Data").fields;
-  REQUIRE(fields.size() == 3);
+  REQUIRE(fields.size() == 4);
   CHECK(fields[0].name == "conditionStartsEnabled");
 }
 

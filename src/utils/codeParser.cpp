@@ -633,7 +633,11 @@ Utils::CPP::Struct Utils::CPP::parseDataStruct(const std::string &sourceCode, co
   if (s.name != structName) return {};
 
   auto body = code.substr(bodyStart, bodyEnd - 1 - bodyStart);
-  if (isCondition) body = std::string{CONDITION_HEADER_FIELDS} + body;
+  if (isCondition) {
+    // a trigger list with at least one name in it
+    const bool hasTriggers = std::regex_search(code, std::regex(R"(\bP64_CONDITION_TRIGGERS\s*\(\s*")"));
+    body = conditionHeaderFields(hasTriggers) + body;
+  }
   s.fields = parseFields(body);
   return s;
 }
@@ -820,10 +824,16 @@ std::vector<Utils::CPP::SystemPins> Utils::CPP::parseGlobalEventPins(const std::
 
 // must match P64::Conditions::Header (n64/engine/include/events/conditionTypes.h)
 // one field a line: the field parser reads a default value up to the last ';' of its line
-const char* const Utils::CPP::CONDITION_HEADER_FIELDS =
-  "[[P64::Name(\"Starts Enabled\")]] bool conditionStartsEnabled = true;\n"
-  "uint8_t conditionFlags;\n"
-  "uint16_t conditionReserved;\n";
+std::string Utils::CPP::conditionHeaderFields(bool hasTriggers)
+{
+  std::string res = "[[P64::Name(\"Starts Enabled\")]] bool conditionStartsEnabled = true;\n"
+                    "uint8_t conditionFlags;\n";
+  // without triggers there is nothing to switch off: the field stays hidden
+  if(hasTriggers) res += "[[P64::Name(\"Auto Check\")]] ";
+  res += "bool conditionAutoCheck = true;\n"
+         "uint8_t conditionReserved;\n";
+  return res;
+}
 
 bool Utils::CPP::Condition::readsConditions(const std::string &pin) const
 {

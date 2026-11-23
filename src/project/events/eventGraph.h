@@ -77,7 +77,7 @@ namespace Project::Events::Graph
     bool builtin{false};   // a built-in event object (an engine script)
     bool delay{false};     // Delay or Frame Delay: a loop through it is fine
     bool condition{false}; // Fork: conditions, has a condition script
-    std::string summary{}; // Fork: conditions, its static values ("Compare: Less, Value: 25")
+    std::vector<std::string> summary{}; // Fork: conditions, its static values: "Compare: Less", "Value: 25"
     uint64_t canvas{0};    // a UI canvas node (uuid is 0)
     std::vector<Category> categories{};
 

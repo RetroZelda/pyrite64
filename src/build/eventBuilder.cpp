@@ -264,7 +264,11 @@ std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const O
   {
     auto [comp, level] = input.comps[i];
     const auto compIndex = static_cast<uint8_t>(i + 1);
-    for(const auto &trigger : compPins[i].triggers) {
+    if(compPins[i].scriptTriggers.empty())continue;
+    // "Auto Check" off on this object (or on the instance it is built for): only Check asks it
+    const auto autoCheck = Project::Component::Code::getBuildArg(const_cast<Project::Object&>(obj), *comp, "conditionAutoCheck");
+    if(autoCheck == "0" || autoCheck == "false")continue;
+    for(const auto &trigger : compPins[i].scriptTriggers) {
       const bool alreadyBound = std::any_of(entries.begin(), entries.end(), [&](const Entry &e) {
         return e.comp == compIndex && e.input && e.pin == "Check" && e.name == trigger;
       });
