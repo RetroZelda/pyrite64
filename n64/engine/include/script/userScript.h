@@ -88,9 +88,11 @@
  * The build binds them to the Check input of every object that uses the script, unless the object
  * has "Auto Check" switched off. Without triggers a condition is checked through its Check input,
  * or read by a logic node.
+ * The array only makes the compiler check the names (its first entry is a placeholder, so an empty
+ * list compiles too); the editor reads the list from the source.
  */
 #define P64_CONDITION_TRIGGERS(...) \
-  [[maybe_unused]] inline constexpr ::P64::Events::EventId CONDITION_TRIGGERS[] = { __VA_ARGS__ }
+  [[maybe_unused]] inline constexpr ::P64::Events::EventId CONDITION_TRIGGERS[] = { ::P64::Events::EventId{}, __VA_ARGS__ }
 
 /**
  * Marks input pins (declared with P64_EVENTS_IN) as reading conditions: Result outputs are wired

@@ -12,6 +12,8 @@ namespace P64::Script::C5A1B2C3D4E5F611
     uint32_t slot = 0;
   );
 
+  P64_CONDITION_TRIGGERS(); // an empty list is allowed: no triggers
+
   bool evaluate(Object& obj, Data *data)
   {
     return condSlots[data->slot & 7];
