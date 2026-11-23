@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <SDL3/SDL.h>
+#include "imgui.h"
 
 #include "../context.h"
 #include "../project/project.h"
@@ -27,6 +28,7 @@ namespace
   int waitFrames{0};
   bool quit{false};
   float mouseX{0.0f}, mouseY{0.0f};
+  bool pointerSet{false}; // the script has placed the pointer at least once
 
   // an interpolated move in progress
   float fromX{0.0f}, fromY{0.0f}, toX{0.0f}, toY{0.0f};
@@ -53,6 +55,7 @@ namespace
     SDL_WarpMouseInWindow(window, x, y);
     mouseX = x;
     mouseY = y;
+    pointerSet = true;
   }
 
   void pushButton(SDL_Window *window, uint8_t button, bool down)
@@ -123,6 +126,11 @@ bool Editor::UiScript::wantsQuit()
   return quit;
 }
 
+void Editor::UiScript::holdPointer()
+{
+  if(pointerSet) ImGui::GetIO().AddMousePosEvent(mouseX, mouseY);
+}
+
 void Editor::UiScript::step(SDL_Window *window)
 {
   if(!window)return;
@@ -161,6 +169,19 @@ void Editor::UiScript::step(SDL_Window *window)
     if(s.cmd == "rdown") { pushButton(window, SDL_BUTTON_RIGHT, true); return; }
     if(s.cmd == "rup") { pushButton(window, SDL_BUTTON_RIGHT, false); return; }
     if(s.cmd == "key") { if(!s.args.empty()) pushKey(window, s.args[0]); return; }
+    if(s.cmd == "wheel") {
+      // scroll at the pointer: positive scrolls up (content moves down), as a mouse wheel does
+      SDL_Event ev{};
+      ev.type = SDL_EVENT_MOUSE_WHEEL;
+      ev.wheel.windowID = SDL_GetWindowID(window);
+      ev.wheel.x = num(s, 1);
+      ev.wheel.y = num(s, 0);
+      ev.wheel.mouse_x = mouseX;
+      ev.wheel.mouse_y = mouseY;
+      ev.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+      SDL_PushEvent(&ev);
+      return;
+    }
     if(s.cmd == "type") {
       textBuffer = s.args.empty() ? std::string{} : s.args[0];
       SDL_Event ev{};

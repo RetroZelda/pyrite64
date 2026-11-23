@@ -720,9 +720,12 @@ struct Editor::EventGraphWindow::State
       const auto *node = k.starts_with("c:") ? model.findCanvas(std::stoull(k.substr(2))) : model.find((uint32_t)std::stoul(k.substr(2)));
       float h = 34.0f;
       if(node) for(const auto &cat : node->categories) {
+        // a collapsed section still shows its wired pins: count the bound ones (a little high at worst)
         size_t ins = 0, outs = 0;
-        for(const auto &pin : cat.pins) (pin.ref.input ? ins : outs)++;
-        h += 22.0f + (cat.openByDefault ? 22.0f * (float)std::max(ins, outs) : 0.0f);
+        for(const auto &pin : cat.pins) {
+          if(cat.openByDefault || !pin.names.empty()) (pin.ref.input ? ins : outs)++;
+        }
+        h += 22.0f + 22.0f * (float)std::max(ins, outs);
       }
       return h;
     };

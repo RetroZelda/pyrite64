@@ -142,35 +142,44 @@ namespace
 
   void drawDebugPage()
   {
+    // the overlay is 320 pixels wide: in the monospace font (7 pixels a character, the columns line up)
+    // every line from x = 15 keeps to 43 characters
     using P64::Debug::printf;
+    P64::Debug::isMonospace = true;
     constexpr uint16_t x = 15;
     constexpr uint8_t step = 8;
+    constexpr uint32_t SHOWN = 10; // of the RECENT_COUNT kept, so the list stays above the overlay's bars
     uint16_t y = 45;
     const auto stats = P64::Events::getStats();
     const auto limits = P64::Events::getLimits();
-    printf(x, y, "Events: queued %u/%lu (peak %u)  subs %u/%lu (peak %u)", (unsigned)stats.queued,
-      (unsigned long)limits.queueSize, (unsigned)stats.queuePeak, (unsigned)stats.subscriptions,
+    printf(x, y, "queue %u/%lu  peak %u", (unsigned)stats.queued, (unsigned long)limits.queueSize,
+      (unsigned)stats.queuePeak);
+    y += step;
+    printf(x, y, "listeners %u/%lu  peak %u", (unsigned)stats.subscriptions,
       (unsigned long)limits.maxSubscriptions, (unsigned)stats.subscriptionsPeak);
     y += step;
-    printf(x, y, "posted %lu  delivered %lu  listener calls %lu", (unsigned long)stats.posted,
-      (unsigned long)stats.delivered, (unsigned long)stats.listenerCalls);
+    printf(x, y, "posted %lu  delivered %lu", (unsigned long)stats.posted, (unsigned long)stats.delivered);
     y += step;
-    printf(x, y, "dropped: full %lu  hops %lu  irq %lu  scope %lu  budget %lu  subs %lu",
-      (unsigned long)stats.droppedQueueFull, (unsigned long)stats.droppedHopLimit,
-      (unsigned long)stats.droppedMailbox, (unsigned long)stats.droppedWrongScope,
+    printf(x, y, "listener calls %lu", (unsigned long)stats.listenerCalls);
+    y += step;
+    printf(x, y, "dropped: full %lu hops %lu irq %lu", (unsigned long)stats.droppedQueueFull,
+      (unsigned long)stats.droppedHopLimit, (unsigned long)stats.droppedMailbox);
+    y += step;
+    printf(x, y, "  scope %lu budget %lu subs %lu", (unsigned long)stats.droppedWrongScope,
       (unsigned long)stats.budgetHits, (unsigned long)stats.subscribeFailed);
     y += step + 4;
-    printf(x, y, "Recent (newest first)            sender   value  heard");
+    printf(x, y, "Latest first           from  value  n"); // n: listeners called
     y += step;
-    const uint32_t count = std::min<uint32_t>(recentTotal, RECENT_COUNT);
+    const uint32_t count = std::min<uint32_t>(std::min<uint32_t>(recentTotal, RECENT_COUNT), SHOWN);
     for(uint32_t i = 0; i < count; ++i) {
       const auto &ev = recent[(recentNext + RECENT_COUNT - 1 - i) % RECENT_COUNT];
       char buffer[16];
-      printf(x, y, "%-32.32s %6u %7lu %5u", describe(ev.hash, buffer, sizeof(buffer)), (unsigned)ev.sender,
+      printf(x, y, "%-22.22s%5u%7lu%3u", describe(ev.hash, buffer, sizeof(buffer)), (unsigned)ev.sender,
         (unsigned long)ev.value, (unsigned)ev.listeners);
       y += step;
     }
     if(count == 0) printf(x, y, "(none yet)");
+    P64::Debug::isMonospace = false;
   }
 
   void onResetPressed()

@@ -11,6 +11,7 @@
 //   click 400 360         move, press and release
 //   rclick 400 360        the same with the right button
 //   key Delete            press and release a key (Delete, Backspace, Return, Escape, Tab, A-Z)
+//   wheel -3 [x]          scroll at the pointer (negative: down), optional horizontal amount
 //   type text             text input
 //   mark name             prints "[ui] mark name" on stdout, for a capture by the caller
 //   save                  saves the project (like Ctrl+S)
@@ -31,4 +32,11 @@ namespace Editor::UiScript
 
   /** The script asked to quit. */
   bool wantsQuit();
+
+  /**
+   * While a script runs: queues its pointer position once more, after the ImGui backend has read
+   * the OS pointer (which does not always follow the warp, e.g. while a screen locker holds the
+   * pointer). Call between ImGui_ImplSDL3_NewFrame() and ImGui::NewFrame().
+   */
+  void holdPointer();
 }

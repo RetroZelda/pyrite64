@@ -456,6 +456,7 @@ int main(int argc, char** argv)
 
       ImGui_ImplSDLGPU3_NewFrame();
       ImGui_ImplSDL3_NewFrame();
+      Editor::UiScript::holdPointer(); // Fork: --ui-script, the scripted pointer wins over the OS one
       ImGui::NewFrame();
 
       if(!ImGui::GetIO().WantTextInput)
