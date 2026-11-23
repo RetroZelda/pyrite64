@@ -176,7 +176,7 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
 
   // send ready event. this is deferred, so it will always happen after 'initDel'.
   // Fork components/scripts use the onReady callback instead; both are kept.
-  sendEvent(obj->id, 0, EVENT_TYPE_READY, 0);
+  sendEventInternal(obj->id, 0, EVENT_TYPE_READY, 0);
 
   /*debugf("Object: id=%d | group=%d | flags=0x%04X | pos=(%f,%f,%f) | comp: %d\n",
     obj->id, obj->group, obj->flags,

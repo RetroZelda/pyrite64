@@ -599,6 +599,15 @@ void draw(Object& obj, Data *data, float deltaTime)
 ```cpp
 void onEvent(Object& obj, Data *data, const ObjectEvent &event)
 ```
+> **Deprecated in the Full-Frontal fork.** `onEvent` and `Scene::sendEvent` are the old addressed messages:
+> every component of the target gets every message, whatever its type. Use the event graph instead: declare
+> inputs with `P64_EVENTS_IN(Open, Close);`, handle them in
+> `void onInput(Object& obj, Data *data, In input, const Events::Event& ev)`, and send one to an object with
+> `P64::Events::send(target, "Open"_pin, value, obj.id)` (only the scripts that declare `Open` get it), or bind
+> the inputs to named events in the editor. Both old functions still work: a call to `Scene::sendEvent` gives a
+> deprecation warning and the build warns about scripts that define `onEvent` (UI element scripts, whose
+> `onEvent` gets the canvas's own events, are not warned about). New scripts no longer get an `onEvent`.
+
 Pyrite64's engine implements a basic event bus for objects.\
 This allows them to send small messages to each other without having to know *what* object are.
 
@@ -617,7 +626,7 @@ There are a few builtin types, so it must be explicitly checked.
 The safe range for user-defined types is from `EVENT_TYPE_CUSTOM_START` to `EVENT_TYPE_CUSTOM_END`.\
 This starts from `0`, whereas builtin types reserve the end of the range. 
 
-The default script template defines this function as such:
+Older script templates defined this function as such:
 ```cpp
 void onEvent(Object& obj, Data *data, const ObjectEvent &event)
 {

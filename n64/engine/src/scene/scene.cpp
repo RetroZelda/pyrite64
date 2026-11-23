@@ -631,7 +631,7 @@ void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
   }
 
   if (enabledChanged) {
-    sendEvent(obj.id, 0, obj.isEnabled() ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE, 0);
+    sendEventInternal(obj.id, 0, obj.isEnabled() ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE, 0);
     Events::Internal::onObjectStateChanged(obj); // Fork: event graph, prefab::Enabled / Disabled
   }
 

@@ -33,7 +33,7 @@ node({
     ctx.localVar("uint16_t", "t_objId", ctx.inputExpr(0))
        .localConst("uint16_t", "t_eventType", n.eventType)
        .localConst("uint32_t", "t_eventVal", numberOrHash(n.eventValue))
-       .line("inst->object->getScene().sendEvent(")
+       .line("inst->object->getScene().sendEventInternal(") // Fork: sendEvent is deprecated, same behaviour
        .line("  t_objId == 0 ? inst->object->id : t_objId,")
        .line("  inst->object->id,")
        .line("  t_eventType,")

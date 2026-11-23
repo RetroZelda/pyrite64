@@ -6,6 +6,13 @@ namespace P64::Script::__UUID__
 {
   P64_DATA_TYPE(User::__STRUCT__);
 
+  // Event pins (optional). Inputs can be bound to events in the editor and arrive in onInput();
+  // outputs are fired with fire(obj, data, Out::Name, value) and post the events they are bound to.
+  //   P64_EVENTS_IN(Open, Close);
+  //   P64_EVENTS_OUT(Opened);
+  //   void onInput(Object& obj, Data *data, In input, const Events::Event& ev) { switch(input) { ... } }
+  // Note: onInput must not be the name of a helper function anywhere else in this file.
+
   // The following functions are called by the engine at different points in the object's lifecycle.
   // If you don't need a specific function you can remove it.
 
@@ -48,15 +55,6 @@ namespace P64::Script::__UUID__
   void onReady(Object& obj, Data *data)
   {
     // object is fully initialized, no update call has happened yet
-  }
-
-  void onEvent(Object& obj, Data *data, const ObjectEvent &event)
-  {
-    // generic events an object can receive
-    switch(event.type)
-    {
-      // you can check for your own custom types here
-    }
   }
 
   void onCollision(Object& obj, Data *data, const Coll::CollEvent& event)

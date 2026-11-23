@@ -39,9 +39,17 @@ if(ptx && ptx->handle.isValid())
   ptx->handle.replay(); // restart the emission from scratch
 }
 
-// start the emitters of an object that don't auto-play
-obj.getScene().sendEvent(obj.id, obj.id, P64::EVENT_TYPE_PARTICLE_PLAY, 0);
+// start the emitters of an object that don't auto-play: what the component's Play input does
+if(ptx && ptx->handle.isValid())
+{
+  ptx->handle.setPos(obj.pos);
+  ptx->handle.replay();
+}
 ```
+
+The component also has the event-graph inputs **Play** and **Stop**: bind them to events in the editor
+to start and stop the emitters without code. (Sending `EVENT_TYPE_PARTICLE_PLAY` with `Scene::sendEvent`
+still works, but `sendEvent` is deprecated in the fork.)
 
 Emitters can also be played without a component, e.g. for one-shot effects:
 `P64::EmitterManager::play()` starts one that cleans itself up once finished,

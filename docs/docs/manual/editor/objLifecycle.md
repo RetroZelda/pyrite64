@@ -121,7 +121,7 @@ Objects also have a state that determines if they are active or not.\
 This means they still stay allocated and initialized, but do not get any update or draw calls.
 
 Specifically: `fixedUpdate`, `onColl`, `update`, `draw` will **not** be called.\
-Events, so `onEvent`, are still dispatched,\
+Events, so `onEvent` and the event-graph inputs (`onInput`, the object's own Enable input), are still dispatched,\
 since an object may want to implement logic to wake itself up.
 
 Performing a state change introduces a bit of complexity, since it could happen at any time, including inside `init` of other objects.\

@@ -192,7 +192,22 @@ namespace P64
       /// @return 
       static bool objectHasCollisionHandler(const Object &obj);
 
+      /**
+       * Old addressed message: onEvent() of every component on the target gets it, the frame after.
+       * Fork: deprecated by the event graph. Declare inputs with P64_EVENTS_IN, handle them in onInput()
+       * and send with P64::Events::send(target, "Input"_pin, value, sender): only the scripts that
+       * declare the input get it. Kept (not removed) for upstream code.
+       */
+      [[deprecated("old addressed message: declare an input (P64_EVENTS_IN, onInput) and use P64::Events::send(target, \"Input\"_pin, value, sender)")]]
       void sendEvent(uint16_t targetId, uint16_t senderId, uint16_t type, uint32_t value) {
+        sendEventInternal(targetId, senderId, type, value);
+      }
+
+      /**
+       * Fork: sendEvent() without the deprecation, for the engine's own notifications (ready, enable,
+       * disable), the Message Bridge and the node-graph "Send Event" node. Same behaviour.
+       */
+      void sendEventInternal(uint16_t targetId, uint16_t senderId, uint16_t type, uint32_t value) {
         eventQueue[eventQueueIdx].add(targetId, senderId, type, value);
       }
 

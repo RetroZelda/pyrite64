@@ -6,10 +6,13 @@
 #include "../utils/string.h"
 #include <filesystem>
 #include <format>
+#include <functional>
+#include <unordered_set>
 
 #include "../utils/fs.h"
 #include "../utils/logger.h"
 #include "../utils/hash.h"
+#include "../project/canvas/canvas.h"
 
 #include "../../../n64/engine/include/script/globalScript.h"
 
@@ -28,6 +31,21 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
 
   std::string scriptNames = "\nnamespace P64::Script {\n";
   scriptNames += "\tconst char* const scriptNames[] = {\n";
+
+  // Fork: event graph. Scripts on UI canvas elements get the canvas's own events in onEvent, which is
+  // not the deprecated addressed message: the onEvent warning below skips them.
+  std::unordered_set<uint64_t> uiElementScripts{};
+  {
+    std::function<void(const std::vector<Project::CanvasElement>&)> collect = [&](const auto &elems) {
+      for(const auto &e : elems) {
+        if(e.scriptUuid) uiElementScripts.insert(e.scriptUuid);
+        collect(e.children);
+      }
+    };
+    for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::CANVAS)) {
+      if(entry.canvas) collect(entry.canvas->elements);
+    }
+  }
 
   auto scripts = project.getAssets().getTypeEntries(Project::FileType::CODE_OBJ);
   uint32_t idx = 0;
@@ -53,6 +71,15 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     bool hasFocus    = Utils::CPP::hasFunction(src, "void", "onFocus");
     bool hasBlur     = Utils::CPP::hasFunction(src, "void", "onBlur");
     bool hasActivate = Utils::CPP::hasFunction(src, "void", "onActivate");
+
+    // Fork: event graph, the old addressed messages are deprecated. Engine scripts (the Message Bridge
+    // keeps them on purpose) and UI element scripts (their onEvent gets the canvas's events) are skipped.
+    const bool uiElementScript = hasFocus || hasBlur || hasActivate || uiElementScripts.contains(script.getUUID());
+    if(hasEvent && !script.engineScript && !uiElementScript) {
+      Utils::Logger::log(script.name + " defines onEvent(): the old addressed messages (Scene::sendEvent / onEvent) are "
+        "deprecated; declare inputs with P64_EVENTS_IN, handle them in onInput() and send with P64::Events::send()",
+        Utils::Logger::LEVEL_WARN);
+    }
 
     // Fork: event graph, input pins declared with P64_EVENTS_IN and handled in onInput
     bool hasInput = Utils::CPP::hasFunction(src, "void", "onInput");

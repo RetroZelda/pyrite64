@@ -3,8 +3,9 @@
 * @license MIT
 */
 // Built-in event object: Message Bridge, between events and the older addressed messages
-// (Scene::sendEvent / onEvent). Trigger sends a message of the chosen type to the target with the
-// event's value. A message of that type sent to this object fires Received with its value.
+// (Scene::sendEvent / onEvent, deprecated in the fork; the bridge uses Scene::sendEventInternal).
+// Trigger sends a message of the chosen type to the target with the event's value. A message of
+// that type sent to this object fires Received with its value.
 #include "script/userScript.h"
 
 namespace P64::Script::C0E000000000000F
@@ -26,15 +27,15 @@ namespace P64::Script::C0E000000000000F
     switch(data->target)
     {
       case 1:
-        if(obj.group) scene.sendEvent(obj.group, obj.id, data->messageType, ev.value);
+        if(obj.group) scene.sendEventInternal(obj.group, obj.id, data->messageType, ev.value);
         break;
       case 2:
         obj.iterChildren([&](Object* child) {
-          if(child) scene.sendEvent(child->id, obj.id, data->messageType, ev.value);
+          if(child) scene.sendEventInternal(child->id, obj.id, data->messageType, ev.value);
         });
         break;
       default:
-        scene.sendEvent(obj.id, obj.id, data->messageType, ev.value);
+        scene.sendEventInternal(obj.id, obj.id, data->messageType, ev.value);
         break;
     }
   }

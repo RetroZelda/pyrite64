@@ -87,15 +87,6 @@ namespace P64::Script::__UUID__
     // object is fully initialized, no update call has happened yet
   }
 
-  void onEvent(Object& obj, Data *data, const ObjectEvent &event)
-  {
-    // generic events an object can receive
-    switch(event.type)
-    {
-      // you can check for your own custom types here
-    }
-  }
-
   void onCollision(Object& obj, Data *data, const Coll::CollEvent& event)
   {
     // collision callbacks, only used if any collider is attached

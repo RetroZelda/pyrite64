@@ -13,6 +13,7 @@ CXXFLAGS += -MP
 
 N64_CXXFLAGS += -std=gnu++20 -fno-exceptions -O3 -Iinclude \
 	-Wall -Wextra -Werror \
+	-Wno-error=deprecated-declarations \
 	-Wformat-signedness -fno-common \
 	-Wshadow -Wdouble-promotion -Wformat-security -Wformat-overflow -Wformat-truncation \
 	-Wfatal-errors
