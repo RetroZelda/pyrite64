@@ -12,6 +12,7 @@
 #include "project/scene/scene.h"
 #include "project/scene/prefab.h"
 #include "project/events/eventGraph.h"
+#include "project/events/eventUsages.h"
 #include "utils/logger.h"
 
 namespace
@@ -176,6 +177,42 @@ namespace
     return res;
   }
 
+  // Fork: the event browser without the editor: list every event and its uses, or rename one
+  bool runEventsCommand(const std::string &cmd, const std::string &event, const std::string &renameTo)
+  {
+    namespace U = Project::Events::Usages;
+    Project::Project project{argProgPath};
+    Project::Project *prevProject = ctx.project;
+    ctx.project = &project;
+    bool res = false;
+    try {
+      if(cmd == "events") {
+        std::string last{};
+        for(const auto &use : U::collect(project, nullptr)) {
+          const auto k = Project::Events::Graph::key(use.name);
+          if(!event.empty() && k != Project::Events::Graph::key(event))continue;
+          if(k != last) { printf("%s\n", k.c_str()); last = k; }
+          const char* kind = use.kind == U::Use::Kind::Code ? "code  " : (use.input ? "listen" : "fire  ");
+          printf("  %s %s\n", kind, use.where.c_str());
+        }
+        res = true;
+      } else {
+        if(event.empty() || renameTo.empty()) throw std::runtime_error("rename-event needs --event and --rename-to");
+        if(auto problem = Project::Events::nameProblem(renameTo); !problem.empty()) throw std::runtime_error(problem);
+        auto result = U::rename(project, nullptr, event, renameTo);
+        printf("renamed %d bindings in %zu files\n", result.bindings, result.files.size());
+        for(const auto &f : result.files) printf("  wrote %s\n", f.c_str());
+        for(const auto &c : result.code) printf("  code still uses the old name: %s\n", c.c_str());
+        res = result.bindings > 0;
+      }
+    } catch(const std::exception &e) {
+      fprintf(stderr, "%s failed: %s\n", cmd.c_str(), e.what());
+      res = false;
+    }
+    ctx.project = prevProject;
+    return res;
+  }
+
   // Fork: "To Prefab" and "Unpack" without the editor, for scripts and tests
   bool runPrefabCommand(const std::string &cmd, int sceneId, const std::string &objectPath, const std::string &dir)
   {
@@ -260,7 +297,7 @@ CLI::Result CLI::run(int argc, char** argv)
 
   prog.add_argument("--cmd")
     .help("Command to run")
-    .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire");
+    .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire", "events", "rename-event");
 
   // Fork: arguments of to-prefab and unpack
   prog.add_argument("--scene")
@@ -300,6 +337,9 @@ CLI::Result CLI::run(int argc, char** argv)
     .default_value(std::string{});
   prog.add_argument("--to")
     .help("Input pin, \"Object/Path|Component.Pin\" (wire, unwire)")
+    .default_value(std::string{});
+  prog.add_argument("--rename-to")
+    .help("The new name (rename-event)")
     .default_value(std::string{});
   prog.add_argument("--event")
     .help("An event to bind one pin to, like an Event node in the window (wire, unwire)")
@@ -382,6 +422,10 @@ CLI::Result CLI::run(int argc, char** argv)
   {
     res = runGraphCommand(cmd, {prog.get<int>("--scene"), prog.get<std::string>("--prefab"), prog.get<std::string>("--focus"),
                                 prog.get<std::string>("--from"), prog.get<std::string>("--to"), prog.get<std::string>("--event")});
+  }
+  else if (cmd == "events" || cmd == "rename-event")
+  {
+    res = runEventsCommand(cmd, prog.get<std::string>("--event"), prog.get<std::string>("--rename-to"));
   }
   else if (cmd == "to-prefab" || cmd == "unpack")
   {

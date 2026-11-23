@@ -85,7 +85,7 @@ nodes that generate C++.
 - [x] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
 - [x] Phase 5: Event Graph window
 - [x] Phase 6: UI canvases
-- [ ] Phase 7: tools (debug page, event browser), example project
+- [x] Phase 7: tools (debug page, event browser), example project (the manual is the final guide)
 - [ ] Phase 8: Kentucky Castle adoption
 - [ ] Phase 9: retire the old messages
 - [ ] Final: finish the guide in kentucky-castle/docs/EventGraph/README.md, final report, delete the cron job
@@ -310,6 +310,18 @@ Events window and the graph command line (`canvas:<Name>|<Pin>`).
 - Unit tests, `graphChecks.sh` 7 of 7, `buildChecks.sh` 5 of 5.
 - Kentucky Castle (scratch copy) builds and boots with its HUD drawn.
 
+### Phase 7: tools and example (done 2026-11-23)
+
+**Built:** the debug overlay page "Events" (counters and the 12 latest deliveries), the event
+browser in the Events window (every name with its uses in scenes, prefabs, canvases and code;
+rename everywhere) and its command line (`--cmd events`, `--cmd rename-event`), the example
+project `n64/examples/events` with a README, and the changelog entry.
+
+**Verified:** the example builds from a copy of its tracked files and runs in ares (the Delay
+ticks, the Counter opens the door on the third tick, the banner shows, the Score system counts);
+rename on a copy keeps the wires and reports code uses; the browser and its rename are visible in
+the editor. The debug page was compiled, not looked at: opening the overlay needs a controller.
+
 ## Decisions made autonomously
 
 Questions that came up while the owner was away, answered with the recommended option. List them
@@ -417,3 +429,13 @@ all in the final report.
    uses the same code path as Focused, which is tested.
 38. (Phase 6) Canvas pin edits made in the Events window are saved straight to the `.canvas` file
    and are not undoable there; canvas undo exists only in canvas mode.
+39. (Phase 7) The manual (events, every pin, how-tos) is the guide in
+   `kentucky-castle/docs/EventGraph/README.md`, as the owner asked; the engine repo gets the
+   changelog entry and the example's README only.
+40. (Phase 7) The debug page is always available; recording the latest deliveries costs a few
+   stores per event. `P64_EVENT_TRACE=1` still prints every delivery through debugf.
+41. (Phase 7) Rename changes bindings, override adds and mutes, link names and link targets in
+   every scene, prefab and canvas, and lists game code uses instead of editing code. Other scenes
+   are written at once; the open scene changes in memory (undoable) and is saved as usual.
+42. (Phase 7) A new wire between two pins never reuses a global:: name (found with the example: an
+   input cannot listen to a system input).

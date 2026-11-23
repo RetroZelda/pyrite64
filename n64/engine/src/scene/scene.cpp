@@ -90,6 +90,7 @@ P64::Scene::Scene(uint16_t sceneId, Scene** ref)
   if(ref)*ref = this;
   Debug::init();
   Debug::Overlay::init();
+  Events::Internal::addDebugMenu(); // Fork: event bus, the overlay's Events page
   AnimController::init();
 
   loadSceneConfig();

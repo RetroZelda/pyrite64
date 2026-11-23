@@ -143,6 +143,9 @@ namespace P64::Events
   /** Engine-internal entry points, called by the scene manager and the scene. */
   namespace Internal
   {
+    /** Adds the "Events" page to the debug overlay (recent events, counters). Called on scene load. */
+    void addDebugMenu();
+
     enum class DrainPoint : uint8_t
     {
       FrameStart,   // after spawns, enable changes and addressed messages; also takes hardware and interrupt events

@@ -4,11 +4,14 @@
 */
 // Fork: the event bus, N64 side: the one bus instance, drains, interrupt mailbox, hardware
 // events and debug output. The rules live in busCore.cpp.
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 #include <libdragon.h>
 
 #include "events/bus.h"
+#include "debug/debugMenu.h"
+#include "debug/debugDraw.h"
 #include "busCore.h"
 #include "lib/logger.h"
 #include "scene/scene.h"
@@ -110,16 +113,65 @@ namespace
     }
   }
 
-#if P64_EVENT_TRACE
+  // the most recent deliveries, for the debug overlay's Events page (PLAN 10)
+  struct RecentEvent
+  {
+    uint32_t hash{};
+    uint32_t value{};
+    uint16_t sender{};
+    uint16_t listeners{};
+  };
+  constexpr uint32_t RECENT_COUNT = 12;
+  constinit RecentEvent recent[RECENT_COUNT]{};
+  constinit uint32_t recentNext = 0;
+  constinit uint32_t recentTotal = 0;
+
   void onTrace(const Core::QueuedEvent& event, uint32_t listeners, [[maybe_unused]] void* user)
   {
+    recent[recentNext] = {event.ev.id, event.ev.value, event.ev.sender, (uint16_t)std::min<uint32_t>(listeners, 0xFFFF)};
+    recentNext = (recentNext + 1) % RECENT_COUNT;
+    ++recentTotal;
+#if P64_EVENT_TRACE
     char buffer[16];
     debugf("[events] %s value=%lu sender=%u instigator=%u hops=%u listeners=%lu\n",
       describe(event.ev.id, buffer, sizeof(buffer)),
       (unsigned long)event.ev.value, (unsigned)event.ev.sender, (unsigned)event.ev.instigator,
       (unsigned)event.hops, (unsigned long)listeners);
-  }
 #endif
+  }
+
+  void drawDebugPage()
+  {
+    using P64::Debug::printf;
+    constexpr uint16_t x = 15;
+    constexpr uint8_t step = 8;
+    uint16_t y = 45;
+    const auto stats = P64::Events::getStats();
+    const auto limits = P64::Events::getLimits();
+    printf(x, y, "Events: queued %u/%lu (peak %u)  subs %u/%lu (peak %u)", (unsigned)stats.queued,
+      (unsigned long)limits.queueSize, (unsigned)stats.queuePeak, (unsigned)stats.subscriptions,
+      (unsigned long)limits.maxSubscriptions, (unsigned)stats.subscriptionsPeak);
+    y += step;
+    printf(x, y, "posted %lu  delivered %lu  listener calls %lu", (unsigned long)stats.posted,
+      (unsigned long)stats.delivered, (unsigned long)stats.listenerCalls);
+    y += step;
+    printf(x, y, "dropped: full %lu  hops %lu  irq %lu  scope %lu  budget %lu  subs %lu",
+      (unsigned long)stats.droppedQueueFull, (unsigned long)stats.droppedHopLimit,
+      (unsigned long)stats.droppedMailbox, (unsigned long)stats.droppedWrongScope,
+      (unsigned long)stats.budgetHits, (unsigned long)stats.subscribeFailed);
+    y += step + 4;
+    printf(x, y, "Recent (newest first)            sender   value  heard");
+    y += step;
+    const uint32_t count = std::min<uint32_t>(recentTotal, RECENT_COUNT);
+    for(uint32_t i = 0; i < count; ++i) {
+      const auto &ev = recent[(recentNext + RECENT_COUNT - 1 - i) % RECENT_COUNT];
+      char buffer[16];
+      printf(x, y, "%-32.32s %6u %7lu %5u", describe(ev.hash, buffer, sizeof(buffer)), (unsigned)ev.sender,
+        (unsigned long)ev.value, (unsigned)ev.listeners);
+      y += step;
+    }
+    if(count == 0) printf(x, y, "(none yet)");
+  }
 
   void onResetPressed()
   {
@@ -349,9 +401,7 @@ void P64::Events::Internal::init()
 {
   bus.setWarnHandler(onWarning, nullptr);
   bus.setDirectHandler(onDirect, nullptr);
-#if P64_EVENT_TRACE
-  bus.setTraceHandler(onTrace, nullptr);
-#endif
+  bus.setTraceHandler(onTrace, nullptr); // feeds the debug page, and debugf with P64_EVENT_TRACE
 
   // the state at boot is the baseline, so controllers already plugged in send no event
   for(uint32_t i = 0; i < JOYPAD_PORT_COUNT; ++i) {
@@ -484,4 +534,10 @@ void P64::Events::Internal::onSceneDestroyed()
   bus.unsubscribeAllInstances();
   Contacts::reset();
   newPrefabRoots.clear();
+}
+
+void P64::Events::Internal::addDebugMenu()
+{
+  auto &menu = P64::Debug::Overlay::addCustomMenu("Events");
+  menu.onDraw = drawDebugPage;
 }

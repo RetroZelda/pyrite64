@@ -28,9 +28,11 @@
 #include "../../../project/component/components.h"
 #include "../../../project/events/eventGraph.h"
 #include "../../../project/events/eventRules.h"
+#include "../../../project/events/eventUsages.h"
 #include "../../../utils/fs.h"
 #include "../../../utils/hash.h"
 #include "../../../utils/logger.h"
+#include "../../imgui/notification.h"
 
 namespace fs = std::filesystem;
 namespace G = Project::Events::Graph;
@@ -286,6 +288,14 @@ struct Editor::EventGraphWindow::State
   // selection sync
   std::vector<uint32_t> lastNodeSel{};
   std::vector<uint32_t> lastCtxSel{};
+
+  // the event browser (phase 7): every event of the project, its uses, rename
+  bool browserOpen{false};
+  bool browserStale{true};
+  std::vector<Project::Events::Usages::Use> uses{};
+  std::string browseFilter{};
+  std::string browseSelected{};
+  std::string renameText{};
 
   // pop-ups
   ImVec2 popupPos{};
@@ -1191,6 +1201,90 @@ struct Editor::EventGraphWindow::State
     }
   }
 
+  void drawBrowser(Project::Scene &scene)
+  {
+    namespace U = Project::Events::Usages;
+    if(browserStale) {
+      uses = U::collect(*ctx.project, &scene);
+      browserStale = false;
+    }
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
+    ImGui::InputTextWithHint("##browseFilter", "Search events", &browseFilter);
+    ImGui::SameLine();
+    if(ImGui::Button(ICON_MDI_REFRESH "##refresh")) browserStale = true;
+    ImGui::SetItemTooltip("Look through every scene, prefab, canvas and script again");
+
+    // the names, with how often they are fired and listened to
+    const float listH = ImGui::GetContentRegionAvail().y * 0.5f;
+    ImGui::BeginChild("names", ImVec2(0, listH), ImGuiChildFlags_Borders);
+    std::string last{};
+    for(size_t i = 0; i < uses.size(); ++i) {
+      const auto k = G::key(uses[i].name);
+      if(k == last)continue;
+      last = k;
+      if(!browseFilter.empty() && k.find(browseFilter) == std::string::npos)continue;
+      int fires = 0, listens = 0, code = 0;
+      for(size_t j = i; j < uses.size() && G::key(uses[j].name) == k; ++j) {
+        if(uses[j].kind == U::Use::Kind::Code) ++code;
+        else if(uses[j].input) ++listens;
+        else ++fires;
+      }
+      const bool problem = !Project::Events::nameProblem(k).empty();
+      if(problem) ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PROBLEM);
+      const std::string label = k + "##" + k;
+      if(ImGui::Selectable(label.c_str(), browseSelected == k)) { browseSelected = k; renameText = k; }
+      if(problem) ImGui::PopStyleColor();
+      ImGui::SetItemTooltip("%d firing, %d listening, %d in code%s", fires, listens, code,
+                            (fires == 0 && code == 0) ? "\nNothing fires it" : ((listens == 0 && code == 0) ? "\nNothing listens to it" : ""));
+    }
+    ImGui::EndChild();
+
+    if(browseSelected.empty()) {
+      ImGui::TextDisabled("Pick an event to see where it is used");
+      return;
+    }
+    ImGui::TextUnformatted(browseSelected.c_str());
+    ImGui::BeginChild("uses", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 2.2f), ImGuiChildFlags_Borders);
+    for(const auto &use : uses) {
+      if(G::key(use.name) != browseSelected)continue;
+      const char* icon = use.kind == U::Use::Kind::Code ? ICON_MDI_CODE_BRACES
+                       : (use.input ? ICON_MDI_ARROW_RIGHT_BOLD : ICON_MDI_ARROW_LEFT_BOLD);
+      ImGui::PushID(&use);
+      if(ImGui::Selectable((std::string{icon} + " " + use.where).c_str())) {
+        // an object of the open scene: select it
+        if(use.kind == U::Use::Kind::Scene && use.sceneId == scene.getId() && use.object) ctx.setObjectSelection(use.object);
+      }
+      ImGui::SetItemTooltip("%s", use.kind == U::Use::Kind::Code ? "A \"...\"_event literal in game code"
+                                 : (use.input ? "Listens to it" : "Fires it"));
+      ImGui::PopID();
+    }
+    ImGui::EndChild();
+
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const auto problem = Project::Events::nameProblem(renameText);
+    if(!problem.empty()) ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PROBLEM);
+    ImGui::InputText("##rename", &renameText);
+    if(!problem.empty()) { ImGui::PopStyleColor(); ImGui::SetItemTooltip("%s", problem.c_str()); }
+    const bool canRename = problem.empty() && G::key(renameText) != browseSelected;
+    if(!canRename) ImGui::BeginDisabled();
+    if(ImGui::Button(ICON_MDI_RENAME " Rename everywhere")) {
+      Editor::UndoRedo::getHistory().markChanged("Rename Event");
+      auto result = U::rename(*ctx.project, &scene, browseSelected, renameText);
+      std::string msg = "Renamed " + browseSelected + " to " + renameText + ": " + std::to_string(result.bindings) +
+                        " bindings, " + std::to_string(result.files.size()) + " other files";
+      Utils::Logger::log(msg);
+      for(const auto &c : result.code) Utils::Logger::log("Rename: game code still uses " + browseSelected + " at " + c, Utils::Logger::LEVEL_WARN);
+      Editor::Noti::add(result.code.empty() ? Editor::Noti::Type::SUCCESS : Editor::Noti::Type::INFO,
+                        result.code.empty() ? msg : msg + "; change the game code by hand (see the log)");
+      if(prefabUUID) ctx.project->getAssets().markPrefabDirty(prefabUUID);
+      browseSelected = renameText;
+      browserStale = true;
+      signature = 0;
+    }
+    if(!canRename) ImGui::EndDisabled();
+    ImGui::SetItemTooltip("Every scene, prefab and canvas; game code is listed in the log, not changed");
+  }
+
   void drawDroppedMenu(ImFlow::Pin *dragged)
   {
     if(ImGui::IsWindowAppearing()) {
@@ -1280,6 +1374,9 @@ void Editor::EventGraphWindow::draw()
     if(ImGui::Checkbox("Focus", &s.focusMode)) s.signature = 0;
     ImGui::SetItemTooltip("Show only the selected object; new wires make object:: events");
     ImGui::SameLine();
+    if(ImGui::Checkbox("Browse", &s.browserOpen) && s.browserOpen) s.browserStale = true;
+    ImGui::SetItemTooltip("Every event of the project: where it is used, and renaming it");
+    ImGui::SameLine();
     if(ImGui::SmallButton(ICON_MDI_AUTO_FIX " Arrange")) {
       auto &scope = s.layoutScope();
       scope["nodes"] = nlohmann::json::object();
@@ -1299,6 +1396,12 @@ void Editor::EventGraphWindow::draw()
     }
   }
 
+  if(s.browserOpen) {
+    ImGui::BeginChild("eventBrowser", ImVec2(300, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+    s.drawBrowser(*scene);
+    ImGui::EndChild();
+    ImGui::SameLine();
+  }
   ImGui::BeginChild("eventCanvas", ImVec2(0, 0), false);
   s.canvas.setSize(ImGui::GetContentRegionAvail());
   auto &gridStyle = s.canvas.getStyle();

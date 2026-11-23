@@ -424,9 +424,12 @@ namespace
     return nullptr;
   }
 
+  // a name a new wire between two pins can share: global:: names only connect through the
+  // Global node (an input cannot listen to what an output fires into a system)
   bool usableHere(const Model &model, const std::string &name)
   {
     if(!nameProblem(name).empty()) return false;
+    if(namespaceOf(name) == "global") return false;
     if(isPrefabName(name)) {
       if(model.kind == Kind::Scene) return false;
       if(parse(name).id.up >= 1) return false;

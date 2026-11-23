@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased (Full-Frontal fork)
+
+### Event graph
+* Named events on an engine event bus (`"scene::Door.Opened"_event`), delivered in the same frame, with global, scene, prefab, object and UI scopes, numbered parent scopes for nested prefabs (`prefab_1::`), and events the engine fires (scene load, controllers, paks, reset)
+* Script pins (`P64_EVENTS_IN/OUT`, `P64_GLOBAL_EVENTS_IN/OUT` for global script systems), `send()` to an input by name, pins on objects and engine components, collider enter/exit
+* 15 built-in event objects (Relay, Delay, Frame Delay, Once, Counter, All, Compare, Gate, Toggle, Sequence, Random, Log, Scene Loader, Spawner, Message Bridge)
+* Per-instance overrides of prefab bindings and repointed parent links; "To Prefab" and "Unpack" keep every binding reaching what it reached
+* The Events window: a node graph of the wiring, with an event browser (find usages, rename), focus mode and canvas nodes
+* UI canvas pins (Show, Hide, PlayClip, StopClip, Event in; Focused, Blurred, Activated, ClipFinished, Marker out) and the "Fire output" timeline marker
+* Command line: `--cmd graph`, `wire`, `unwire`, `events`, `rename-event`, `to-prefab`, `unpack`; `--ui-script` plays input into the editor
+* Debug overlay page "Events"; example project `n64/examples/events`
+
 ## v0.10.0
 
 ### Editor

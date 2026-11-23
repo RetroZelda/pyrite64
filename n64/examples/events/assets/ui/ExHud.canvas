@@ -1,0 +1,67 @@
+{
+  "animations": [],
+  "conf": {
+    "gridSizeX": 8,
+    "gridSizeY": 8,
+    "showGrid": true,
+    "viewportHeight": 240,
+    "viewportWidth": 320
+  },
+  "elements": [
+    {
+      "children": [],
+      "name": "Banner",
+      "props": {
+        "color": {
+          "isBound": false,
+          "val": [
+            90,
+            200,
+            120,
+            255
+          ]
+        },
+        "height": {
+          "isBound": false,
+          "val": 12.0
+        },
+        "width": {
+          "isBound": false,
+          "val": 200.0
+        }
+      },
+      "rotation": {
+        "isBound": false,
+        "val": 0.0
+      },
+      "type": 2,
+      "uuid": 7357000000000000201,
+      "visible": {
+        "isBound": false,
+        "val": true
+      },
+      "x": {
+        "isBound": false,
+        "val": 60.0
+      },
+      "y": {
+        "isBound": false,
+        "val": 16.0
+      }
+    }
+  ],
+  "eventBindings": {
+    "in": {
+      "Hide": [
+        "ui::Door.Closed"
+      ],
+      "Show": [
+        "ui::Door.Opened"
+      ]
+    }
+  },
+  "events": [],
+  "name": "ExHud",
+  "uuid": 7357000000000000200,
+  "variables": []
+}

@@ -217,6 +217,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/events/eventPins.cpp
         src/project/events/eventNesting.cpp
         src/project/events/eventGraph.cpp
+        src/project/events/eventUsages.cpp
         src/editor/pages/parts/eventInspector.cpp
         src/editor/pages/parts/eventGraphWindow.cpp
         src/editor/uiScript.cpp
