@@ -432,3 +432,26 @@ TEST_CASE("index: a Fire Event node fires, so a trigger bound to its event is no
   lonely.add("player::HealthChanged", UseKind::GraphOut, "node graph Heal.p64graph (Fire Event)");
   CHECK_FALSE(hasMessage(lonely.check(cat), Message::Level::Warning, "nothing fires it"));
 }
+
+TEST_CASE("index: an event nothing listens to is noted once, however many outputs fire it")
+{
+  auto cat = Catalog{};
+  cat.namespaces["player"] = "";
+  Index index{};
+  index.add("player::HealthChanged", UseKind::BoundOut, "scene 1 / Player / Damagable.HealthChanged");
+  index.add("player::HealthChanged", UseKind::BoundOut, "scene 2 / Player / Damagable.HealthChanged");
+  index.add("player::HealthChanged", UseKind::BoundOut, "prefab Player.prefab / Player / Damagable.HealthChanged");
+  index.add("scene::Lever.Pulled", UseKind::BoundOut, "lever.Pulled");
+
+  auto msgs = index.check(cat);
+  int notes = 0;
+  for(const auto &msg : msgs) {
+    if(msg.level == Message::Level::Info && msg.text.find("player::HealthChanged") != std::string::npos) ++notes;
+  }
+  CHECK(notes == 1);
+  CHECK(hasMessage(msgs, Message::Level::Info,
+    "scene 1 / Player / Damagable.HealthChanged fires 'player::HealthChanged', but nothing listens to it (and 2 more outputs)"));
+  CHECK(hasMessage(msgs, Message::Level::Info, "lever.Pulled fires 'scene::Lever.Pulled', but nothing listens to it"));
+  CHECK_FALSE(hasMessage(msgs, Message::Level::Info, "lever.Pulled fires 'scene::Lever.Pulled', but nothing listens to it ("));
+}
+

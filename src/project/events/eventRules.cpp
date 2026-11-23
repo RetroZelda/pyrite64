@@ -412,8 +412,20 @@ std::vector<Project::Events::Message> Project::Events::Index::check(const Catalo
       if(use->kind == UseKind::BoundIn && !anyFires && !readsCondition) {
         res.push_back({Level::Warning, use->where + " listens to '" + name + "', but nothing fires it (no output, code or system uses this name)"});
       }
-      if(use->kind == UseKind::BoundOut && !anyListens) {
-        res.push_back({Level::Info, use->where + " fires '" + name + "', but nothing listens to it"});
+    }
+
+    // one note for the event, however many outputs fire it (a prefab placed in every scene)
+    if(!anyListens) {
+      const Use* first = nullptr;
+      size_t outputs = 0;
+      for(const auto *use : list) {
+        if(use->kind != UseKind::BoundOut)continue;
+        if(!first) first = use;
+        ++outputs;
+      }
+      if(first) {
+        std::string more = outputs > 1 ? " (and " + std::to_string(outputs - 1) + " more output" + (outputs > 2 ? "s" : "") + ")" : "";
+        res.push_back({Level::Info, first->where + " fires '" + name + "', but nothing listens to it" + more});
       }
     }
   }

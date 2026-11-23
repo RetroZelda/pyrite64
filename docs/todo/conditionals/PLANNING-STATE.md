@@ -91,7 +91,10 @@ recommend. Change any of them on request.
 21. The Player Health Condition takes the perception system's primary target as the player. A player
     that is not in the damage registry (it died) counts as 0 health, like the HUD does; without a
     player object the answer is false.
-22. Not built: separate NAND / NOR / XNOR nodes, a node-graph node that listens to events, a line for
+22. The build's "fires 'X', but nothing listens to it" note is printed once per event with a count,
+    not once per output: the Player prefab's HealthChanged binding printed it nine times (once per
+    scene with a player) while no level has a condition.
+23. Not built: separate NAND / NOR / XNOR nodes, a node-graph node that listens to events, a line for
     conditions on the debug overlay's Events page. The manual stays the guide in kentucky-castle;
     the engine repo has the changelog entry.
 
@@ -103,11 +106,12 @@ recommend. Change any of them on request.
 | 3, 4 | pyrite64 93dbe53 | Events window, inspector, command-line text, Fire Event node, `conditionChecks.sh`, `nestingChecks.sh` fix |
 | 3 | pyrite64 dcbcf7f | Auto Check, values one per line, the argument override fix |
 | 6 | kentucky-castle a9b96a4 | `player::HealthChanged`, Damagable output, Player Health Condition |
-| 7 | kentucky-castle aff2779 | the guide |
+| 7 | kentucky-castle aff2779, b766d85, 75c5c2c | the guide |
+| fixes | pyrite64 267d6c8 and the commit after it | an empty trigger list compiles; the nothing-listens note once per event |
 
 ## What was verified
 
-- Host unit tests: 115 cases, 1,971 assertions (21 cases are new).
+- Host unit tests: 116 cases, 1,975 assertions (22 cases are new).
 - `n64/tests/test_events` in ares: 15 of 15, test 14 is the conditions (scene 10).
 - Shell checks: `conditionChecks.sh` 22 of 22, `graphChecks.sh` 7 of 7, `nestingChecks.sh` 11 of 11,
   `buildChecks.sh` 5 of 5.

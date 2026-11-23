@@ -22,6 +22,7 @@
 * Events window: condition nodes show their values, a "Condition" entry in the add menu, Result wires in their own colour, triggers shown locked on Check
 * Node graphs: a "Fire Event" node posts a named event
 * Fix: an instance override of a script argument that the prefab file never stored is now found by the build (it built the default before)
+* The build's "fires 'X', but nothing listens to it" note appears once per event, with a count of the other outputs that fire it
 
 ## v0.10.0
 
