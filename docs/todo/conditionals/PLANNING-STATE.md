@@ -115,6 +115,7 @@ recommend. Change any of them on request.
   the CondKit prefab, change only that instance (the test then fails for exactly that instance).
 - Kentucky Castle, on a copy, in ares: a throwaway script changed the player's health; two Player
   Health Conditions and an And node fired exactly at the crossings.
+- The Fire Event node was looked at in the node-graph editor (it shows its Event and Value fields)
+  and run in scene 10.
 - Not verified: the Player Health Condition with damage from real combat (the damage path calls the
-  same `fire()`); the Fire Event node in the node-graph editor's own window (it was built and run,
-  not looked at).
+  same `fire()` as the tested paths).
