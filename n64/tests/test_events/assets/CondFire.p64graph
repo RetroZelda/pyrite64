@@ -1,0 +1,31 @@
+{
+  "groups": [],
+  "links": [
+    {
+      "dst": 20002,
+      "dstPort": 0,
+      "src": 20001,
+      "srcPort": 0
+    }
+  ],
+  "nodes": [
+    {
+      "pos": [
+        0.0,
+        0.0
+      ],
+      "typeId": "core.start",
+      "uuid": 20001
+    },
+    {
+      "pos": [
+        200.0,
+        0.0
+      ],
+      "typeId": "core.fireEvent",
+      "uuid": 20002,
+      "eventName": "scene::C.GraphKick",
+      "eventValue": "42"
+    }
+  ]
+}

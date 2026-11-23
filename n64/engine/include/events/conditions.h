@@ -43,7 +43,8 @@ namespace P64::Conditions
   /**
    * For a condition that combines other conditions: call it from onInput when an input pin that
    * reads conditions received an event. The condition then checks itself once the events of this
-   * moment are handled, so several inputs changing together cause one check.
+   * moment are handled, so several inputs changing together cause one check. That check's True,
+   * False, NewlyTrue and NewlyFalse carry the answer as their value: 1 or 0.
    */
   template<typename Data>
   inline void notify(Object& obj, Data* data, const Events::Event& ev) { notifyData(obj, data, ev); }

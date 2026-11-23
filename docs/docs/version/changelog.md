@@ -14,6 +14,14 @@
 * `Events::send(targetId, "Input"_pin, value, sender)`: a direct send by object id, looked up on delivery
 * The old addressed messages are deprecated: `Scene::sendEvent` has `[[deprecated]]` (engine code, the Message Bridge and the node-graph "Send Event" node use `Scene::sendEventInternal`, which behaves the same), the build warns about scripts that define `onEvent` (not engine or UI element scripts), new-script templates no longer contain `onEvent`, and the engine Makefile has `-Wno-error=deprecated-declarations`
 
+### Conditions
+* A condition is a script declared with `P64_CONDITION_DATA` that answers in `bool evaluate()`. It gets the pins Enable, Disable, Check, Reset and True, False, NewlyTrue, NewlyFalse, Result; its fields are static values, not pins
+* `P64_CONDITION_TRIGGERS("ns::Name"_event, ...)`: the events that make a condition check itself, decided in code and bound to its Check input by the build
+* Built-in logic nodes And, Or, Xor and Not: wire any number of Result outputs into their Inputs pin; `P64_CONDITION_INPUTS` and `Conditions::Inputs` for game scripts that combine conditions
+* `Conditions::evaluate()`, `check()`, `setEnabled()`, `reset()` from code (`events/conditions.h`)
+* Events window: condition nodes show their values, a "Condition" entry in the add menu, Result wires in their own colour, triggers shown locked on Check
+* Node graphs: a "Fire Event" node posts a named event
+
 ## v0.10.0
 
 ### Editor

@@ -172,6 +172,7 @@ namespace P64::User::EventTest
     COND_NAND_NEWLY_TRUE, COND_NAND_NEWLY_FALSE,
     COND_ORPHAN_TRUE, COND_ORPHAN_FALSE,
     COND_GATED_TRUE,
+    COND_G_TRUE,
   };
   inline constexpr LogicName COND_NAMES[] = {
     {"A.True",          "scene::C.A.True"_event,          COND_A_TRUE},
@@ -197,5 +198,6 @@ namespace P64::User::EventTest
     {"Orphan.True",     "scene::C.Orphan.True"_event,     COND_ORPHAN_TRUE},
     {"Orphan.False",    "scene::C.Orphan.False"_event,    COND_ORPHAN_FALSE},
     {"Gated.True",      "scene::C.Gated.True"_event,      COND_GATED_TRUE},
+    {"G.True",          "scene::C.G.True"_event,          COND_G_TRUE},
   };
 }

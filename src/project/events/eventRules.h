@@ -68,10 +68,19 @@ namespace Project::Events
     std::string file{};
     int line{0};
     bool isPin{false};
+    // Fork: conditions. A name in P64_CONDITION_TRIGGERS(...): the script listens to it. The build
+    // binds it to the condition's Check input, so the project index does not count it a second time.
+    bool trigger{false};
   };
 
   std::vector<SourceUse> scanSource(const std::string &code, const std::string &fileName);
   std::vector<SourceUse> scanSourceDir(const std::filesystem::path &dir);
+
+  /**
+   * Fork: conditions. The events a node graph fires: the names of its "Fire Event" nodes (the text
+   * of a .p64graph file). 'line' is 0.
+   */
+  std::vector<SourceUse> scanNodeGraph(const std::string &json, const std::string &fileName);
 
   // ---- project index, filled while a project builds
 
@@ -80,6 +89,7 @@ namespace Project::Events
     BoundIn,   // an input pin of an object is bound to it (the object listens)
     BoundOut,  // an output pin of an object is bound to it (the object fires)
     Code,      // a "..."_event literal in game code (may post or listen)
+    GraphOut,  // Fork: conditions, a node graph's "Fire Event" node (fires)
     SystemIn,  // an input pin of a global script system
     SystemOut, // an output pin of a global script system
     EngineOut, // fired by the engine

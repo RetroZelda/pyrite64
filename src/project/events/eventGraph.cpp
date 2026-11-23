@@ -15,6 +15,7 @@
 #include "eventPins.h"
 #include "eventRules.h"
 #include "../project.h"
+#include "../../utils/fs.h"
 #include "../scene/object.h"
 #include "../scene/prefab.h"
 #include "../component/components.h"
@@ -28,7 +29,7 @@ namespace
 {
   constexpr int COMP_CODE = 0;
   constexpr uint64_t ENGINE_SCRIPT_FIRST = 0xC0E0000000000001ull;
-  constexpr uint64_t ENGINE_SCRIPT_LAST = 0xC0E000000000000Full;
+  constexpr uint64_t ENGINE_SCRIPT_LAST = 0xC0E0000000000013ull; // Fork: conditions, And to Not are 10 to 13
   constexpr uint64_t SCRIPT_DELAY = 0xC0E0000000000002ull;
   constexpr uint64_t SCRIPT_FRAME_DELAY = 0xC0E0000000000003ull;
 
@@ -194,6 +195,58 @@ namespace
     }
   }
 
+  // Fork: conditions. What the pins of a condition script's category are for, and the events the
+  // script itself binds to Check.
+  void markConditionPins(Category &cat, const PinList &pins)
+  {
+    if(!pins.isCondition())return;
+    for(auto &pin : cat.pins) {
+      if(!pin.declared)continue;
+      if(pin.ref.input) {
+        pin.reads = pins.readsConditions(pin.ref.pin);
+        if(pin.ref.pin == "Check" && pins.isConditionPin(true, pin.ref.pin)) {
+          for(const auto &trigger : pins.triggers) {
+            const bool written = std::any_of(pin.names.begin(), pin.names.end(), [&](const std::string &n) { return key(n) == key(trigger); });
+            if(!written) pin.locked.push_back(trigger);
+          }
+        }
+      } else {
+        pin.result = pin.ref.pin == "Result" && pins.isConditionPin(false, pin.ref.pin);
+      }
+    }
+  }
+
+  // Fork: conditions. The static values of a condition, as the node shows them: "Compare: Less, Value: 25"
+  std::string conditionSummary(const Ctx &c, const Project::Component::Entry &comp)
+  {
+    auto *script = c.project.getAssets().getEntryByUUID(Project::Component::Code::getScriptUUID(comp));
+    if(!script) return {};
+    std::string res{};
+    for(const auto &field : script->params.fields) {
+      auto label = field.attr.find("P64::Name");
+      if(label == field.attr.end())continue;
+      auto value = Project::Component::Code::getStoredArg(comp, field.name);
+      if(value.empty()) value = field.defaultValue;
+      if(field.name == "conditionStartsEnabled") {
+        // the usual case says nothing
+        if(value == "0" || value == "false") res += (res.empty() ? "" : ", ") + std::string{"Starts disabled"};
+        continue;
+      }
+      if(!field.enumValues.empty()) {
+        try {
+          const auto number = std::stoll(value.empty() ? "0" : value);
+          for(const auto &[enumValue, enumName] : field.enumValues) {
+            if(enumValue == number) { value = enumName; break; }
+          }
+        } catch(...) {}
+      } else if(field.type == Utils::DataType::BOOL) {
+        value = (value == "1" || value == "true") ? "on" : "off";
+      }
+      res += (res.empty() ? "" : ", ") + label->second + ": " + value;
+    }
+    return res;
+  }
+
   Node plainNode(const Ctx &c, Project::Object &obj)
   {
     Node node{};
@@ -209,11 +262,16 @@ namespace
       if(pins.empty() && comp.events.empty())continue;
       Category cat{"c:" + std::to_string(comp.uuid), displayName(c.project, comp), true, {}};
       addPins(c, cat, {obj.uuid, {}, comp.uuid, {}, false, false}, pins, comp.events);
+      markConditionPins(cat, pins);
       node.categories.push_back(cat);
       if(comp.id == COMP_CODE) {
         const auto script = Project::Component::Code::getScriptUUID(comp);
         if(script >= ENGINE_SCRIPT_FIRST && script <= ENGINE_SCRIPT_LAST) node.builtin = true;
         if(script == SCRIPT_DELAY || script == SCRIPT_FRAME_DELAY) node.delay = true;
+        if(pins.isCondition() && !node.condition) {
+          node.condition = true;
+          node.summary = conditionSummary(c, comp);
+        }
       }
     }
     return node;
@@ -309,6 +367,8 @@ namespace
           cat.pins.push_back(instancePin(c, inst, {inst.uuid, {}, comp.uuid, pinName, input, false}, &comp.events, pinName));
         }
       }
+      markConditionPins(cat, pins);
+      if(pins.isCondition()) node.condition = true;
       node.categories.push_back(cat);
     }
     // components added to this instance are written in this graph, like a plain object's
@@ -317,6 +377,7 @@ namespace
       if(pins.empty() && comp.events.empty())continue;
       Category cat{"c:" + std::to_string(comp.uuid), displayName(c.project, comp) + " (this instance)", true, {}};
       addPins(c, cat, {inst.uuid, {}, comp.uuid, {}, false, false}, pins, comp.events);
+      markConditionPins(cat, pins);
       node.categories.push_back(cat);
     }
 
@@ -449,7 +510,7 @@ bool Project::Events::Graph::Node::bound() const
   for(const auto &cat : categories) {
     for(const auto &pin : cat.pins) {
       if(pin.ref.link)continue; // every instance has its links; they do not make it interesting
-      if(!pin.names.empty() || !pin.muted.empty()) return true;
+      if(!pin.names.empty() || !pin.muted.empty() || !pin.locked.empty()) return true;
     }
   }
   return false;
@@ -525,6 +586,12 @@ Model Project::Events::Graph::collect(Project &project, Object &root, Kind kind,
   for(const auto &use : scanSourceDir(fs::path{project.getPath()} / "src" / "user")) {
     if(!use.isPin) model.codeNames.insert(key(use.name));
   }
+  // Fork: conditions, the events node graphs fire ("Fire Event" nodes)
+  for(const auto &graph : project.getAssets().getTypeEntries(FileType::NODE_GRAPH)) {
+    for(const auto &use : scanNodeGraph(Utils::FS::loadTextFile(graph.path), graph.name)) {
+      if(nameProblem(use.name).empty()) model.codeNames.insert(key(use.name));
+    }
+  }
   for(const auto &node : model.canvases) {
     for(const auto &cat : node.categories) {
       for(const auto &pin : cat.pins) for(const auto &name : pin.names) model.allNames.insert(key(name));
@@ -532,7 +599,10 @@ Model Project::Events::Graph::collect(Project &project, Object &root, Kind kind,
   }
   for(const auto &node : model.nodes) {
     for(const auto &cat : node.categories) {
-      for(const auto &pin : cat.pins) for(const auto &name : pin.names) model.allNames.insert(key(name));
+      for(const auto &pin : cat.pins) {
+        for(const auto &name : pin.names) model.allNames.insert(key(name));
+        for(const auto &name : pin.locked) model.allNames.insert(key(name));
+      }
     }
   }
   return model;
@@ -553,6 +623,11 @@ std::vector<Wire> Project::Events::Graph::wires(const Model &model, const std::s
           if(!nameProblem(name).empty())continue;
           auto &sides = byName[key(name)];
           (pin.ref.input ? sides.in : sides.out).push_back(pin.ref);
+        }
+        // Fork: conditions, the triggers a script binds to its Check input are wires too
+        for(const auto &name : pin.locked) {
+          if(!nameProblem(name).empty())continue;
+          byName[key(name)].in.push_back(pin.ref);
         }
       }
     }

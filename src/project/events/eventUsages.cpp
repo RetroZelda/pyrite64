@@ -14,6 +14,7 @@
 #include "eventPins.h"
 #include "eventRules.h"
 #include "../project.h"
+#include "../../utils/fs.h"
 #include "../scene/scene.h"
 #include "../scene/sceneManager.h"
 #include "../scene/prefab.h"
@@ -127,7 +128,15 @@ std::vector<Usage> Project::Events::Usages::collect(Project &project, Scene *ope
   }
   for(const auto &use : scanSourceDir(fs::path{project.getPath()} / "src" / "user")) {
     if(use.isPin)continue;
-    res.push_back({use.name, Usage::Kind::Code, use.file + ":" + std::to_string(use.line), false, 0, 0});
+    // Fork: conditions, a trigger listens
+    res.push_back({use.name, Usage::Kind::Code, use.file + ":" + std::to_string(use.line) + (use.trigger ? " (condition trigger)" : ""),
+                   use.trigger, 0, 0});
+  }
+  // Fork: conditions, the events node graphs fire
+  for(const auto &graph : project.getAssets().getTypeEntries(FileType::NODE_GRAPH)) {
+    for(const auto &use : scanNodeGraph(Utils::FS::loadTextFile(graph.path), graph.name)) {
+      res.push_back({use.name, Usage::Kind::Code, "node graph " + graph.name + " (Fire Event)", false, 0, 0});
+    }
   }
   std::stable_sort(res.begin(), res.end(), [](const Usage &a, const Usage &b) {
     return Graph::key(a.name) < Graph::key(b.name);
@@ -159,6 +168,12 @@ Project::Events::Usages::RenameResult Project::Events::Usages::rename(Project &p
     if(entry.canvas && renameBindings(entry.canvas->bindings, from, to, res.bindings)) {
       entry.canvas->save();
       res.files.push_back(entry.canvas->path);
+    }
+  }
+  // Fork: conditions, node graphs are reported like code: the name is typed into a Fire Event node
+  for(const auto &graph : project.getAssets().getTypeEntries(FileType::NODE_GRAPH)) {
+    for(const auto &use : scanNodeGraph(Utils::FS::loadTextFile(graph.path), graph.name)) {
+      if(Graph::key(use.name) == Graph::key(from)) res.code.push_back("node graph " + graph.name + " (Fire Event)");
     }
   }
   for(const auto &use : scanSourceDir(fs::path{project.getPath()} / "src" / "user")) {

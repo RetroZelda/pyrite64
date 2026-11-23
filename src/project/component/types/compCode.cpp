@@ -40,6 +40,15 @@ namespace Project::Component::Code
     return data ? data->scriptUUID : 0;
   }
 
+  // Fork: conditions
+  std::string getStoredArg(const Entry &entry, const std::string &field)
+  {
+    auto *data = static_cast<const Data*>(entry.data.get());
+    if(!data) return {};
+    auto it = data->args.find(field);
+    return it == data->args.end() ? std::string{} : it->second.value;
+  }
+
   namespace
   {
     // Instance overrides of args live in an override map keyed like every other property. Nested prefab

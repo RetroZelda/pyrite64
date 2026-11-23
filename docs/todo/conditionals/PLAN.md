@@ -63,7 +63,9 @@ namespace P64::Script::C0FFEE0000000001
 | Result | out | fired by every check, value 1 or 0; this is also what logic nodes read |
 
 - A condition starts as false, so the first check that is true fires NewlyTrue.
-- True, False, NewlyTrue and NewlyFalse pass on the value of the event that caused the check.
+- True, False, NewlyTrue and NewlyFalse pass on the value of the event that caused the check. A
+  logic node that checks itself because one of its inputs was checked fires them with its own
+  answer as the value: 1 or 0.
 - The only static field the engine adds is **Starts Enabled** (on).
 - When one event is bound to Enable and to Check of the same condition, Enable is handled first.
 - A disabled condition fires nothing, but it still answers when a logic node reads it.
@@ -82,7 +84,7 @@ namespace the game declares (`events/*.json`), for example `player::HealthChange
 ### 2.3 Logic nodes
 
 Built-in objects **And**, **Or**, **Xor**, **Not**. Each is a condition itself (all the pins above)
-and has one more input, **In**. Wire the Result of any number of conditions into In.
+and has one more input, **Inputs**. Wire the Result of any number of conditions into Inputs.
 
 | Node | Answer |
 |---|---|
@@ -95,13 +97,13 @@ NAND, NOR and XNOR are a Not behind an And, Or or Xor.
 
 - **Reading.** When a logic node is checked it evaluates its inputs on the spot (it calls their
   `evaluate()`), so the answer is always current, also for inputs that have no triggers.
-- **Following.** When an input is checked, its Result event reaches In and the logic node checks
+- **Following.** When an input is checked, its Result event reaches Inputs and the logic node checks
   itself once the current events have settled. So a logic node follows the triggers of its inputs
   without triggers of its own, and several inputs checked by the same event cause one check.
 - A Result wire is a named event like any other (`scene::LowHealth.Result`), so it follows the same
   scope rules: inside prefabs, across nested prefabs, with per-instance overrides.
-- An In binding whose name no condition provides counts as a false input; the build warns.
-- Game scripts can combine conditions the same way: `P64_CONDITION_INPUTS(In)` marks an input pin
+- An Inputs binding whose name no condition provides counts as a false input; the build warns.
+- Game scripts can combine conditions the same way: `P64_CONDITION_INPUTS(Pin)` marks an input pin
   as reading conditions, `Conditions::Inputs` reads them, `Conditions::notify()` schedules the check.
 
 ### 2.4 From code
@@ -142,10 +144,10 @@ editor's parser adds the same fields in front, so "Starts Enabled" is an ordinar
 condition pins (index 0x80 + position). The Code component hands pins >= 0x80 to the runtime.
 
 **Providers.** A condition whose Result is bound registers (name hash, scope, instance) -> itself
-in a small table (`P64_CONDITION_MAX_PROVIDERS`, 64). A logic node walks its In bindings and looks
-each one up.
+in a small table (`P64_CONDITION_MAX_PROVIDERS`, 64). A logic node walks its Inputs bindings and
+looks each one up.
 
-**Re-check.** A Result event arriving at In does not check at once: the node sends itself an
+**Re-check.** A Result event arriving at Inputs does not check at once: the node sends itself an
 internal `Recheck` (once, a flag is set while it is on its way). The check then runs after every
 event of the same wave, so each wave causes one check. Each logic level costs two hops.
 

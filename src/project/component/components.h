@@ -104,7 +104,11 @@ namespace Project::Component
     }
 
   MAKE_COMP(Code)
-  namespace Code { uint64_t getScriptUUID(const Entry &entry); } // Fork: event graph
+  namespace Code {
+    uint64_t getScriptUUID(const Entry &entry); // Fork: event graph
+    /** Fork: conditions. An argument as the component stores it (no instance overrides); empty if unset. */
+    std::string getStoredArg(const Entry &entry, const std::string &field);
+  }
   MAKE_COMP(Model)
   MAKE_COMP(Light)
   MAKE_COMP(Camera)

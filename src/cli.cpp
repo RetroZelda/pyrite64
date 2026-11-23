@@ -101,13 +101,15 @@ namespace
         for(const auto &node : model.canvases) if(node.bound()) printed.push_back(&node);
         for(const auto *nodePtr : printed) {
           const auto &node = *nodePtr;
-          printf("node %s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : (node.canvas ? " (UI canvas)" : ""),
-                 node.builtin ? " (built-in)" : "");
+          printf("node %s%s%s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : (node.canvas ? " (UI canvas)" : ""),
+                 node.builtin ? " (built-in)" : "", node.condition ? " (condition)" : "",
+                 node.summary.empty() ? "" : (" [" + node.summary + "]").c_str());
           for(const auto &cat : node.categories) {
             for(const auto &pin : cat.pins) {
-              if(pin.names.empty() && pin.muted.empty() && pin.problem.empty())continue;
+              if(pin.names.empty() && pin.muted.empty() && pin.problem.empty() && pin.locked.empty())continue;
               std::string names{};
               for(const auto &n : pin.names) names += " " + n;
+              for(const auto &n : pin.locked) names += " " + n + " (trigger, from the script)";
               for(const auto &n : pin.muted) names += " (muted " + n + ")";
               printf("  %s %s:%s%s%s\n", pin.ref.input ? "in " : "out", G::describe(project, *root, pin.ref).c_str(), names.c_str(),
                      pin.problem.empty() ? "" : ("  PROBLEM: " + pin.problem).c_str(),

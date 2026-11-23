@@ -47,6 +47,7 @@ namespace
   constexpr ImU32 COL_GLOBAL = IM_COL32(230, 170, 80, 255);
   constexpr ImU32 COL_SCOPE = IM_COL32(150, 210, 140, 255);
   constexpr ImU32 COL_EVENT = IM_COL32(235, 205, 110, 255);
+  constexpr ImU32 COL_PIN_VALUE = IM_COL32(245, 150, 95, 255); // Fork: conditions, a Result and the inputs that read it
   const ImVec4 TEXT_PROBLEM{0.92f, 0.37f, 0.33f, 1.0f};
   const ImVec4 TEXT_HINT{0.62f, 0.62f, 0.68f, 1.0f};
 
@@ -54,7 +55,10 @@ namespace
   constexpr const char* BUILTIN_NAMES[] = {
     "Relay", "Delay", "Frame Delay", "Once", "Counter", "All", "Compare", "Gate", "Toggle",
     "Sequence", "Random", "Log", "Scene Loader", "Spawner", "Message Bridge",
+    // Fork: conditions (docs/todo/conditionals/PLAN.md), scripts C0E0...10 to 13
+    "And", "Or", "Xor", "Not",
   };
+  constexpr size_t BUILTIN_LOGIC_FIRST = 15; // And: from here on the built-ins are the logic conditions
 
   std::shared_ptr<ImFlow::PinStyle> pinStyle(ImU32 color)
   {
@@ -560,11 +564,20 @@ struct Editor::EventGraphWindow::State
     if(src.canvas) { title = ICON_MDI_MONITOR_DASHBOARD " " + src.name + "  (UI canvas)"; header = IM_COL32(40, 110, 120, 255); }
     else if(src.instance) { title += "  " ICON_MDI_PACKAGE_VARIANT_CLOSED " " + src.prefab; header = IM_COL32(104, 76, 140, 255); }
     else if(src.builtin) header = IM_COL32(62, 112, 84, 255);
+    // Fork: conditions, also the built-in logic ones
+    if(src.condition && !src.instance) {
+      title = ICON_MDI_HELP_RHOMBUS_OUTLINE " " + title;
+      header = IM_COL32(150, 92, 50, 255);
+    }
     node.setTitle(title);
     node.setStyle(nodeStyle(header, warn));
     node.subtitle = warn ? ICON_MDI_ALERT " Loop without a delay" : "";
     node.subtitleTip = warn ? "Its outputs reach its own inputs again with no Delay or Frame Delay in between.\n"
                               "Allowed, but an event chain that keeps going is cut after 16 hops." : "";
+    if(!warn && !src.summary.empty()) {
+      node.subtitle = src.summary;
+      node.subtitleTip = "The condition's values. They are set in the inspector and built into the game:\nthey are not pins.";
+    }
     const std::string nodeKey = src.canvas ? "c" + std::to_string(src.canvas) : std::to_string(src.uuid);
     for(const auto &cat : src.categories) {
       Section sec{cat.key, cat.title, sectionOpen(nodeKey, cat.key, cat.openByDefault), {}, {}};
@@ -573,10 +586,15 @@ struct Editor::EventGraphWindow::State
         Row row{};
         row.problem = !pin.problem.empty();
         row.hinted = !pin.hint.empty();
-        const ImU32 color = row.problem ? COL_PROBLEM : (pin.ref.link ? COL_PIN_LINK : COL_PIN);
+        const ImU32 color = row.problem ? COL_PROBLEM
+                          : (pin.ref.link ? COL_PIN_LINK : ((pin.result || pin.reads) ? COL_PIN_VALUE : COL_PIN));
         row.pin = makePin(node, info, pin.ref.input, pin.label, color);
         std::string tip{};
         for(const auto &n : pin.names) tip += (tip.empty() ? "" : "\n") + n;
+        // Fork: conditions
+        for(const auto &n : pin.locked) tip += (tip.empty() ? "" : "\n") + n + "  " ICON_MDI_LOCK " trigger set in the script";
+        if(pin.result && tip.empty()) tip = "Not bound: drag a wire into a logic node (And, Or, Xor, Not) to combine it,\nor into any input to pass the answer on as 1 or 0";
+        if(pin.reads && tip.empty()) tip = "Not bound: drag the Result of a condition into it";
         for(const auto &n : pin.muted) tip += (tip.empty() ? "" : "\n") + n + " (muted on this instance)";
         if(pin.ref.link) tip = "Parent link " + pin.ref.pin + (tip.empty() ? "" : ": " + tip) + "\nDrag a wire to repoint it for this instance";
         if(tip.empty()) tip = pin.ref.input ? "Not bound: drag a wire into it" : "Not bound: drag a wire out of it";
@@ -723,7 +741,7 @@ struct Editor::EventGraphWindow::State
         // a collapsed section still shows its wired pins: count the bound ones (a little high at worst)
         size_t ins = 0, outs = 0;
         for(const auto &pin : cat.pins) {
-          if(cat.openByDefault || !pin.names.empty()) (pin.ref.input ? ins : outs)++;
+          if(cat.openByDefault || !pin.names.empty() || !pin.locked.empty()) (pin.ref.input ? ins : outs)++;
         }
         h += 22.0f + 22.0f * (float)std::max(ins, outs);
       }
@@ -798,7 +816,8 @@ struct Editor::EventGraphWindow::State
     }
     bool anyGlobal = false, anyScope = false;
     for(const auto &node : model.nodes) for(const auto &cat : node.categories) for(const auto &pin : cat.pins) {
-      for(const auto &n : pin.names) {
+      // Fork: conditions, 'locked' are the triggers a condition script binds to its Check input
+      for(const auto *list : {&pin.names, &pin.locked}) for(const auto &n : *list) {
         if(Project::Events::namespaceOf(n) == "global") anyGlobal = true;
         if(std::find(model.scopeEvents.begin(), model.scopeEvents.end(), n) != model.scopeEvents.end()) anyScope = true;
       }
@@ -1043,11 +1062,17 @@ struct Editor::EventGraphWindow::State
 
   void addBuiltin(size_t index, ImVec2 pos)
   {
+    addScriptObject(BUILTIN_NAMES[index], BUILTIN_FIRST + index, pos, "Add Built-in Event Object");
+  }
+
+  // a new object with one script, in the graph being shown
+  void addScriptObject(const std::string &name, uint64_t scriptUuid, ImVec2 pos, const char* undoText)
+  {
     auto *scene = ctx.project->getScenes().getLoadedScene();
     if(!scene)return;
     Project::Object *obj = nullptr;
     if(kind == G::Kind::Scene) {
-      Editor::UndoRedo::getHistory().markChanged("Add Built-in Event Object");
+      Editor::UndoRedo::getHistory().markChanged(undoText);
       auto added = scene->addObject(focus ? *findObj(*root, focus) : *root);
       obj = added.get();
     } else {
@@ -1057,9 +1082,9 @@ struct Editor::EventGraphWindow::State
       if(prefabId) ctx.project->getAssets().markPrefabDirty(prefabId);
     }
     if(!obj)return;
-    obj->name = BUILTIN_NAMES[index];
+    obj->name = name;
     obj->addComponent(0); // Code
-    if(!obj->components.empty()) Project::Component::Code::setScript(obj->components.back(), BUILTIN_FIRST + index, false);
+    if(!obj->components.empty()) Project::Component::Code::setScript(obj->components.back(), scriptUuid, false);
     layoutScope()["nodes"][std::to_string(obj->uuid)]["pos"] = vecJson(pos);
     setShownByHand(obj->uuid, true);
     signature = 0;
@@ -1186,9 +1211,35 @@ struct Editor::EventGraphWindow::State
       ImGui::EndMenu();
     }
     if(ImGui::BeginMenu(ICON_MDI_PUZZLE_OUTLINE " Built-in object")) {
-      for(size_t i = 0; i < std::size(BUILTIN_NAMES); ++i) {
+      for(size_t i = 0; i < BUILTIN_LOGIC_FIRST; ++i) {
         if(!popupFilter.empty() && std::string{BUILTIN_NAMES[i]}.find(popupFilter) == std::string::npos)continue;
         if(ImGui::Selectable(BUILTIN_NAMES[i])) addBuiltin(i, popupPos);
+      }
+      ImGui::EndMenu();
+    }
+    // Fork: conditions. The project's condition scripts, then the logic nodes that combine them.
+    if(ImGui::BeginMenu(ICON_MDI_HELP_RHOMBUS_OUTLINE " Condition")) {
+      int count = 0;
+      for(const auto &script : ctx.project->getAssets().getTypeEntries(Project::FileType::CODE_OBJ)) {
+        if(!script.condition.isCondition || script.engineScript)continue;
+        auto name = script.name;
+        if(auto dot = name.rfind('.'); dot != std::string::npos) name = name.substr(0, dot);
+        if(!popupFilter.empty() && name.find(popupFilter) == std::string::npos)continue;
+        ++count;
+        if(ImGui::Selectable(name.c_str())) addScriptObject(name, script.getUUID(), popupPos, "Add Condition");
+      }
+      if(count == 0) {
+        ImGui::TextDisabled("%s", popupFilter.empty() ? "The project has no condition script yet" : "No condition script matches");
+        ImGui::SetItemTooltip("A condition is a script that declares its data with P64_CONDITION_DATA\nand answers in bool evaluate(Object& obj, Data *data)");
+      }
+      ImGui::Separator();
+      for(size_t i = BUILTIN_LOGIC_FIRST; i < std::size(BUILTIN_NAMES); ++i) {
+        if(!popupFilter.empty() && std::string{BUILTIN_NAMES[i]}.find(popupFilter) == std::string::npos)continue;
+        if(ImGui::Selectable(BUILTIN_NAMES[i])) addBuiltin(i, popupPos);
+        ImGui::SetItemTooltip("%s", i == BUILTIN_LOGIC_FIRST     ? "True when every condition wired into Inputs is true"
+                                  : i == BUILTIN_LOGIC_FIRST + 1 ? "True when at least one condition wired into Inputs is true"
+                                  : i == BUILTIN_LOGIC_FIRST + 2 ? "True when an odd number of the conditions wired into Inputs is true (with two: exactly one)"
+                                                                 : "True when no condition wired into Inputs is true (with one: its opposite)");
       }
       ImGui::EndMenu();
     }

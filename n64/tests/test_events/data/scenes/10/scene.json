@@ -858,6 +858,100 @@
         "uuid": 10035,
         "uuidPrefab": 0,
         "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "data": {
+              "asset": 7357000000000000041,
+              "autoRun": true,
+              "objRefs": {},
+              "varDefaults": {}
+            },
+            "enabled": true,
+            "id": 9,
+            "name": "Node Graph",
+            "uuid": 10102
+          }
+        ],
+        "enabled": true,
+        "name": "Graph",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10101,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10104,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "5"
+              },
+              "script": 14240860050882426385
+            },
+            "events": {
+              "in": {
+                "Check": [
+                  "scene::C.GraphKick"
+                ]
+              },
+              "out": {
+                "True": [
+                  "scene::C.G.True"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "CondG",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10103,
+        "uuidPrefab": 0,
+        "visMask": 1
       }
     ],
     "components": [],

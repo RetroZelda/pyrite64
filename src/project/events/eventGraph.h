@@ -52,6 +52,11 @@ namespace Project::Events::Graph
     bool declared{true};              // false: the script lost the pin, its bindings do nothing
     std::string problem{};            // why a binding cannot work (drawn red)
     std::string hint{};               // a binding that reaches nothing here
+    // Fork: conditions (docs/todo/conditionals/PLAN.md)
+    std::vector<std::string> locked{}; // events the script itself binds to the pin (P64_CONDITION_TRIGGERS
+                                       // on Check): wired like 'names', but not stored in the file
+    bool result{false};               // the Result output of a condition
+    bool reads{false};                // an input that reads conditions: Result outputs are wired into it
   };
 
   /** Pins of a node that belong together: the object's own, a component's, an inner object's, the links. */
@@ -71,6 +76,8 @@ namespace Project::Events::Graph
     std::string prefab{};  // instance nodes: the prefab's name
     bool builtin{false};   // a built-in event object (an engine script)
     bool delay{false};     // Delay or Frame Delay: a loop through it is fine
+    bool condition{false}; // Fork: conditions, has a condition script
+    std::string summary{}; // Fork: conditions, its static values ("Compare: Less, Value: 25")
     uint64_t canvas{0};    // a UI canvas node (uuid is 0)
     std::vector<Category> categories{};
 

@@ -563,31 +563,36 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     ok &= expectCond(COND_A_NEWLY_FALSE, {});                        // it starts false; disabled at frame 5
     ok &= expectCond(COND_A_RESULT,      {{2, 0}, {3, 1}, {4, 1}, {6, 1}});
 
-    // one check per tick, though both inputs were checked; it reads A while A is disabled
-    ok &= expectCond(COND_AND_FALSE,       {{2, 0}, {3, 1}, {5, 1}});
+    // one check per tick, though both inputs were checked; it reads A while A is disabled.
+    // A logic node following its inputs fires with its own answer as the value: 1 or 0
+    ok &= expectCond(COND_AND_FALSE,       {{2, 0}, {3, 0}, {5, 0}});
     ok &= expectCond(COND_AND_TRUE,        {{4, 1}, {6, 1}});
     ok &= expectCond(COND_AND_NEWLY_TRUE,  {{4, 1}, {6, 1}});
-    ok &= expectCond(COND_AND_NEWLY_FALSE, {{5, 1}});
+    ok &= expectCond(COND_AND_NEWLY_FALSE, {{5, 0}});
     ok &= expectCond(COND_OR_NEWLY_TRUE,   {{3, 1}});
     ok &= expectCond(COND_OR_NEWLY_FALSE,  {});
     ok &= expectCond(COND_XOR_NEWLY_TRUE,  {{3, 1}, {5, 1}});
-    ok &= expectCond(COND_XOR_NEWLY_FALSE, {{4, 1}, {6, 1}});
+    ok &= expectCond(COND_XOR_NEWLY_FALSE, {{4, 0}, {6, 0}});
     // two logic nodes deep: Nand follows And, which follows A and B
-    ok &= expectCond(COND_NAND_NEWLY_TRUE,  {{2, 0}, {5, 0}});
-    ok &= expectCond(COND_NAND_NEWLY_FALSE, {{4, 1}, {6, 1}});
+    ok &= expectCond(COND_NAND_NEWLY_TRUE,  {{2, 1}, {5, 1}});
+    ok &= expectCond(COND_NAND_NEWLY_FALSE, {{4, 0}, {6, 0}});
 
     // frame 7: Check by name with a value. 9: Conditions::check() from code
     ok &= expectCond(COND_M_TRUE,   {{7, 77}, {9, 5}});
     ok &= expectCond(COND_M_FALSE,  {});
     ok &= expectCond(COND_M_RESULT, {{7, 1}, {9, 1}});
-    // Not follows M's Result (7, 9); at 8 it is checked itself and reads M, which is false by then
-    ok &= expectCond(COND_NOT_FALSE, {{7, 1}, {9, 1}});
+    // Not follows M's Result (7, 9: its answer, 0); at 8 it is checked itself (the Check's value, 3)
+    // and reads M, which is false by then
+    ok &= expectCond(COND_NOT_FALSE, {{7, 0}, {9, 0}});
     ok &= expectCond(COND_NOT_TRUE,  {{8, 3}});
     // an input nothing provides counts as false
     ok &= expectCond(COND_ORPHAN_FALSE, {{7, 1}});
     ok &= expectCond(COND_ORPHAN_TRUE,  {});
     // starts disabled, so the ticks do nothing; one event on Enable and Check: Enable first
     ok &= expectCond(COND_GATED_TRUE, {{7, 9}});
+
+    // a node graph's Fire Event node (Start -> Fire Event, value 42) reaches a Check input
+    ok &= expectCond(COND_G_TRUE, {{1, 42}});
 
     // evaluate(): false, true, and false for an object that is no condition
     ok &= expectRecs(Rec::CondEval, {{8, 0}, {8, 1}, {8, 0}});

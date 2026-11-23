@@ -13,7 +13,7 @@ namespace P64::Script::C5A1B2C3D4E5F614
 
   // runtime ids, in the order of the scene's objects
   enum : uint16_t { COND_A = 3, COND_B, COND_M, AND, OR, XOR, NOT, NAND, ORPHAN, GATED, K10, K20, SPAWNER };
-  enum : uint32_t { SLOT_A = 0, SLOT_B, SLOT_M, SLOT_GATED };
+  enum : uint32_t { SLOT_A = 0, SLOT_B, SLOT_M, SLOT_GATED, SLOT_G = 5 };
 
   void to(uint16_t id, Events::PinName pin, uint32_t value = 0)
   {
@@ -29,6 +29,8 @@ namespace P64::Script::C5A1B2C3D4E5F614
       case 1:
         for(auto &slot : condSlots) slot = false;
         kitValue = 0;
+        // CondG is checked by scene::C.GraphKick, which the node graph of 'Graph' fires as it starts
+        condSlots[SLOT_G] = true;
         break;
       case 2: // A and B are false
         Events::post(COND_TICK, 5, 2);

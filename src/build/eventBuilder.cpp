@@ -174,6 +174,13 @@ void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
   }
   ctx.eventIndex.addSourceUses(Project::Events::scanSourceDir(fs::path{project.getPath()} / "src" / "user"));
 
+  // Fork: conditions. Node graphs fire named events with their "Fire Event" node.
+  for(const auto &graph : project.getAssets().getTypeEntries(Project::FileType::NODE_GRAPH)) {
+    for(const auto &use : Project::Events::scanNodeGraph(Utils::FS::loadTextFile(graph.path), graph.name)) {
+      ctx.eventIndex.add(use.name, Project::Events::UseKind::GraphOut, "node graph " + graph.name + " (Fire Event)");
+    }
+  }
+
   // UI canvases (PLAN 9): checked like an object's bindings, and counted in the index
   for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::CANVAS)) {
     if(!entry.canvas)continue;

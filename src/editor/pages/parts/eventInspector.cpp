@@ -311,6 +311,13 @@ namespace
       }
 
       ImGui::Indent();
+      // Fork: conditions. The events the script itself binds to Check (P64_CONDITION_TRIGGERS).
+      if(input && declared && pin == "Check" && sec.pins.isConditionPin(true, pin)) {
+        for(const auto &trigger : sec.pins.triggers) {
+          ImGui::TextDisabled(ICON_MDI_LOCK " %s", trigger.c_str());
+          ImGui::SetItemTooltip("Set in the script (P64_CONDITION_TRIGGERS): the condition checks itself when this event fires");
+        }
+      }
       if(overrides) {
         changed |= drawOverridePin(sec, pin, input);
       } else {

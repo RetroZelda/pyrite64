@@ -86,13 +86,16 @@ namespace
     return answer;
   }
 
-  void checkCode(Object& obj, Comp::Code& code, uint32_t value)
+  // 'valueIsAnswer': a check no event with a value of its own asked for (a logic node following its
+  // inputs), so the outputs carry the answer, 1 or 0
+  void checkCode(Object& obj, Comp::Code& code, uint32_t value, bool valueIsAnswer = false)
   {
     auto &header = headerOf(code);
     if(!Conditions::isEnabled(header)) return;
 
     const auto outcome = Conditions::applyAnswer(header, evaluateCode(obj, code));
     ++checks;
+    if(valueIsAnswer) value = outcome.answer ? 1 : 0;
 
     const void* data = code.getCodeData();
     auto pin = [](ConditionOut out) { return static_cast<uint8_t>(PIN_BASE + static_cast<uint8_t>(out)); };
@@ -135,12 +138,12 @@ void P64::Conditions::reset(Object& obj)
   forEachCondition(obj, [&](Comp::Code& code) { reset(headerOf(code)); });
 }
 
-void P64::Conditions::notifyData(Object& obj, void* data, const Events::Event& ev)
+void P64::Conditions::notifyData(Object& obj, void* data, [[maybe_unused]] const Events::Event& ev)
 {
   // one re-check per wave: while it waits in the queue, further inputs change nothing
   auto &header = *static_cast<Header*>(data);
   if(!isEnabled(header) || (header.flags & Flag::PENDING)) return;
-  if(Events::Internal::sendChecked(obj.id, RECHECK, ev.value, obj.id)) header.flags |= Flag::PENDING;
+  if(Events::Internal::sendChecked(obj.id, RECHECK, 0, obj.id)) header.flags |= Flag::PENDING;
 }
 
 P64::Conditions::Inputs::Inputs(Object& obj, const void* data, uint8_t pin)
@@ -228,7 +231,7 @@ uint32_t P64::Conditions::Internal::onDirect(Object& obj, Comp::Code& code, cons
     auto &header = headerOf(code);
     if(!(header.flags & Flag::PENDING)) return 0; // another condition script of this object asked
     header.flags = static_cast<uint8_t>(header.flags & ~Flag::PENDING);
-    checkCode(obj, code, ev.value);
+    checkCode(obj, code, 0, true);
     return 1;
   }
 

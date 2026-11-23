@@ -43,6 +43,28 @@ node({
 });
 
 node({
+  // Fork: conditions (docs/todo/conditionals/PLAN.md, 2.5). Fires a named event of the event graph,
+  // in the scope of this graph's object: scene::, prefab::, object::, ui:: or a game namespace.
+  id: "core.fireEvent",
+  name: icon("flash") + " Fire Event",
+  color: Color.green,
+  category: "Object",
+  inputs: [logicIn()],
+  outputs: [logicOut()],
+  props: {
+    eventName: Str({ label: "Event", default: "scene::MyEvent", width: 180 }),
+    eventValue: Str({ label: "Value", default: "0", width: 80 }),
+  },
+  build(n, ctx) {
+    // the name becomes a "..."_event literal, so the compiler checks it; quotes cannot be part of one
+    var name = ("" + n.eventName).replace(/["\\\n\r]/g, "");
+    ctx.include("<events/bus.h>")
+       .localConst("uint32_t", "t_eventVal", numberOrHash(n.eventValue))
+       .line('P64::Events::postTo(*inst->object, "' + name + '"_event, t_eventVal, inst->object->id);');
+  },
+});
+
+node({
   // Deprecated in favour of an "objref" variable + Get Var; hidden but still loads.
   id: "core.objRef",
   name: icon("cube-outline") + " Object",

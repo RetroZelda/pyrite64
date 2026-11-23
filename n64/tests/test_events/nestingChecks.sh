@@ -37,14 +37,17 @@ run() {
   rm -f "$log"
   timeout 120 ares --no-file-prompt --setting Audio/Mute=true --setting Input/Defocus=Allow \
     --system "Nintendo 64" "$DIR/test_events.z64" > "$log" 2>&1 &
+  local pid=$!
   for _ in $(seq 1 100); do
     grep -q '\[event test\] DONE' "$log" 2>/dev/null && break
     sleep 1
   done
-  pkill -x ares
-  wait 2>/dev/null
+  # only this run's emulator: timeout passes the signal on (the emulator runs as ares-simd)
+  kill "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  # every test passed, however many there are
   if grep -q '\[event test\] 11 Same events after To Prefab and Unpack: OK' "$log" \
-     && grep -q '\[event test\] DONE: 12 of 12 passed' "$log"; then
+     && grep -qE '\[event test\] DONE: ([0-9]+) of \1 passed' "$log"; then
     ok "$title: runtime"
   else
     bad "$title: runtime"

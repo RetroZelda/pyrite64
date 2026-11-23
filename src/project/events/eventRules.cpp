@@ -49,7 +49,7 @@ namespace
   bool fires(Project::Events::UseKind kind)
   {
     using K = Project::Events::UseKind;
-    return kind == K::BoundOut || kind == K::Code || kind == K::SystemOut || kind == K::EngineOut;
+    return kind == K::BoundOut || kind == K::Code || kind == K::SystemOut || kind == K::EngineOut || kind == K::GraphOut;
   }
 
   bool listens(Project::Events::UseKind kind)
@@ -191,8 +191,8 @@ std::vector<Project::Events::SourceUse> Project::Events::scanSource(const std::s
   std::vector<SourceUse> res{};
   static const std::regex literal(R"re("([^"\\\n]*)"_(event|pin)\b)re");
 
-  // Fork: conditions. The names in P64_CONDITION_TRIGGERS(...) are not counted here: the build
-  // binds them to the condition's Check input, which says more ("listens", not "may fire").
+  // Fork: conditions. The names in P64_CONDITION_TRIGGERS(...) are marked: the build binds them to
+  // the condition's Check input, which says more ("listens", not "may fire").
   std::vector<std::pair<size_t, size_t>> triggerLists{};
   for(size_t at = code.find("P64_CONDITION_TRIGGERS("); at != std::string::npos; at = code.find("P64_CONDITION_TRIGGERS(", at + 1)) {
     const auto end = code.find(')', at);
@@ -209,7 +209,6 @@ std::vector<Project::Events::SourceUse> Project::Events::scanSource(const std::s
   for(auto it = begin; it != std::sregex_iterator(); ++it)
   {
     const auto pos = static_cast<size_t>(it->position(0));
-    if(inTriggerList(pos))continue;
     for(size_t i = lineStartPos; i < pos; ++i) if(code[i] == '\n') ++line;
     lineStartPos = pos;
     res.push_back({
@@ -217,7 +216,21 @@ std::vector<Project::Events::SourceUse> Project::Events::scanSource(const std::s
       .file = fileName,
       .line = line,
       .isPin = (*it)[2].str() == "pin",
+      .trigger = inTriggerList(pos),
     });
+  }
+  return res;
+}
+
+std::vector<Project::Events::SourceUse> Project::Events::scanNodeGraph(const std::string &json, const std::string &fileName)
+{
+  std::vector<SourceUse> res{};
+  auto doc = nlohmann::json::parse(json, nullptr, false);
+  if(doc.is_discarded() || !doc.is_object() || !doc.contains("nodes") || !doc["nodes"].is_array())return res;
+  for(const auto &node : doc["nodes"]) {
+    if(!node.is_object() || node.value("typeId", "") != "core.fireEvent")continue;
+    if(!node.contains("eventName") || !node["eventName"].is_string())continue;
+    res.push_back({.name = node["eventName"].get<std::string>(), .file = fileName});
   }
   return res;
 }
@@ -279,7 +292,7 @@ void Project::Events::Index::addSourceUses(const std::vector<SourceUse> &found)
 {
   for(const auto &use : found) {
     if(use.isPin) sourcePins.push_back(use);
-    else add(use.name, UseKind::Code, use.file + ":" + std::to_string(use.line));
+    else if(!use.trigger) add(use.name, UseKind::Code, use.file + ":" + std::to_string(use.line));
   }
 }
 
@@ -343,6 +356,10 @@ std::vector<Project::Events::Message> Project::Events::Index::check(const Catalo
     if(!nameProblem(use.name).empty()) {
       if(use.kind == UseKind::Code) {
         res.push_back({Level::Warning, use.where + ": " + nameProblem(use.name)});
+      }
+      // Fork: conditions. A Fire Event node becomes a "..."_event literal: a bad name cannot compile.
+      if(use.kind == UseKind::GraphOut) {
+        res.push_back({Level::Error, use.where + ": " + nameProblem(use.name)});
       }
       continue; // bindings with bad names already failed while writing the object
     }

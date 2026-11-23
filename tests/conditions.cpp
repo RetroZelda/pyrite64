@@ -347,14 +347,67 @@ TEST_CASE("index: prefab_0:: and prefab:: are the same Result name")
   CHECK_FALSE(hasMessage(index.check(Catalog{}), Message::Level::Warning, "reads"));
 }
 
-TEST_CASE("source scan: trigger names are left to the build, other literals are found")
+TEST_CASE("source scan: trigger names are marked, and the index leaves them to the build")
 {
   auto found = scanSource(
     "P64_CONDITION_TRIGGERS(\"player::HealthChanged\"_event, \"scene::Loaded\"_event);\n"
     "void f() { P64::Events::post(\"player::Healed\"_event); send(o, \"Check\"_pin); }\n", "Cond.cpp");
+  REQUIRE(found.size() == 4);
+  CHECK(found[0].name == "player::HealthChanged");
+  CHECK(found[0].trigger);
+  CHECK(found[1].name == "scene::Loaded");
+  CHECK(found[1].trigger);
+  CHECK(found[2].name == "player::Healed");
+  CHECK_FALSE(found[2].trigger);
+  CHECK(found[2].line == 2);
+  CHECK(found[3].name == "Check");
+  CHECK(found[3].isPin);
+
+  // counted as code, a trigger would hide "nothing fires it": the build's binding on Check says "listens"
+  Index index{};
+  index.addSourceUses(found);
+  REQUIRE(index.uses.size() == 1);
+  CHECK(index.uses[0].name == "player::Healed");
+  index.add("player::HealthChanged", UseKind::BoundIn, "Low / HealthLow, trigger");
+  auto cat = Catalog{};
+  cat.namespaces["player"] = "";
+  CHECK(hasMessage(index.check(cat), Message::Level::Warning, "listens to 'player::HealthChanged', but nothing fires it"));
+}
+
+TEST_CASE("node graphs: the events their Fire Event nodes name")
+{
+  const char* graph = R"({"groups": [], "links": [], "nodes": [
+    {"pos": [0, 0], "typeId": "core.start", "uuid": 1},
+    {"pos": [10, 0], "typeId": "core.fireEvent", "uuid": 2, "eventName": "player::HealthChanged", "eventValue": "0"},
+    {"pos": [20, 0], "typeId": "core.objEvent", "uuid": 3, "eventType": 4, "eventValue": "1"},
+    {"pos": [30, 0], "typeId": "core.fireEvent", "uuid": 4, "eventName": "bad name"}
+  ]})";
+  auto found = scanNodeGraph(graph, "Heal.p64graph");
   REQUIRE(found.size() == 2);
-  CHECK(found[0].name == "player::Healed");
-  CHECK(found[0].line == 2);
-  CHECK(found[1].name == "Check");
-  CHECK(found[1].isPin);
+  CHECK(found[0].name == "player::HealthChanged");
+  CHECK(found[0].file == "Heal.p64graph");
+  CHECK_FALSE(found[0].isPin);
+  CHECK(found[1].name == "bad name");
+
+  CHECK(scanNodeGraph("not json", "x.p64graph").empty());
+  CHECK(scanNodeGraph("{\"nodes\": 3}", "x.p64graph").empty());
+}
+
+TEST_CASE("index: a Fire Event node fires, so a trigger bound to its event is not reported")
+{
+  auto cat = Catalog{};
+  cat.namespaces["player"] = "";
+  Index index{};
+  index.add("player::HealthChanged", UseKind::GraphOut, "node graph Heal.p64graph (Fire Event)");
+  index.add("player::HealthChanged", UseKind::BoundIn, "Low / HealthLow, trigger");
+  index.add("bad name", UseKind::GraphOut, "node graph Heal.p64graph (Fire Event)");
+  auto msgs = index.check(cat);
+  CHECK_FALSE(hasMessage(msgs, Message::Level::Warning, "nothing fires it"));
+  // the name becomes a "..."_event literal in generated code: a bad one cannot compile
+  CHECK(hasMessage(msgs, Message::Level::Error, "node graph Heal.p64graph (Fire Event): "));
+
+  // alone, it fires an event nobody listens to
+  Index lonely{};
+  lonely.add("player::HealthChanged", UseKind::GraphOut, "node graph Heal.p64graph (Fire Event)");
+  CHECK_FALSE(hasMessage(lonely.check(cat), Message::Level::Warning, "nothing fires it"));
 }
