@@ -33,6 +33,13 @@ namespace Project::Component::Code
     std::unordered_map<std::string, PropString> args{};
   };
 
+  // Fork: event graph
+  uint64_t getScriptUUID(const Entry &entry)
+  {
+    auto *data = static_cast<const Data*>(entry.data.get());
+    return data ? data->scriptUUID : 0;
+  }
+
   namespace
   {
     // Instance overrides of args live in an override map keyed like every other property. Nested prefab

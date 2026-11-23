@@ -20,7 +20,19 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   namespace Builtin = P64::Events::Builtin;
 
   constexpr uint32_t ANY = 0xFFFFFFFF;
-  constexpr uint16_t PROBE_ID = 2; // runtime id of the Probe object in both scenes
+  constexpr uint16_t PROBE_ID = 2; // runtime id of the Probe object in scenes 1 and 2
+  constexpr uint16_t TRIGGER_ID = 2, DOOR_A = 3, DOOR_B = 4; // scene 3
+
+  // Phase 2: this global script is a system with an input pin and declares the test events
+  P64_GLOBAL_EVENTS_IN(EventTest, DoorOpened);
+  P64_GLOBAL_EVENTS_OUT(Test, Ping, Pong, FromFixed, FromUpdate, Loop, Burst, Carried, Irq);
+  static_assert(TestOutIds[0] == "global::Test.Ping"_event.hash, "P64_GLOBAL_EVENTS_OUT hashes like _event");
+  static_assert(TestOutIds[7] == "global::Test.Irq"_event.hash);
+
+  void onInput(EventTestIn input, const Events::Event& ev)
+  {
+    if(input == EventTestIn::DoorOpened) add(Rec::SysDoorOpened, ev);
+  }
 
   struct Expect
   {
@@ -29,6 +41,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     uint32_t value{ANY};
     uint32_t sender{ANY};
     uint32_t instigator{ANY};
+    uint32_t obj{ANY};
   };
 
   struct TestDef
@@ -59,9 +72,9 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   {
     for(uint32_t i = 0; i < records.size(); ++i) {
       const auto &r = records[i];
-      debugf("  [%02lu] frame %lu %s value=%lu sender=%u instigator=%u\n",
+      debugf("  [%02lu] frame %lu %s value=%lu sender=%u instigator=%u obj=%u\n",
         (unsigned long)i, (unsigned long)r.frame, REC_NAMES[(uint32_t)r.type],
-        (unsigned long)r.value, (unsigned)r.sender, (unsigned)r.instigator);
+        (unsigned long)r.value, (unsigned)r.sender, (unsigned)r.instigator, (unsigned)r.obj);
     }
   }
 
@@ -71,7 +84,8 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
       && (e.frame == ANY || r.frame == e.frame)
       && (e.value == ANY || r.value == e.value)
       && (e.sender == ANY || r.sender == e.sender)
-      && (e.instigator == ANY || r.instigator == e.instigator);
+      && (e.instigator == ANY || r.instigator == e.instigator)
+      && (e.obj == ANY || r.obj == e.obj);
   }
 
   bool expectExactly(const std::vector<Expect> &expected)
@@ -264,6 +278,26 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return ok;
   }
 
+  bool checkDoor()
+  {
+    std::vector<Expect> e{};
+    addSceneChange(e, 2, 3);
+    e.push_back({Rec::TriggerSpawned, 1, 1, TRIGGER_ID, TRIGGER_ID});  // fired in init(), queued before the load events
+    e.push_back({Rec::SceneLoaded,        1, 3, 0});
+    e.push_back({Rec::CurrentSceneLoaded, 1, 3, 0});
+    // frame 2: Enter reaches both doors through scene::Trigger.Enter, in the order they subscribed
+    e.push_back({Rec::Open,  2, 0, TRIGGER_ID, 77, DOOR_A});
+    e.push_back({Rec::Open,  2, 0, TRIGGER_ID, 77, DOOR_B});
+    // each door's Opened reaches its own lamp only (object::), door A's also the global input pin
+    e.push_back({Rec::Light, 2, DOOR_A, DOOR_A, 77, DOOR_A});
+    e.push_back({Rec::SysDoorOpened, 2, DOOR_A, DOOR_A, 77});
+    e.push_back({Rec::Light, 2, DOOR_B, DOOR_B, 77, DOOR_B});
+    // frame 3: send() by input name, frame 4: Exit reaches door A only
+    e.push_back({Rec::Knock, 3, 5, TRIGGER_ID, TRIGGER_ID, DOOR_A});
+    e.push_back({Rec::Close, 4, 0, TRIGGER_ID, TRIGGER_ID, DOOR_A});
+    return expectExactly(e);
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -272,6 +306,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Drain budget",                  1, 8,  checkBudget},
     {"Scene change keeps global only", 2, 3,  checkCarry},
     {"Post from an interrupt",        2, 8,  checkIrq},
+    {"Pins, bindings and send()",     3, 6,  checkDoor},
   };
 
   void runStep()
@@ -329,6 +364,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     Events::listen(CARRIED,     onRecord, tag(Rec::Carried));
     Events::listen(STALE,       onRecord, tag(Rec::Stale));
     Events::listen(IRQ,         onRecord, tag(Rec::Irq));
+    Events::listen(TRIGGER_SPAWNED, onRecord, tag(Rec::TriggerSpawned));
   }
 
   void onScenePreLoad()

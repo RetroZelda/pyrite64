@@ -12,7 +12,9 @@
 // spawns and addressed messages, after physics, and after update. See the README next to the
 // plan for the full rules.
 #pragma once
-#include "events/types.h"
+#include "types.h"
+
+namespace P64 { class Object; }
 
 namespace P64::Events
 {
@@ -53,6 +55,34 @@ namespace P64::Events
 
   /** Removes a listener and resets the handle. Safe during delivery and with stale handles. */
   void unlisten(Listener& listener);
+
+  /**
+   * Posts an object:: event in the scope of 'inScopeOf' (prefab:: events from phase 4).
+   * Other namespaces work too and behave like post().
+   */
+  void postTo(Object& inScopeOf, EventId id, uint32_t value = 0, uint16_t sender = 0);
+
+  /**
+   * Listens to an object:: event in the scope of 'inScopeOf' (prefab:: events from phase 4).
+   * The listener is removed when that object is destroyed; a later unlisten() is harmless.
+   */
+  Listener listenIn(Object& inScopeOf, EventId id, ListenerFn fn, void* user = nullptr);
+
+  /**
+   * Fires output pin 'pin' of the component whose data is 'componentData' on 'obj': posts every
+   * event the pin is bound to. Scripts use the fire(obj, data, Out::X) their P64_EVENTS_OUT
+   * declares instead of calling this.
+   * @param instigator object that started the chain; 0 continues the current chain or uses obj
+   */
+  void fire(Object& obj, const void* componentData, uint8_t pin, uint32_t value = 0, uint16_t instigator = 0);
+
+  /**
+   * Sends to one object: every script on 'target' that declares an input named 'input' receives
+   * it in onInput, through the same queue and drains as any event. Nothing has to be bound in
+   * the editor. Replaces Scene::sendEvent.
+   *   P64::Events::send(*enemy, "TakeDamage"_pin, amount, obj.id);
+   */
+  void send(Object& target, PinName input, uint32_t value = 0, uint16_t sender = 0);
 
   /** Number of listeners 'id' has right now. */
   uint32_t listenerCount(EventId id);
@@ -118,5 +148,17 @@ namespace P64::Events
     void drain(DrainPoint point);
     void postImmediate(EventId id, uint32_t value = 0);
     void onSceneDestroyed();
+    void onObjectDestroyed(Object& obj);
+
+    // used by the EventLinks component
+    uint16_t resolveInstance(Object& obj, Scope scope, uint8_t up);
+    Listener listenBound(uint32_t hash, Scope scope, uint16_t instance, ListenerFn fn, void* user);
+    void objectInput(Object& obj, uint8_t pin, const Event& ev);
+  }
+
+  /** Implemented by the build in the project's src/p64/eventNames.cpp. */
+  namespace Generated
+  {
+    void registerNames();
   }
 }

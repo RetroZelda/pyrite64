@@ -42,6 +42,9 @@ namespace P64::Events::Core
 
   using TraceFn = void(*)(const QueuedEvent& event, uint32_t listeners, void* user);
 
+  /** Delivers a Scope::Direct event (send()) to its target object. Returns the listeners called. */
+  using DirectFn = uint32_t(*)(const QueuedEvent& event, void* user);
+
   class BusCore
   {
     public:
@@ -112,6 +115,7 @@ namespace P64::Events::Core
 
       void setWarnHandler(WarnFn fn, void* user) { warnFn = fn; warnUser = user; }
       void setTraceHandler(TraceFn fn, void* user) { traceFn = fn; traceUser = user; }
+      void setDirectHandler(DirectFn fn, void* user) { directFn = fn; directUser = user; }
 
     private:
       static constexpr uint16_t NIL = 0xFFFF;
@@ -166,6 +170,8 @@ namespace P64::Events::Core
       void* warnUser{nullptr};
       TraceFn traceFn{nullptr};
       void* traceUser{nullptr};
+      DirectFn directFn{nullptr};
+      void* directUser{nullptr};
 
       [[nodiscard]] static uint32_t bucketOf(uint32_t hash, uint16_t instance);
       bool enqueue(const QueuedEvent& event);

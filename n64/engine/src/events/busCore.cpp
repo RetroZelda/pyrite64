@@ -258,22 +258,30 @@ namespace P64::Events::Core
     ctx.hops = event.hops;
     ++depth;
 
-    // Walk only the entries the chain has now. Listeners subscribed by a callback are appended
-    // behind them and are not called for this event. Unsubscribed entries stay linked (marked
-    // dead) until the delivery ends, so the walk stays valid.
-    uint32_t b = bucketOf(event.ev.id, event.instance);
-    uint32_t chainLength = 0;
-    for(uint16_t s = buckets[b]; s != NIL; s = subs[s].next) ++chainLength;
-
     uint32_t calls = 0;
-    uint16_t s = buckets[b];
-    for(uint32_t i = 0; i < chainLength && s != NIL; ++i) {
-      const Sub &sub = subs[s];
-      if((sub.flags & FLAG_ALIVE) && sub.hash == event.ev.id && sub.instance == event.instance) {
-        ++calls;
-        sub.fn(event.ev, sub.user);
+    if(event.scope == Scope::Direct)
+    {
+      // send(): the target object's inputs with this pin name, no subscriptions involved
+      if(directFn) calls = directFn(event, directUser);
+    }
+    else
+    {
+      // Walk only the entries the chain has now. Listeners subscribed by a callback are appended
+      // behind them and are not called for this event. Unsubscribed entries stay linked (marked
+      // dead) until the delivery ends, so the walk stays valid.
+      uint32_t b = bucketOf(event.ev.id, event.instance);
+      uint32_t chainLength = 0;
+      for(uint16_t s = buckets[b]; s != NIL; s = subs[s].next) ++chainLength;
+
+      uint16_t s = buckets[b];
+      for(uint32_t i = 0; i < chainLength && s != NIL; ++i) {
+        const Sub &sub = subs[s];
+        if((sub.flags & FLAG_ALIVE) && sub.hash == event.ev.id && sub.instance == event.instance) {
+          ++calls;
+          sub.fn(event.ev, sub.user);
+        }
+        s = subs[s].next; // read after the call: the callback may have appended behind it
       }
-      s = subs[s].next; // read after the call: the callback may have appended behind it
     }
     stats.listenerCalls += calls;
 

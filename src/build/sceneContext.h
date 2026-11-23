@@ -8,6 +8,7 @@
 #include "stringTable.h"
 #include "../utils/binaryFile.h"
 #include "../utils/toolchain.h"
+#include "../project/events/eventRules.h"
 
 namespace Project { class Project; class Scene; struct AssetManagerEntry; }
 
@@ -46,6 +47,12 @@ namespace Build
 
     bool needsOpus{false};
     bool hasCanvases{false};
+
+    // Fork: event graph, see eventBuilder.h
+    Project::Events::Catalog eventCatalog{};
+    Project::Events::Index eventIndex{};
+    std::vector<Project::Events::Message> eventMessages{};
+    std::string eventWhere{}; // "scene 3" or "prefab Door.prefab", for messages
 
     void addAsset(const Project::AssetManagerEntry &entry);
   };

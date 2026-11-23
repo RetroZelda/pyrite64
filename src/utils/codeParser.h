@@ -63,5 +63,29 @@ namespace Utils::CPP
 
   bool hasFunction(const std::string &sourceCode, const std::string &retType, const std::string &name);
 
+  // Fork: event graph. Pins an object script declares with P64_EVENTS_IN(...) / P64_EVENTS_OUT(...).
+  struct EventPins
+  {
+    std::vector<std::string> in{};
+    std::vector<std::string> out{};
+    std::vector<std::string> errors{}; // problems found, one sentence each
+
+    [[nodiscard]] bool empty() const { return in.empty() && out.empty(); }
+  };
+
+  // Fork: event graph. Pins a global script declares for one system with
+  // P64_GLOBAL_EVENTS_IN(System, ...) / P64_GLOBAL_EVENTS_OUT(System, ...).
+  struct SystemPins
+  {
+    std::string system{};
+    std::vector<std::string> in{};
+    std::vector<std::string> out{};
+  };
+
+  EventPins parseEventPins(const std::string &sourceCode);
+
+  /** Systems in declaration order, IN and OUT of one system merged. Problems go to 'errors'. */
+  std::vector<SystemPins> parseGlobalEventPins(const std::string &sourceCode, std::vector<std::string> *errors = nullptr);
+
   uint32_t calcStructSize(const Struct &s);
 }

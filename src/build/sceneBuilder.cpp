@@ -14,6 +14,7 @@
 #include "../utils/logger.h"
 
 #include "engine/include/scene/objectFlags.h"
+#include "eventBuilder.h"
 #include "../project/component/types/compSpline.h"
 
 namespace T3D
@@ -172,6 +173,13 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
     }
   );
 
+  // Fork: event graph. The object's bindings become an EventLinks record, written first so a
+  // component can fire its outputs from init().
+  auto eventRecords = Build::Events::collect(ctx, obj, compList, srcObj->events);
+  if(!eventRecords.empty()) {
+    Build::Events::writeLinks(ctx, obj, eventRecords);
+  }
+
   for(auto &comp : compList) {
     saveComp(*comp);
   }
@@ -210,6 +218,7 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
 
   std::unique_ptr<Project::Scene> sc{new Project::Scene(scene.id, project.getPath())};
   ctx.scene = sc.get();
+  ctx.eventWhere = "scene " + std::to_string(scene.id) + " (" + scene.name + ")"; // Fork: event graph
 
   // Object ids only exist at runtime; assign them now so writeObject and component
   // builds (which resolve object UUID -> runtime id) see a consistent id space.

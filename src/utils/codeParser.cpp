@@ -4,6 +4,7 @@
 */
 #include "codeParser.h"
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <cstdint>
@@ -675,3 +676,124 @@ uint32_t Utils::CPP::calcStructSize(const Struct&s) {
   return size;
 }
 
+
+// Fork: event graph pin declarations ---------------------------------------------------------
+
+namespace
+{
+  bool isPinIdentifier(const std::string &name)
+  {
+    if(name.empty() || std::isdigit(static_cast<unsigned char>(name[0])))return false;
+    for(char c : name) {
+      if(!std::isalnum(static_cast<unsigned char>(c)) && c != '_')return false;
+    }
+    return true;
+  }
+
+  std::string trimCopy(const std::string &str)
+  {
+    size_t start = 0;
+    size_t end = str.size();
+    while(start < end && std::isspace(static_cast<unsigned char>(str[start])))++start;
+    while(end > start && std::isspace(static_cast<unsigned char>(str[end - 1])))--end;
+    return str.substr(start, end - start);
+  }
+
+  // every argument list of 'macroName(...)', in order; the name must not follow an identifier character
+  std::vector<std::vector<std::string>> findMacroCalls(const std::string &code, const std::string &macroName)
+  {
+    std::vector<std::vector<std::string>> calls{};
+    const std::string needle = macroName + "(";
+    size_t pos = 0;
+    while((pos = code.find(needle, pos)) != std::string::npos)
+    {
+      const bool partOfLongerName = pos > 0 && (std::isalnum(static_cast<unsigned char>(code[pos - 1])) || code[pos - 1] == '_');
+      size_t start = pos + needle.size();
+      size_t end = code.find(')', start);
+      pos = start;
+      if(partOfLongerName || end == std::string::npos)continue;
+
+      // skip the macro's own definition: "#define P64_EVENTS_IN(...)"
+      auto lineStart = code.rfind('\n', pos);
+      auto line = code.substr(lineStart == std::string::npos ? 0 : lineStart + 1, start - (lineStart == std::string::npos ? 0 : lineStart + 1));
+      if(line.find("#define") != std::string::npos)continue;
+
+      std::vector<std::string> args{};
+      std::string current{};
+      for(size_t i = start; i < end; ++i) {
+        if(code[i] == ',') { args.push_back(trimCopy(current)); current.clear(); }
+        else current += code[i];
+      }
+      args.push_back(trimCopy(current));
+      calls.push_back(args);
+      pos = end;
+    }
+    return calls;
+  }
+
+  void addPins(const std::vector<std::string> &names, std::vector<std::string> &target,
+               const std::string &macroName, std::vector<std::string> &errors)
+  {
+    for(const auto &name : names) {
+      if(name.empty() && names.size() == 1)continue; // "P64_EVENTS_IN()" declares nothing
+      if(!isPinIdentifier(name)) {
+        errors.push_back(macroName + ": '" + name + "' is not a valid pin name (letters, digits and _, not starting with a digit)");
+        continue;
+      }
+      if(std::find(target.begin(), target.end(), name) != target.end()) {
+        errors.push_back(macroName + ": pin '" + name + "' is declared twice");
+        continue;
+      }
+      target.push_back(name);
+    }
+  }
+}
+
+Utils::CPP::EventPins Utils::CPP::parseEventPins(const std::string &sourceCode)
+{
+  EventPins res{};
+  const auto code = stripComments(sourceCode);
+
+  for(const auto &[macro, target] : {std::pair{"P64_EVENTS_IN", &res.in}, std::pair{"P64_EVENTS_OUT", &res.out}})
+  {
+    auto calls = findMacroCalls(code, macro);
+    if(calls.size() > 1) {
+      res.errors.push_back(std::string(macro) + " is used " + std::to_string(calls.size()) + " times; a script declares its pins once");
+    }
+    if(!calls.empty())addPins(calls[0], *target, macro, res.errors);
+  }
+  return res;
+}
+
+std::vector<Utils::CPP::SystemPins> Utils::CPP::parseGlobalEventPins(const std::string &sourceCode, std::vector<std::string> *errors)
+{
+  std::vector<SystemPins> res{};
+  std::vector<std::string> localErrors{};
+  auto &errs = errors ? *errors : localErrors;
+  const auto code = stripComments(sourceCode);
+
+  for(const auto &[macro, isIn] : {std::pair{"P64_GLOBAL_EVENTS_IN", true}, std::pair{"P64_GLOBAL_EVENTS_OUT", false}})
+  {
+    for(auto &args : findMacroCalls(code, macro))
+    {
+      if(args.empty() || !isPinIdentifier(args[0])) {
+        errs.push_back(std::string(macro) + ": the first argument must be the system name");
+        continue;
+      }
+      const std::string system = args[0];
+      auto it = std::find_if(res.begin(), res.end(), [&](const SystemPins &s) { return s.system == system; });
+      if(it == res.end()) {
+        res.push_back({.system = system});
+        it = res.end() - 1;
+      }
+      auto &target = isIn ? it->in : it->out;
+      if(!target.empty()) {
+        errs.push_back(std::string(macro) + "(" + system + ", ...) is used twice; declare each direction of a system once");
+        continue;
+      }
+      std::vector<std::string> names(args.begin() + 1, args.end());
+      addPins(names, target, std::string(macro) + "(" + system + ")", errs);
+    }
+  }
+  return res;
+}

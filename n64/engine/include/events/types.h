@@ -6,6 +6,7 @@
 // This header must stay free of engine and libdragon includes: the editor and the host unit
 // tests include it too.
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -19,6 +20,7 @@ namespace P64::Events
     Prefab = 2, // prefab::, prefab_0::, prefab_1::, ...
     Object = 3, // object::
     UI     = 4, // ui::
+    Direct = 5, // internal: send() to one object's inputs by pin name; never a namespace
   };
 
   /** What a listener receives. */
@@ -106,6 +108,8 @@ namespace P64::Events
     void eventName_must_be_letters_digits_underscore_and_dots_without_empty_parts();
     void eventNamespace_prefab_number_must_be_0_to_255_without_leading_zeros();
     void globalEventName_must_be_global_colon_colon_System_dot_Pin();
+    void pinName_must_be_an_identifier();
+    void pin_list_must_be_identifiers_separated_by_commas();
   }
 
   /**
@@ -201,6 +205,66 @@ namespace P64::Events
     return res;
   }
 
+  /** A pin name for send(), as produced by the "..."_pin literal: "TakeDamage"_pin. */
+  struct PinName
+  {
+    uint32_t hash{}; // CRC-32 of the pin name
+
+    constexpr bool operator==(const PinName&) const = default;
+  };
+
+  /** Hash of a pin name (CRC-32 of the text), the same value the build writes for scripts. */
+  constexpr uint32_t pinHash(const char* str, size_t len)
+  {
+    return ~Detail::crc32Update(0xFFFFFFFFu, str, len);
+  }
+
+  namespace Detail
+  {
+    constexpr bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+    /** Counts the names in a stringized macro argument list ("A, B, C" has 3). */
+    consteval size_t countPins(const char* list)
+    {
+      size_t count = 0;
+      bool inName = false;
+      for(size_t i = 0; list[i] != '\0'; ++i) {
+        if(list[i] == ',') { inName = false; continue; }
+        if(isSpace(list[i])) continue;
+        if(!inName) { ++count; inName = true; }
+      }
+      return count;
+    }
+
+    /**
+     * Hashes of 'prefix' + each name of a stringized macro argument list, in order.
+     * Used by P64_GLOBAL_EVENTS_OUT: prefix "global::System." and list "A, B" give the ids of
+     * global::System.A and global::System.B.
+     */
+    template<size_t N>
+    consteval std::array<uint32_t, N> systemPinHashes(const char* prefix, const char* list)
+    {
+      std::array<uint32_t, N> res{};
+      size_t prefixLen = 0;
+      while(prefix[prefixLen] != '\0') ++prefixLen;
+      const uint32_t prefixCrc = crc32Update(0xFFFFFFFFu, prefix, prefixLen);
+
+      size_t idx = 0;
+      size_t i = 0;
+      while(list[i] != '\0') {
+        while(isSpace(list[i]) || list[i] == ',') ++i;
+        if(list[i] == '\0') break;
+        size_t start = i;
+        while(list[i] != '\0' && list[i] != ',' && !isSpace(list[i])) ++i;
+        size_t len = i - start;
+        if(idx >= N || !isIdentifier(list + start, len)) pin_list_must_be_identifiers_separated_by_commas();
+        res[idx++] = ~crc32Update(prefixCrc, list + start, len);
+      }
+      if(idx != N) pin_list_must_be_identifiers_separated_by_commas();
+      return res;
+    }
+  }
+
   /** Counters kept by the bus, see getStats(). */
   struct Stats
   {
@@ -218,6 +282,15 @@ namespace P64::Events
     uint16_t subscriptions{};     // subscription slots in use right now
     uint16_t subscriptionsPeak{};
   };
+}
+
+/**
+ * Pin name literal for send(): "TakeDamage"_pin. Checked at compile time: an identifier.
+ */
+consteval P64::Events::PinName operator""_pin(const char* str, size_t len)
+{
+  if(!P64::Events::Detail::isIdentifier(str, len)) P64::Events::Detail::pinName_must_be_an_identifier();
+  return {P64::Events::pinHash(str, len)};
 }
 
 /**

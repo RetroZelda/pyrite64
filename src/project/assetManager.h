@@ -96,6 +96,8 @@ namespace Project
     std::shared_ptr<Assets::Emitter> emitter{nullptr};
     AssetConf conf{};
     Utils::CPP::Struct params{};
+    Utils::CPP::EventPins pins{};                    // Fork: event graph, object scripts
+    std::vector<Utils::CPP::SystemPins> systemPins{}; // Fork: event graph, global scripts
 
     // Destructor defined in assetManager.cpp (where Canvas is complete)
     ~AssetManagerEntry();

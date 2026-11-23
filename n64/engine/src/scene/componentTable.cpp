@@ -23,6 +23,7 @@
 #include "scene/components/surface.h"
 #include "scene/components/particle.h"
 #include "scene/components/spline.h"
+#include "scene/components/eventLinks.h"
 
 // some template magic to auto-detect if a function exists in a component
 #define HAS_FUNC_TPL(NAME_HAS, NAME_GET, FUNC) \
@@ -47,6 +48,7 @@ namespace
   HAS_FUNC_TPL(has_fixed_update, get_fixed_update, fixedUpdate)
   HAS_FUNC_TPL(has_event,  get_event,   onEvent)
   HAS_FUNC_TPL(has_coll,   get_coll,    onColl )
+  HAS_FUNC_TPL(has_input,  get_input,   onInput)
 }
 
 #define SET_COMP(NAME) \
@@ -60,6 +62,7 @@ namespace
     .draw   = (FuncDraw)(get_draw<Comp::NAME>()), \
     .onEvent = (FuncOnEvent)(get_event<Comp::NAME>()), \
     .onColl = (FuncOnColl)(get_coll<Comp::NAME>()), \
+    .onInput = (FuncOnInput)(get_input<Comp::NAME>()), \
     .getAllocSize = reinterpret_cast<FuncGetAllocSize>(Comp::NAME::getAllocSize), \
   }
 
@@ -86,17 +89,19 @@ namespace P64
     // fork components, reserved id block 24+ (keep the designators ascending)
     SET_COMP(Particle),
     SET_COMP(Spline),
+    SET_COMP(EventLinks), // Fork: event graph, added by the build to objects with event bindings
   };
 
   static_assert(P64::Comp::Surface::ID == 13 && P64::Comp::Particle::ID == 24, "update the empty designators above");
   static_assert(P64::Comp::Spline::ID < P64::COMP_TABLE_SIZE);
+  static_assert(P64::Comp::EventLinks::ID == P64::Comp::Spline::ID + 1 && P64::Comp::EventLinks::ID < P64::COMP_TABLE_SIZE);
 
   // Ids are stored in scene and prefab data, so two components must never share one
   constexpr uint32_t ALL_COMP_IDS[] {
     Comp::Code::ID, Comp::Model::ID, Comp::Light::ID, Comp::Camera::ID, Comp::CollMesh::ID,
     Comp::CollBody::ID, Comp::Audio2D::ID, Comp::Constraint::ID, Comp::Culling::ID,
     Comp::NodeGraph::ID, Comp::AnimModel::ID, Comp::RigidBody::ID, Comp::CharBody::ID,
-    Comp::Surface::ID, Comp::Particle::ID, Comp::Spline::ID,
+    Comp::Surface::ID, Comp::Particle::ID, Comp::Spline::ID, Comp::EventLinks::ID,
   };
   static_assert([]{
     for(uint32_t i = 0; i < std::size(ALL_COMP_IDS); ++i) {

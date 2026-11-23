@@ -34,6 +34,7 @@ bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
     // nested prefabs, and prefix the object count so the runtime knows how many to load.
     sceneCtx.fileObj = {};
     sceneCtx.nextRuntimeId = 1; // the root is 0, expanded children continue from here
+    sceneCtx.eventWhere = "prefab " + asset.name; // Fork: event graph
     sceneCtx.fileObj.write<uint32_t>(0); // object count, patched below
     uint32_t count = 0;
     try {

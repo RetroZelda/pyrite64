@@ -11,6 +11,9 @@ namespace P64::GlobalScript
 {
   __CODE_DECL__
 
+  // Fork: event graph
+  __EVENT_PINS__
+
   void callHooks(HookType type)
   {
     switch (type)

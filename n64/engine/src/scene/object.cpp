@@ -8,6 +8,7 @@
 #include "scene/scene.h"
 #include "scene/sceneManager.h"
 #include "scene/components/code.h"
+#include "events/bus.h"
 
 P64::Object::~Object()
 {
@@ -22,6 +23,7 @@ P64::Object::~Object()
 
     compDef.initDel(*this, dataPtr, nullptr);
   }
+  Events::Internal::onObjectDestroyed(*this); // Fork: event graph
 }
 
 void* P64::Object::getScriptDataByType(const void* typeTag) const

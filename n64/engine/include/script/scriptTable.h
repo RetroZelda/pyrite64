@@ -5,6 +5,7 @@
 #pragma once
 #include <libdragon.h>
 #include "nodeGraph.h"
+#include "../events/types.h"
 
 namespace P64 { class Object; struct ObjectEvent; }
 namespace P64::Coll { struct CollEvent; }
@@ -15,6 +16,7 @@ namespace P64::Script
   typedef void(*FuncObjDataDelta)(Object&, void*, float);
   typedef void(*FuncObjDataEvent)(Object&, void*, const ObjectEvent&);
   typedef void(*FuncObjDataColl)(Object&, void*, const P64::Coll::CollEvent&);
+  typedef void(*FuncObjDataInput)(Object&, void*, uint8_t, const Events::Event&);
 
   struct ScriptEntry
   {
@@ -37,6 +39,12 @@ namespace P64::Script
     FuncObjInit onActivate;
 
     const void* const* dataType; // points to the 'DATA_TYPE' of the script, see 'TYPE_TAG'
+
+    // Fork: event graph. Input pins declared with P64_EVENTS_IN, and their names hashed
+    // (Events::pinHash) in declaration order, so send() can find an input by name.
+    FuncObjDataInput onInput;
+    const uint32_t* inputHashes;
+    uint8_t inputCount;
   };
 
   // Note: generated and implement in the project:

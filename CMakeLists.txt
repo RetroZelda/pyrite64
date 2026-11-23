@@ -211,6 +211,11 @@ add_executable(pyrite64 src/main.cpp
         src/utils/proc.h
         src/utils/proc.cpp
         src/build/sceneBuilder.cpp
+        src/build/eventBuilder.cpp
+        src/project/events/eventBindings.cpp
+        src/project/events/eventRules.cpp
+        src/project/events/eventPins.cpp
+        src/editor/pages/parts/eventInspector.cpp
         src/utils/binaryFile.h
         src/build/sceneContext.h
         src/build/stringTable.h
@@ -408,13 +413,16 @@ if(PYRITE64_BUILD_TESTS)
         tests/codeParserFork.cpp
         tests/layer.cpp
         tests/eventBus.cpp
+        tests/eventEditor.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
+        src/project/events/eventBindings.cpp
+        src/project/events/eventRules.cpp
         n64/engine/src/events/busCore.cpp
     )
     # n64/engine: the event bus core is engine code written to also compile on the host
     target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include
-        n64/engine/include n64/engine/src)
+        vendored/tiny3d/tools/gltf_importer/src/lib n64/engine/include n64/engine/src)
     add_test(NAME pyrite64_tests COMMAND pyrite64_tests)
 endif()
 

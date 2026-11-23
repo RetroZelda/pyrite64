@@ -62,6 +62,7 @@ namespace Project
 
       std::vector<std::shared_ptr<Object>> children{};
       std::vector<Component::Entry> components{};
+      Events::Bindings events{}; // Fork: event graph, bindings of the object's own pins (Enable, Ready, ...)
 
       explicit Object(Object& parent) : parent{&parent} {}
       Object() = default;

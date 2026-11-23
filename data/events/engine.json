@@ -1,0 +1,16 @@
+{
+  "events": {
+    "global::Engine.GameInit": { "doc": "Once, right after the game-init hook. Delivered immediately.", "value": "" },
+    "global::Engine.SceneLoading": { "doc": "Before a scene is created, after the pre-load hook. Delivered immediately.", "value": "scene id" },
+    "global::Engine.SceneLoaded": { "doc": "First frame of a scene, after every onReady.", "value": "scene id" },
+    "global::Engine.SceneUnloading": { "doc": "Before the scene is deleted. Delivered immediately.", "value": "scene id" },
+    "global::Engine.SceneUnloaded": { "doc": "After the scene was deleted. Delivered immediately; the scene no longer exists.", "value": "scene id" },
+    "global::Engine.ResetPressed": { "doc": "The N64 reset button. About half a second is left before the console resets.", "value": "" },
+    "global::Engine.ControllerConnected": { "doc": "A controller was plugged in.", "value": "port 0-3" },
+    "global::Engine.ControllerDisconnected": { "doc": "A controller was unplugged.", "value": "port 0-3" },
+    "global::Engine.PakInserted": { "doc": "A Rumble, Controller or Transfer Pak was inserted.", "value": "port | (pak type << 8)" },
+    "global::Engine.PakRemoved": { "doc": "A pak was removed.", "value": "port | (pak type << 8)" },
+    "scene::Loaded": { "doc": "First frame of the current scene, after every onReady.", "value": "scene id" },
+    "scene::Unloading": { "doc": "Before the current scene is deleted. Delivered immediately.", "value": "scene id" }
+  }
+}

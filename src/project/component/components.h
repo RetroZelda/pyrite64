@@ -3,6 +3,7 @@
 * @license MIT
 */
 #pragma once
+#include "../events/eventBindings.h"
 #include <array>
 #include <memory>
 #include <SDL3/SDL_gpu.h>
@@ -36,6 +37,7 @@ namespace Project::Component
     std::string name{};
     Property<bool> enabled{"enabled", true};
     std::shared_ptr<void> data{};
+    Events::Bindings events{}; // Fork: event graph, the component's pin bindings
   };
 
   // Everything transform evaluation is allowed to depend on. Filled once per frame by
@@ -102,6 +104,7 @@ namespace Project::Component
     }
 
   MAKE_COMP(Code)
+  namespace Code { uint64_t getScriptUUID(const Entry &entry); } // Fork: event graph
   MAKE_COMP(Model)
   MAKE_COMP(Light)
   MAKE_COMP(Camera)

@@ -5,6 +5,7 @@
 #pragma once
 #include <libdragon.h>
 #include "event.h"
+#include "events/types.h"
 
 namespace P64::Coll
 {
@@ -25,6 +26,8 @@ namespace P64
   typedef void(*FuncDraw)(Object&, void*, float deltaTime);
   typedef void(*FuncOnEvent)(Object&, void*, const ObjectEvent&);
   typedef void(*FuncOnColl)(Object&, void*, const P64::Coll::CollEvent&);
+  // Fork: event graph, an input pin of the component received an event
+  typedef void(*FuncOnInput)(Object&, void*, uint8_t pin, const Events::Event&);
 
   struct ComponentDef
   {
@@ -37,6 +40,7 @@ namespace P64
     FuncDraw draw{};
     FuncOnEvent onEvent{};
     FuncOnColl onColl{};
+    FuncOnInput onInput{};
     FuncGetAllocSize getAllocSize{};
   };
 

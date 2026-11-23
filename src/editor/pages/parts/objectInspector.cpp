@@ -2,6 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include "eventInspector.h"
 #include "objectInspector.h"
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -847,6 +848,8 @@ void Editor::ObjectInspector::draw() {
       }
 
       def.funcDraw(*obj, comp);
+      // Fork: event graph, the component's pins and their bindings (prefab content is read-only here)
+      Editor::EventInspector::drawComponent(*obj, comp, locked || ImTable::readOnly);
     }
     ImGui::PopID();
     // Let the next insertion marker know if the previous component is folded

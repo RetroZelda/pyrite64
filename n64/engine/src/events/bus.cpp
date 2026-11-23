@@ -10,6 +10,12 @@
 #include "events/bus.h"
 #include "busCore.h"
 #include "lib/logger.h"
+#include "scene/scene.h"
+#include "scene/sceneManager.h"
+#include "scene/componentTable.h"
+#include "scene/objectFlags.h"
+#include "scene/components/code.h"
+#include "scene/components/eventLinks.h"
 
 namespace
 {
@@ -153,6 +159,49 @@ namespace
   }
 
   constinit uint32_t droppedWrongScope = 0;
+
+  // send(): every script input on the target object with this pin name
+  uint32_t onDirect(const Core::QueuedEvent& event, [[maybe_unused]] void* user)
+  {
+    P64::Object* obj = P64::SceneManager::getCurrent().getObjectById(event.instance);
+    if(!obj) return 0;
+
+    uint32_t calls = 0;
+    auto refs = obj->getCompRefs();
+    for(uint32_t c = 0; c < obj->compCount; ++c)
+    {
+      if(refs[c].type != P64::Comp::Code::ID) continue;
+      auto *code = reinterpret_cast<P64::Comp::Code*>(reinterpret_cast<char*>(obj) + refs[c].offset);
+      const auto *script = code->script;
+      if(!script || !script->onInput || !script->inputHashes) continue;
+      for(uint32_t pin = 0; pin < script->inputCount; ++pin) {
+        if(script->inputHashes[pin] != event.ev.id) continue;
+        P64::Comp::Code::onInput(*obj, code, static_cast<uint8_t>(pin), event.ev);
+        ++calls;
+      }
+    }
+    return calls;
+  }
+
+  // the component index of 'componentData' on 'obj', or 0xFF
+  uint8_t componentIndexOf(const P64::Object& obj, const void* componentData)
+  {
+    auto refs = obj.getCompRefs();
+    for(uint32_t c = 0; c < obj.compCount; ++c) {
+      const char* data = reinterpret_cast<const char*>(&obj) + refs[c].offset;
+      if(data == componentData) return static_cast<uint8_t>(c);
+      // a script's data sits right behind its Code component
+      if(refs[c].type == P64::Comp::Code::ID && data + sizeof(P64::Comp::Code) == componentData) {
+        return static_cast<uint8_t>(c);
+      }
+    }
+    return 0xFF;
+  }
+
+  void markScoped(P64::Object& obj)
+  {
+    obj.setFlag(P64::ObjectFlags::EVENT_SCOPE, true);
+  }
 }
 
 void P64::Events::post(EventId id, uint32_t value, uint16_t sender)
@@ -190,6 +239,51 @@ void P64::Events::unlisten(Listener& listener)
 {
   bus.unsubscribe({listener.slot, listener.gen});
   listener = {};
+}
+
+void P64::Events::postTo(Object& inScopeOf, EventId id, uint32_t value, uint16_t sender)
+{
+  if(!needsInstance(id)) {
+    bus.post(id.hash, id.scope, 0, value, sender);
+    return;
+  }
+  uint16_t instance = Internal::resolveInstance(inScopeOf, id.scope, id.up);
+  if(instance == 0) {
+    ++droppedWrongScope;
+    warnWrongScope("postTo", id);
+    return;
+  }
+  bus.post(id.hash, id.scope, instance, value, sender);
+}
+
+P64::Events::Listener P64::Events::listenIn(Object& inScopeOf, EventId id, ListenerFn fn, void* user)
+{
+  if(!needsInstance(id)) return listen(id, fn, user);
+  uint16_t instance = Internal::resolveInstance(inScopeOf, id.scope, id.up);
+  if(instance == 0) {
+    ++droppedWrongScope;
+    warnWrongScope("listenIn", id);
+    return {};
+  }
+  return Internal::listenBound(id.hash, id.scope, instance, fn, user);
+}
+
+void P64::Events::fire(Object& obj, const void* componentData, uint8_t pin, uint32_t value, uint16_t instigator)
+{
+  auto *links = obj.getComponent<Comp::EventLinks>();
+  if(!links) return; // nothing bound on this object
+  const uint8_t comp = componentData ? componentIndexOf(obj, componentData) : Comp::EventLinks::COMP_OBJECT;
+
+  for(uint32_t i = 0; i < links->count; ++i) {
+    const auto &binding = links->bindings()[i];
+    if(binding.isInput() || binding.rec.comp != comp || binding.rec.pin != pin) continue;
+    bus.post(binding.rec.hash, binding.scope(), binding.instance, value, obj.id, instigator);
+  }
+}
+
+void P64::Events::send(Object& target, PinName input, uint32_t value, uint16_t sender)
+{
+  bus.post(input.hash, Scope::Direct, target.id, value, sender);
 }
 
 uint32_t P64::Events::listenerCount(EventId id)
@@ -235,6 +329,7 @@ const char* P64::Events::nameOf(uint32_t hash)
 void P64::Events::Internal::init()
 {
   bus.setWarnHandler(onWarning, nullptr);
+  bus.setDirectHandler(onDirect, nullptr);
 #if P64_EVENT_TRACE
   bus.setTraceHandler(onTrace, nullptr);
 #endif
@@ -278,6 +373,38 @@ void P64::Events::Internal::drain(DrainPoint point)
 void P64::Events::Internal::postImmediate(EventId id, uint32_t value)
 {
   bus.deliverNow(id.hash, id.scope, 0, value, 0);
+}
+
+uint16_t P64::Events::Internal::resolveInstance(Object& obj, Scope scope, [[maybe_unused]] uint8_t up)
+{
+  switch(scope)
+  {
+    case Scope::Object: return obj.id;
+    case Scope::Prefab: return 0; // phase 4: the prefab instance 'up' levels above obj
+    default: return 0;
+  }
+}
+
+P64::Events::Listener P64::Events::Internal::listenBound(uint32_t hash, [[maybe_unused]] Scope scope, uint16_t instance, ListenerFn fn, void* user)
+{
+  if(instance != 0) {
+    if(auto *scopeObj = SceneManager::getCurrent().getObjectById(instance)) markScoped(*scopeObj);
+  }
+  auto handle = bus.subscribe(hash, instance, fn, user);
+  return {handle.slot, handle.gen};
+}
+
+void P64::Events::Internal::objectInput([[maybe_unused]] Object& obj, [[maybe_unused]] uint8_t pin, [[maybe_unused]] const Event& ev)
+{
+  // phase 3: the object's own pins (Enable, Disable, Destroy, Show, Hide)
+}
+
+void P64::Events::Internal::onObjectDestroyed(Object& obj)
+{
+  // listeners keyed to this object's scope must not outlive it: its id will be reused
+  if(obj.flags & ObjectFlags::EVENT_SCOPE) {
+    bus.unsubscribeInstance(obj.id);
+  }
 }
 
 void P64::Events::Internal::onSceneDestroyed()

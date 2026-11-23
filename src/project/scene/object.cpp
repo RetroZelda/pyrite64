@@ -50,9 +50,11 @@ namespace
       c["name"] = comp.name;
       c["enabled"] = comp.enabled.value;
       c["data"] = def.funcSerialize(comp);
+      if(!comp.events.empty())c["events"] = comp.events.toJson(); // Fork: event graph
       comps.push_back(c);
     }
     builder.doc["components"] = comps;
+    if(!obj.events.empty())builder.doc["events"] = obj.events.toJson(); // Fork: event graph, the object's own pins
 
     nlohmann::json children = nlohmann::json::array();
     for (const auto &child : obj.children) {
@@ -194,6 +196,8 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
     }
   }
 
+  events = doc.contains("events") ? Events::Bindings::fromJson(doc["events"]) : Events::Bindings{}; // Fork: event graph
+
   if(doc.contains("components")) {
     auto &cmArray = doc["components"];
     int count = cmArray.size();
@@ -210,7 +214,8 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
         .uuid = compObj["uuid"],
         .name = compObj["name"],
         .enabled = Property<bool>{"enabled", compObj.value("enabled", true)},
-        .data = def.funcDeserialize(compObj["data"])
+        .data = def.funcDeserialize(compObj["data"]),
+        .events = compObj.contains("events") ? Events::Bindings::fromJson(compObj["events"]) : Events::Bindings{},
       });
 
     }

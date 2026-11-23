@@ -9,6 +9,7 @@
 
 #include "../utils/fs.h"
 #include "../utils/logger.h"
+#include "../utils/hash.h"
 
 #include "../../../n64/engine/include/script/globalScript.h"
 
@@ -53,6 +54,14 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     bool hasBlur     = Utils::CPP::hasFunction(src, "void", "onBlur");
     bool hasActivate = Utils::CPP::hasFunction(src, "void", "onActivate");
 
+    // Fork: event graph, input pins declared with P64_EVENTS_IN and handled in onInput
+    bool hasInput = Utils::CPP::hasFunction(src, "void", "onInput");
+    const auto &inputPins = script.pins.in;
+    if(!inputPins.empty() && !hasInput) {
+      Utils::Logger::log(script.name + " declares input pins but has no onInput(); its inputs do nothing", Utils::Logger::LEVEL_WARN);
+    }
+    const bool registerInputs = hasInput && !inputPins.empty();
+
     auto uuidStr = std::format("{:016X}", script.getUUID());
 
     srcSizeEntries += uuidStr + "::DATA_SIZE,\n";
@@ -73,6 +82,13 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasFocus)srcDecl += "void onFocus(Object& obj, Data *data);\n";
     if(hasBlur)srcDecl += "void onBlur(Object& obj, Data *data);\n";
     if(hasActivate)srcDecl += "void onActivate(Object& obj, Data *data);\n";
+    if(registerInputs) {
+      srcDecl += "enum class In : uint8_t;\n";
+      srcDecl += "void onInput(Object& obj, Data *data, In input, const P64::Events::Event& ev);\n";
+      srcDecl += "inline constexpr uint32_t INPUT_HASHES[] = {";
+      for(const auto &pin : inputPins) srcDecl += std::format("0x{:08X}u, ", Utils::Hash::crc32(pin));
+      srcDecl += "};\n";
+    }
     srcDecl += "}\n";
 
     srcEntries += "{\n";
@@ -90,6 +106,11 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     if(hasBlur)srcEntries += " .onBlur = (FuncObjInit)" + uuidStr + "::onBlur,\n";
     if(hasActivate)srcEntries += " .onActivate = (FuncObjInit)" + uuidStr + "::onActivate,\n";
     srcEntries += " .dataType = &" + uuidStr + "::DATA_TYPE,\n";
+    if(registerInputs) {
+      srcEntries += " .onInput = (FuncObjDataInput)" + uuidStr + "::onInput,\n";
+      srcEntries += " .inputHashes = " + uuidStr + "::INPUT_HASHES,\n";
+      srcEntries += " .inputCount = " + std::to_string(inputPins.size()) + ",\n";
+    }
     srcEntries += "},\n";
 
     scriptNames += "\t\t[";
@@ -207,6 +228,46 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
     "}\n";
   }
 
+  // Fork: event graph. Each input pin of a global script system listens to global::System.Pin
+  // for the whole game; registerEventPins() runs before the game-init hook.
+  std::string srcPins = "  namespace\n  {\n";
+  std::string srcRegister = "  void registerEventPins()\n  {\n";
+  for (auto &script : scripts)
+  {
+    if(script.systemPins.empty())continue;
+    auto src = Utils::FS::loadTextFile(script.path);
+    const bool hasInput = Utils::CPP::hasFunction(src, "void", "onInput");
+    auto uuidStr = std::format("{:016X}", script.getUUID());
+
+    for(const auto &sys : script.systemPins)
+    {
+      if(sys.in.empty())continue;
+      if(!hasInput) {
+        Utils::Logger::log(script.name + ": system " + sys.system + " declares input pins but the script has no onInput(" +
+          sys.system + "In, const P64::Events::Event&); its inputs do nothing", Utils::Logger::LEVEL_WARN);
+        continue;
+      }
+      const auto enumName = sys.system + "In";
+      const auto trampoline = "eventPin_" + uuidStr + "_" + sys.system;
+      srcDecl += "  namespace " + uuidStr + " {\n";
+      srcDecl += " enum class " + enumName + " : uint8_t;\n";
+      srcDecl += " void onInput(" + enumName + " input, const ::P64::Events::Event& ev);\n";
+      srcDecl += "}\n";
+
+      srcPins += "    void " + trampoline + "(const ::P64::Events::Event& ev, void* user) {\n";
+      srcPins += "      " + uuidStr + "::onInput(static_cast<" + uuidStr + "::" + enumName + ">(reinterpret_cast<uintptr_t>(user)), ev);\n";
+      srcPins += "    }\n";
+
+      for(size_t i = 0; i < sys.in.size(); ++i) {
+        auto name = "global::" + sys.system + "." + sys.in[i];
+        srcRegister += std::format("    ::P64::Events::listen(::P64::Events::EventId{{0x{:08X}u, ::P64::Events::Scope::Global, 0}}, {}, reinterpret_cast<void*>(uintptr_t{{{}}})); // {}\n",
+          Utils::Hash::crc32(name), trampoline, i, name);
+      }
+    }
+  }
+  srcPins += "  }\n\n";
+  srcRegister += "  }\n";
+
   std::string srcHook = "";
   for (auto &pair : nameMap)
   {
@@ -221,5 +282,6 @@ void Build::buildGlobalScripts(Project::Project &project, SceneCtx &sceneCtx)
   src = Utils::replaceAll(src, "__EXTRA_DECL__", srcExtraDecl);
   src = Utils::replaceAll(src, "__CODE_DECL__", srcDecl);
   src = Utils::replaceAll(src, "__CODE_HOOKS__", srcHook);
+  src = Utils::replaceAll(src, "__EVENT_PINS__", srcPins + srcRegister);
   Utils::FS::saveTextFileIfChanged(pathTable, src);
 }

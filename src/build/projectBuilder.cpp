@@ -2,6 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include "eventBuilder.h"
 #include "projectBuilder.h"
 
 #include <filesystem>
@@ -200,6 +201,7 @@ bool Build::buildProject(const std::string &configPath)
   // Scripts
   buildGlobalScripts(project, sceneCtx);
   buildScripts(project, sceneCtx);
+  Build::Events::begin(project, sceneCtx); // Fork: event graph
 
   // Scenes
   project.getScenes().reload();
@@ -243,6 +245,14 @@ bool Build::buildProject(const std::string &configPath)
       Utils::Logger::log(std::string(builder.name) + " Asset build failed!", Utils::Logger::LEVEL_ERROR);
       return false;
     }
+  }
+
+  // Fork: event graph. Every scene and prefab is written: check the bindings project-wide.
+  if(!Build::Events::finish(project, sceneCtx)) {
+    auto msg = std::string("Event bindings have errors, see the log");
+    Utils::Logger::log(msg, Utils::Logger::LEVEL_ERROR);
+    Editor::Noti::add(Editor::Noti::Type::ERROR, msg);
+    return false;
   }
 
   auto assetTableCode = Utils::replaceAll(

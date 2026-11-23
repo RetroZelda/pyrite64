@@ -263,6 +263,16 @@ namespace
     };
     entry.conf.uuid = uuid;
 
+    // Fork: event graph, the pins the script declares
+    if(type == Project::FileType::CODE_OBJ) {
+      entry.pins = Utils::CPP::parseEventPins(code);
+    } else {
+      entry.systemPins = Utils::CPP::parseGlobalEventPins(code, &entry.pins.errors);
+    }
+    for(const auto &err : entry.pins.errors) {
+      Utils::Logger::log(entry.name + ": " + err, Utils::Logger::LEVEL_WARN);
+    }
+
     return true;
   }
 }

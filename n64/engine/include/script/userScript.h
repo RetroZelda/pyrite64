@@ -15,6 +15,7 @@
 #include "lib/math.h"
 #include "collision/shapes.h"
 #include "renderer/drawLayer.h"
+#include "events/bus.h"
 
 #include "p64/assetTable.h"
 #include "p64/sceneTable.h"
@@ -39,3 +40,26 @@
   static_assert(std::is_trivially_copyable_v<T>, "P64_DATA_TYPE: '" #T "' must be trivially copyable"); \
   static_assert(std::is_standard_layout_v<T>, "P64_DATA_TYPE: '" #T "' must be standard-layout"); \
   P64_DATA_COMMON_(T)
+
+// Fork: event graph (docs/todo/event-graph/PLAN.md, section 5.1).
+
+/**
+ * Declares the script's input pins, in the order the editor shows them:
+ *   P64_EVENTS_IN(Open, Close);
+ * Handle them in one function:
+ *   void onInput(Object& obj, Data *data, In input, const Events::Event& ev)
+ */
+#define P64_EVENTS_IN(...) enum class In : uint8_t { __VA_ARGS__ };
+
+/**
+ * Declares the script's output pins:
+ *   P64_EVENTS_OUT(Opened, Closed);
+ * and a fire() for them, which posts every event the pin is bound to:
+ *   fire(obj, data, Out::Opened, value);
+ */
+#define P64_EVENTS_OUT(...) \
+  enum class Out : uint8_t { __VA_ARGS__ }; \
+  [[maybe_unused]] inline void fire(::P64::Object& obj, const void* data, Out pin, \
+                                    uint32_t value = 0, uint16_t instigator = 0) { \
+    ::P64::Events::fire(obj, data, static_cast<uint8_t>(pin), value, instigator); \
+  }

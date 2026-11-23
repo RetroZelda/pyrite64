@@ -79,7 +79,16 @@ nodes that generate C++.
 - [x] Fold the answers into PLAN.md (draft 2), delete the reminders and close the board request
 - [x] Owner approves the plan (2026-11-23: "the plan looks good. lets start implementation and testing")
 - [x] Phase 1: runtime event bus (see "Implementation log" below)
-- [ ] Phase 2: script pins, bindings, direct sends, inspector section
+- [ ] Phase 2: script pins, bindings, direct sends, inspector section (code done and tested,
+  Kentucky Castle compile check running, then commit)
+- [ ] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
+- [ ] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
+- [ ] Phase 5: Event Graph window
+- [ ] Phase 6: UI canvases
+- [ ] Phase 7: tools (debug page, event browser), example project
+- [ ] Phase 8: Kentucky Castle adoption
+- [ ] Phase 9: retire the old messages
+- [ ] Final: finish the guide in kentucky-castle/docs/EventGraph/README.md, final report, delete the cron job
 
 ## Notes for whoever resumes
 
@@ -233,3 +242,21 @@ all in the final report.
 
 1. (Phase 1, 2026-11-23) The how-to guide draft moved to `kentucky-castle/docs/EventGraph/` as
    asked; the planning documents stay in `pyrite64/docs/todo/event-graph/`.
+2. (Phase 2) Kentucky Castle's own `Events` aliases (16 namespace aliases and 3 type aliases)
+   are renamed to `GameEvents`, because `P64::Events` hides them once `userScript.h` includes
+   the event headers. Recommended option from the phase 1 notes.
+3. (Phase 2) The local editor build directory `pyrite64/build` was reconfigured with
+   `-DSDL_X11_XCURSOR=OFF -DSDL_X11_XINPUT=OFF -DSDL_X11_XRANDR=OFF -DSDL_X11_XFIXES=OFF
+   -DSDL_X11_XSCRNSAVER=OFF -DSDL_KMSDRM=OFF`, because this machine lacks the development
+   headers (libxcursor-dev, libxi-dev, libxrandr-dev, libxfixes-dev, libxss-dev, libgbm-dev).
+   The editor binary `pyrite64/pyrite64` was rebuilt this way and replaces the 2026-11-02 one.
+   Install those packages and rebuild to get the editor with every SDL feature again.
+4. (Phase 2) The EventLinks component is written first in each object's component list, so a
+   component can fire outputs from init(); the other components' indices shift by one.
+5. (Phase 2) `prefab::` bindings are rejected by the build until phase 4 implements them.
+6. (Phase 2) The debug name table is generated only when the project's debug menu is enabled,
+   like other debug data; otherwise warnings show hex ids.
+7. (Phase 2) The "differ by one character" check only warns when one name is only listened to
+   and the other only fired, so deliberate families like Wave1/Wave2 stay quiet.
+8. (Phase 2) send() uses an internal scope value (`Scope::Direct`) on the same queue, so its
+   timing matches every other event.
