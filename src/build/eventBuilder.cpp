@@ -16,6 +16,7 @@
 #include "../project/component/components.h"
 #include "../project/events/eventPins.h"
 #include "../project/events/eventRules.h"
+#include "../../n64/engine/include/events/pins.h"
 #include "../utils/fs.h"
 #include "../utils/logger.h"
 
@@ -39,6 +40,7 @@ namespace
     std::string name;
     size_t level;          // the graph that wrote it
     std::string where;
+    bool trigger{false};   // Fork: conditions, a P64_CONDITION_TRIGGERS event bound to Check by the build
   };
 
   // every graph from the scene (or the spawned prefab's root) in to the object being written
@@ -165,6 +167,10 @@ void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
   }
   for(const auto &script : project.getAssets().getTypeEntries(Project::FileType::CODE_OBJ)) {
     for(const auto &pin : script.pins.in) ctx.eventIndex.declaredInputPins.insert(pin);
+    // Fork: conditions, send(obj, "Check"_pin) reaches the pins every condition has
+    if(script.condition.isCondition) {
+      for(const char* pin : P64::Events::Pins::CONDITION_IN) ctx.eventIndex.declaredInputPins.insert(pin);
+    }
   }
   ctx.eventIndex.addSourceUses(Project::Events::scanSourceDir(fs::path{project.getPath()} / "src" / "user"));
 
@@ -244,6 +250,22 @@ std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const O
 
   // 2. what the instances around this object change
   applyOverrides(ctx, entries, compPins, input.comps, objectPins, objWhere);
+
+  // Fork: conditions. The events a condition script names in P64_CONDITION_TRIGGERS are bound to its
+  // Check input here; they are written in the graph that holds the component.
+  for(size_t i = 0; i < input.comps.size(); ++i)
+  {
+    auto [comp, level] = input.comps[i];
+    const auto compIndex = static_cast<uint8_t>(i + 1);
+    for(const auto &trigger : compPins[i].triggers) {
+      const bool alreadyBound = std::any_of(entries.begin(), entries.end(), [&](const Entry &e) {
+        return e.comp == compIndex && e.input && e.pin == "Check" && e.name == trigger;
+      });
+      if(alreadyBound)continue;
+      entries.push_back({compIndex, comp->uuid, &compPins[i], true, "Check", trigger, level,
+        objWhere + " / " + Project::Events::displayName(*ctx.project, *comp), true});
+    }
+  }
   if(entries.empty())return res;
 
   // 3. resolve each binding through the prefabs around it
@@ -257,23 +279,43 @@ std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const O
       continue;
     }
 
+    // a trigger comes from the script's code, so the message points there
+    const std::string pinWhere = e.trigger ? e.where + ", trigger '" + e.name + "' (P64_CONDITION_TRIGGERS)"
+                                           : e.where + "." + e.pin;
+
     auto problem = Project::Events::nameProblem(e.name);
-    if(!problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + problem);
+    if(!problem.empty()) throw std::runtime_error(pinWhere + ": " + problem);
 
     const auto resolved = Project::Events::resolveName(e.name, levels, std::min(e.level, levels.size() - 1));
-    if(!resolved.problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + resolved.problem);
+    if(!resolved.problem.empty()) {
+      // a script with a prefab:: trigger used outside a prefab: the designer cannot fix the script
+      if(e.trigger) {
+        ctx.eventMessages.push_back({Message::Level::Warning, pinWhere + ": " + resolved.problem + "; here it does nothing"});
+        continue;
+      }
+      throw std::runtime_error(pinWhere + ": " + resolved.problem);
+    }
     if(!resolved.warning.empty()) {
-      ctx.eventMessages.push_back({Message::Level::Warning, e.where + "." + e.pin + ": " + resolved.warning});
+      ctx.eventMessages.push_back({Message::Level::Warning, pinWhere + ": " + resolved.warning});
       continue;
     }
 
     problem = Project::Events::bindingProblem(ctx.eventIndex, ctx.eventCatalog, e.name, e.input);
-    if(!problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + problem);
+    if(!problem.empty()) throw std::runtime_error(pinWhere + ": " + problem);
 
     // the name it ends up as: a link repointed to scene::X listens to scene::X
-    ctx.eventIndex.add(resolved.name.empty() ? e.name : resolved.name,
+    const auto &finalName = resolved.name.empty() ? e.name : resolved.name;
+    ctx.eventIndex.add(finalName,
                        e.input ? Project::Events::UseKind::BoundIn : Project::Events::UseKind::BoundOut,
-                       e.where + "." + e.pin);
+                       pinWhere);
+
+    // Fork: conditions, who provides a Result and who reads one
+    if(!e.input && e.pin == "Result" && e.pins->isConditionPin(false, e.pin)) {
+      ctx.eventIndex.conditionResults.insert(Project::Events::canonicalName(finalName));
+    }
+    if(e.input && e.pins->readsConditions(e.pin)) {
+      ctx.eventIndex.conditionReads.emplace_back(finalName, pinWhere);
+    }
     res.push_back({
       .hash = resolved.hash,
       .comp = e.comp,
@@ -282,6 +324,14 @@ std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const O
       .up = resolved.up,
     });
   }
+
+  // Fork: conditions. Listeners of one event are called in record order: a condition's Check comes
+  // last, so an event bound to Enable (or Disable) and to Check is handled in that order.
+  const uint8_t checkPin = P64::Events::Pins::CONDITION_PIN_BASE + static_cast<uint8_t>(P64::Events::Pins::ConditionIn::Check);
+  std::stable_partition(res.begin(), res.end(), [&](const Record &rec) {
+    const bool isInput = rec.kind & 1; // EventLinks::KIND_INPUT
+    return !(isInput && rec.comp != COMP_OBJECT && rec.pin == checkPin);
+  });
   return res;
 }
 

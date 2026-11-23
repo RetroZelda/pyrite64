@@ -91,6 +91,13 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     bool hasCollEnter = Utils::CPP::hasFunction(src, "void", "onCollisionEnter");
     bool hasCollExit  = Utils::CPP::hasFunction(src, "void", "onCollisionExit");
 
+    // Fork: conditions, a script declared with P64_CONDITION_DATA answers in evaluate()
+    const bool hasEvaluate = script.condition.isCondition && Utils::CPP::hasFunction(src, "bool", "evaluate");
+    if(!script.condition.inputs.empty() && !hasInput) {
+      Utils::Logger::log(script.name + " marks input pins with P64_CONDITION_INPUTS but has no onInput(); "
+        "call Conditions::notify() there so the condition follows its inputs", Utils::Logger::LEVEL_WARN);
+    }
+
     auto uuidStr = std::format("{:016X}", script.getUUID());
 
     srcSizeEntries += uuidStr + "::DATA_SIZE,\n";
@@ -120,6 +127,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     }
     if(hasCollEnter)srcDecl += "void onCollisionEnter(Object& obj, Data *data, uint16_t otherId);\n";
     if(hasCollExit)srcDecl += "void onCollisionExit(Object& obj, Data *data, uint16_t otherId);\n";
+    if(hasEvaluate)srcDecl += "bool evaluate(Object& obj, Data *data);\n";
     srcDecl += "}\n";
 
     srcEntries += "{\n";
@@ -144,6 +152,7 @@ void Build::buildScripts(Project::Project &project, SceneCtx &sceneCtx)
     }
     if(hasCollEnter)srcEntries += " .onCollEnter = (FuncObjContact)" + uuidStr + "::onCollisionEnter,\n";
     if(hasCollExit)srcEntries += " .onCollExit = (FuncObjContact)" + uuidStr + "::onCollisionExit,\n";
+    if(hasEvaluate)srcEntries += " .evaluate = (FuncObjCondition)" + uuidStr + "::evaluate,\n";
     srcEntries += "},\n";
 
     scriptNames += "\t\t[";

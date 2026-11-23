@@ -174,6 +174,12 @@ namespace P64::Events
     uint16_t resolveInstance(Object& obj, Scope scope, uint8_t up);
     Listener listenBound(uint32_t hash, Scope scope, uint16_t instance, ListenerFn fn, void* user);
     void objectInput(Object& obj, uint8_t pin, const Event& ev);
+
+    // used by the conditions (events/conditions.h)
+    /** The component index of 'componentData' (a component, or a script's data) on 'obj', or 0xFF. */
+    uint8_t componentIndexOf(const Object& obj, const void* componentData);
+    /** send() by pin hash that reports a dropped event. @return false if it was not queued */
+    bool sendChecked(uint16_t targetId, uint32_t inputHash, uint32_t value, uint16_t sender);
   }
 
   /** Implemented by the build in the project's src/p64/eventNames.cpp. */

@@ -13,6 +13,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 #include <filesystem>
 #include <unordered_set>
@@ -600,10 +601,24 @@ Utils::CPP::Struct Utils::CPP::parseDataStruct(const std::string &sourceCode, co
 
   // Locate the P64_DATA(...) body by matching parentheses, so defaults that
   // contain calls or macros (e.g. "color_t c = RGBA32(...)") don't end it early.
-  auto bodyStart = code.find("P64_DATA(");
+  // Fork: conditions. P64_CONDITION_DATA(...) is the same with the condition header in front.
+  std::string_view macro{"P64_DATA("};
+  auto bodyStart = code.find(macro);
+  const bool isCondition = bodyStart == std::string::npos;
+  if (isCondition) {
+    macro = "P64_CONDITION_DATA(";
+    bodyStart = code.find(macro);
+    // not the macro's own definition in a header
+    while (bodyStart != std::string::npos) {
+      auto lineStart = code.rfind('\n', bodyStart);
+      lineStart = lineStart == std::string::npos ? 0 : lineStart + 1;
+      if (code.substr(lineStart, bodyStart - lineStart).find("#define") == std::string::npos) break;
+      bodyStart = code.find(macro, bodyStart + 1);
+    }
+  }
   if (bodyStart == std::string::npos)return {};
 
-  bodyStart += std::string_view{"P64_DATA("}.size();
+  bodyStart += macro.size();
   size_t bodyEnd = bodyStart;
   int depth = 1;
   while (bodyEnd < code.size() && depth > 0) {
@@ -617,7 +632,9 @@ Utils::CPP::Struct Utils::CPP::parseDataStruct(const std::string &sourceCode, co
   Struct s{.name = "Data"};
   if (s.name != structName) return {};
 
-  s.fields = parseFields(code.substr(bodyStart, bodyEnd - 1 - bodyStart));
+  auto body = code.substr(bodyStart, bodyEnd - 1 - bodyStart);
+  if (isCondition) body = std::string{CONDITION_HEADER_FIELDS} + body;
+  s.fields = parseFields(body);
   return s;
 }
 
@@ -793,6 +810,87 @@ std::vector<Utils::CPP::SystemPins> Utils::CPP::parseGlobalEventPins(const std::
       }
       std::vector<std::string> names(args.begin() + 1, args.end());
       addPins(names, target, std::string(macro) + "(" + system + ")", errs);
+    }
+  }
+  return res;
+}
+
+
+// Fork: conditions (docs/todo/conditionals/PLAN.md) ------------------------------------------------
+
+// must match P64::Conditions::Header (n64/engine/include/events/conditionTypes.h)
+// one field a line: the field parser reads a default value up to the last ';' of its line
+const char* const Utils::CPP::CONDITION_HEADER_FIELDS =
+  "[[P64::Name(\"Starts Enabled\")]] bool conditionStartsEnabled = true;\n"
+  "uint8_t conditionFlags;\n"
+  "uint16_t conditionReserved;\n";
+
+bool Utils::CPP::Condition::readsConditions(const std::string &pin) const
+{
+  return std::find(inputs.begin(), inputs.end(), pin) != inputs.end();
+}
+
+Utils::CPP::Condition Utils::CPP::parseCondition(const std::string &sourceCode, const EventPins &pins)
+{
+  Condition res{};
+  const auto code = stripComments(sourceCode);
+
+  res.isCondition = !findMacroCalls(code, "P64_CONDITION_DATA").empty();
+  const auto triggerCalls = findMacroCalls(code, "P64_CONDITION_TRIGGERS");
+  const auto inputCalls = findMacroCalls(code, "P64_CONDITION_INPUTS");
+
+  if(!res.isCondition) {
+    for(const auto &[macro, used] : {std::pair{"P64_CONDITION_TRIGGERS", !triggerCalls.empty()},
+                                     std::pair{"P64_CONDITION_INPUTS", !inputCalls.empty()}}) {
+      if(used) res.errors.push_back(std::string(macro) + " only works in a condition script: declare its data with P64_CONDITION_DATA");
+    }
+    return res;
+  }
+
+  if(!findMacroCalls(code, "P64_DATA").empty() || !findMacroCalls(code, "P64_DATA_TYPE").empty()) {
+    res.errors.push_back("P64_CONDITION_DATA replaces P64_DATA: a script declares its data once");
+  }
+  if(!hasFunction(sourceCode, "bool", "evaluate")) {
+    res.errors.push_back("P64_CONDITION_DATA needs the function that answers: bool evaluate(Object& obj, Data *data)");
+  }
+
+  // "ns::Name"_event, ...
+  if(triggerCalls.size() > 1) res.errors.push_back("P64_CONDITION_TRIGGERS is used " + std::to_string(triggerCalls.size()) + " times; list every trigger in one");
+  if(!triggerCalls.empty()) {
+    for(const auto &arg : triggerCalls[0]) {
+      if(arg.empty() && triggerCalls[0].size() == 1)continue;
+      constexpr std::string_view SUFFIX{"\"_event"};
+      const bool literal = arg.size() > SUFFIX.size() + 1 && arg.front() == '"'
+        && arg.compare(arg.size() - SUFFIX.size(), SUFFIX.size(), SUFFIX) == 0;
+      if(!literal) {
+        res.errors.push_back("P64_CONDITION_TRIGGERS: write each trigger as \"namespace::Name\"_event, not '" + arg + "'");
+        continue;
+      }
+      auto name = arg.substr(1, arg.size() - SUFFIX.size() - 1);
+      if(std::find(res.triggers.begin(), res.triggers.end(), name) == res.triggers.end()) res.triggers.push_back(name);
+    }
+  }
+
+  if(inputCalls.size() > 1) res.errors.push_back("P64_CONDITION_INPUTS is used " + std::to_string(inputCalls.size()) + " times; list every pin in one");
+  if(!inputCalls.empty()) {
+    for(const auto &name : inputCalls[0]) {
+      if(name.empty() && inputCalls[0].size() == 1)continue;
+      if(std::find(pins.in.begin(), pins.in.end(), name) == pins.in.end()) {
+        res.errors.push_back("P64_CONDITION_INPUTS: '" + name + "' is not an input pin of this script (P64_EVENTS_IN)");
+        continue;
+      }
+      if(!res.readsConditions(name)) res.inputs.push_back(name);
+    }
+  }
+
+  // the condition pins are added to the script's own, so the names must not be used twice
+  for(const auto &[own, reserved, kind] : {
+        std::tuple{&pins.in,  std::vector<std::string>{"Enable", "Disable", "Check", "Reset"}, "input"},
+        std::tuple{&pins.out, std::vector<std::string>{"True", "False", "NewlyTrue", "NewlyFalse", "Result"}, "output"}}) {
+    for(const auto &pin : *own) {
+      if(std::find(reserved.begin(), reserved.end(), pin) != reserved.end()) {
+        res.errors.push_back("the " + std::string(kind) + " pin '" + pin + "' is one every condition has; a condition script cannot declare its own");
+      }
     }
   }
   return res;

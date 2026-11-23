@@ -113,6 +113,10 @@ namespace Project::Events
     std::vector<SourceUse> sourcePins{};
     std::set<std::string> declaredInputPins{}; // input pin names of every object script
     std::vector<SystemDecl> systems{};
+    // Fork: conditions. Names a condition's Result output is bound to, and the bindings of input
+    // pins that read conditions (name, where).
+    std::set<std::string> conditionResults{};
+    std::vector<std::pair<std::string, std::string>> conditionReads{};
 
     void add(const std::string &name, UseKind kind, const std::string &where);
     /** Records a global script system and its global::System.Pin uses. Reports duplicates. */

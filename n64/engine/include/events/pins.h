@@ -58,6 +58,17 @@ namespace P64::Events::Pins
   inline constexpr const char* LIGHT_IN[] = {"TurnOn", "TurnOff"};
   enum class LightIn : uint8_t { TurnOn, TurnOff };
 
+  // Fork: conditions (docs/todo/conditionals/PLAN.md). A script declared with P64_CONDITION_DATA
+  // has these pins besides its own. Their index is CONDITION_PIN_BASE + the position here, so they
+  // never collide with the script's own pins (which count from 0).
+  inline constexpr uint8_t CONDITION_PIN_BASE = 0x80;
+  inline constexpr const char* CONDITION_IN[]  = {"Enable", "Disable", "Check", "Reset"};
+  inline constexpr const char* CONDITION_OUT[] = {"True", "False", "NewlyTrue", "NewlyFalse", "Result"};
+  enum class ConditionIn : uint8_t { Enable, Disable, Check, Reset };
+  enum class ConditionOut : uint8_t { True, False, NewlyTrue, NewlyFalse, Result };
+  inline constexpr List CONDITION_IN_LIST{CONDITION_IN, 4};
+  inline constexpr List CONDITION_OUT_LIST{CONDITION_OUT, 5};
+
   inline constexpr ComponentPins COMPONENTS[] = {
     {2,  {LIGHT_IN, 2},    {nullptr, 0}},
     {3,  {CAMERA_IN, 1},   {nullptr, 0}},

@@ -17,6 +17,8 @@ namespace P64::UI::Generated { void uiInitializeBindings(); }
 constinit uint32_t P64::User::EventTest::currFrame = 0;
 constinit uint32_t P64::User::EventTest::activeTest = 0;
 constinit std::vector<P64::User::EventTest::Record> P64::User::EventTest::records{};
+constinit bool P64::User::EventTest::condSlots[8]{};
+constinit uint32_t P64::User::EventTest::kitValue = 0;
 
 namespace P64::GlobalScript::C5D2B8E4F1A07C93
 {
@@ -29,7 +31,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
 
   // Phase 2: this global script is a system with an input pin and declares the test events
   P64_GLOBAL_EVENTS_IN(EventTest, DoorOpened);
-  P64_GLOBAL_EVENTS_OUT(Test, Ping, Pong, FromFixed, FromUpdate, Loop, Burst, Carried, Irq);
+  P64_GLOBAL_EVENTS_OUT(Test, Ping, Pong, FromFixed, FromUpdate, Loop, Burst, Carried, Irq, CondTick, KitTick);
   static_assert(TestOutIds[0] == "global::Test.Ping"_event.hash, "P64_GLOBAL_EVENTS_OUT hashes like _event");
   static_assert(TestOutIds[7] == "global::Test.Irq"_event.hash);
 
@@ -133,6 +135,11 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   void onLogic(const Events::Event& ev, void* user)
   {
     add(Rec::Logic, ev, static_cast<uint16_t>(reinterpret_cast<uintptr_t>(user)));
+  }
+
+  void onCond(const Events::Event& ev, void* user)
+  {
+    add(Rec::Cond, ev, static_cast<uint16_t>(reinterpret_cast<uintptr_t>(user)));
   }
 
   void onCurrentSceneLoaded(const Events::Event& ev, [[maybe_unused]] void* user)
@@ -498,6 +505,108 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return ok;
   }
 
+  // the (frame, value) pairs recorded for one output of a condition in scene 10
+  bool expectCond(uint16_t tag, std::initializer_list<std::pair<uint32_t, uint32_t>> expected)
+  {
+    std::vector<std::pair<uint32_t, uint32_t>> got{};
+    for(const auto &r : records) {
+      if(r.type == Rec::Cond && r.obj == tag) got.push_back({r.frame, r.value});
+    }
+    bool ok = got.size() == expected.size();
+    size_t i = 0;
+    for(const auto &e : expected) {
+      if(!ok)break;
+      ok = got[i].first == e.first && (e.second == ANY || got[i].second == e.second);
+      ++i;
+    }
+    if(!ok) {
+      const char* name = "?";
+      for(const auto &n : COND_NAMES) if(n.tag == tag) name = n.name;
+      debugf("  %s: expected %lu outputs, got %lu:", name, (unsigned long)expected.size(), (unsigned long)got.size());
+      for(const auto &g : got) debugf(" (frame %lu, value %lu)", (unsigned long)g.first, (unsigned long)g.second);
+      debugf("\n");
+    }
+    return ok;
+  }
+
+  // the records of one type, in order, as (frame, value)
+  bool expectRecs(Rec type, std::initializer_list<std::pair<uint32_t, uint32_t>> expected)
+  {
+    std::vector<std::pair<uint32_t, uint32_t>> got{};
+    for(const auto &r : records) {
+      if(r.type == type) got.push_back({r.frame, r.value});
+    }
+    bool ok = got.size() == expected.size();
+    size_t i = 0;
+    for(const auto &e : expected) {
+      if(!ok)break;
+      ok = got[i].first == e.first && got[i].second == e.second;
+      ++i;
+    }
+    if(!ok) {
+      debugf("  %s: expected %lu records, got %lu:", REC_NAMES[(uint32_t)type], (unsigned long)expected.size(), (unsigned long)got.size());
+      for(const auto &g : got) debugf(" (frame %lu, value %lu)", (unsigned long)g.first, (unsigned long)g.second);
+      debugf("\n");
+    }
+    return ok;
+  }
+
+  // Scene 10, driven by TestDriver10. A and B check themselves on global::Test.CondTick (the tick's
+  // value is passed on); And, Or and Xor read both; Nand is a Not behind And; M has no triggers.
+  bool checkConditions()
+  {
+    bool ok = true;
+    // frame 2: both false. 3: A true. 4: B true. 5: A disabled (and false). 6: A enabled, reset, true.
+    ok &= expectCond(COND_A_FALSE,       {{2, 5}});                  // every check that is false...
+    ok &= expectCond(COND_A_TRUE,        {{3, 6}, {4, 7}, {6, 9}});  // ...or true; nothing while disabled
+    ok &= expectCond(COND_A_NEWLY_TRUE,  {{3, 6}, {6, 9}});          // false to true, and again after Reset
+    ok &= expectCond(COND_A_NEWLY_FALSE, {});                        // it starts false; disabled at frame 5
+    ok &= expectCond(COND_A_RESULT,      {{2, 0}, {3, 1}, {4, 1}, {6, 1}});
+
+    // one check per tick, though both inputs were checked; it reads A while A is disabled
+    ok &= expectCond(COND_AND_FALSE,       {{2, 0}, {3, 1}, {5, 1}});
+    ok &= expectCond(COND_AND_TRUE,        {{4, 1}, {6, 1}});
+    ok &= expectCond(COND_AND_NEWLY_TRUE,  {{4, 1}, {6, 1}});
+    ok &= expectCond(COND_AND_NEWLY_FALSE, {{5, 1}});
+    ok &= expectCond(COND_OR_NEWLY_TRUE,   {{3, 1}});
+    ok &= expectCond(COND_OR_NEWLY_FALSE,  {});
+    ok &= expectCond(COND_XOR_NEWLY_TRUE,  {{3, 1}, {5, 1}});
+    ok &= expectCond(COND_XOR_NEWLY_FALSE, {{4, 1}, {6, 1}});
+    // two logic nodes deep: Nand follows And, which follows A and B
+    ok &= expectCond(COND_NAND_NEWLY_TRUE,  {{2, 0}, {5, 0}});
+    ok &= expectCond(COND_NAND_NEWLY_FALSE, {{4, 1}, {6, 1}});
+
+    // frame 7: Check by name with a value. 9: Conditions::check() from code
+    ok &= expectCond(COND_M_TRUE,   {{7, 77}, {9, 5}});
+    ok &= expectCond(COND_M_FALSE,  {});
+    ok &= expectCond(COND_M_RESULT, {{7, 1}, {9, 1}});
+    // Not follows M's Result (7, 9); at 8 it is checked itself and reads M, which is false by then
+    ok &= expectCond(COND_NOT_FALSE, {{7, 1}, {9, 1}});
+    ok &= expectCond(COND_NOT_TRUE,  {{8, 3}});
+    // an input nothing provides counts as false
+    ok &= expectCond(COND_ORPHAN_FALSE, {{7, 1}});
+    ok &= expectCond(COND_ORPHAN_TRUE,  {});
+    // starts disabled, so the ticks do nothing; one event on Enable and Check: Enable first
+    ok &= expectCond(COND_GATED_TRUE, {{7, 9}});
+
+    // evaluate(): false, true, and false for an object that is no condition
+    ok &= expectRecs(Rec::CondEval, {{8, 0}, {8, 1}, {8, 0}});
+
+    // prefab instances at x 10 and 20, and one spawned at x 30 in frame 11: each Not reads the
+    // condition of its own instance (true while kitValue is the instance's x)
+    ok &= expectRecs(Rec::KitNotFalse, {{10, 10}, {11, 20}, {12, 30}});
+    ok &= expectRecs(Rec::KitNotTrue,  {{10, 20}, {11, 10}, {11, 30}, {12, 10}, {12, 20}});
+
+    const auto stats = Conditions::getStats();
+    ok &= expectTrue(stats.providers == 7, "A, B, M, And and the three kit conditions have a bound Result");
+    if(!ok) {
+      debugf("  providers %lu (peak %lu of %lu), checks %lu\n", (unsigned long)stats.providers,
+        (unsigned long)stats.providersPeak, (unsigned long)stats.maxProviders, (unsigned long)stats.checks);
+      printRecords();
+    }
+    return ok;
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -513,6 +622,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Same events after To Prefab and Unpack", 7, 5, checkNesting},
     {"Wired by the graph",            8, 6, checkGraph},
     {"UI canvas pins",                9, 30, checkCanvas},
+    {"Conditions and logic nodes",    10, 14, checkConditions},
   };
 
   void runStep()
@@ -585,6 +695,9 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     Events::listen("scene::Chain.Delayed"_event,   onRecord, tag(Rec::ChainDelayed));
     for(const auto &logic : LOGIC_NAMES) {
       Events::listen(logic.id, onLogic, reinterpret_cast<void*>(static_cast<uintptr_t>(logic.tag)));
+    }
+    for(const auto &cond : COND_NAMES) {
+      Events::listen(cond.id, onCond, reinterpret_cast<void*>(static_cast<uintptr_t>(cond.tag)));
     }
   }
 

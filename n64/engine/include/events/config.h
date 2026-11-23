@@ -42,3 +42,9 @@
 #ifndef P64_EVENT_TRACE
   #define P64_EVENT_TRACE 0
 #endif
+
+// Fork: conditions (docs/todo/conditionals/PLAN.md). Result outputs that can be bound at once:
+// each bound Result of a live condition takes one entry, so logic nodes can find it.
+#ifndef P64_CONDITION_MAX_PROVIDERS
+  #define P64_CONDITION_MAX_PROVIDERS 64
+#endif

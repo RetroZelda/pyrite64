@@ -84,6 +84,24 @@ namespace Utils::CPP
 
   EventPins parseEventPins(const std::string &sourceCode);
 
+  // Fork: conditions (docs/todo/conditionals/PLAN.md). What an object script declares with
+  // P64_CONDITION_DATA(...), P64_CONDITION_TRIGGERS(...) and P64_CONDITION_INPUTS(...).
+  struct Condition
+  {
+    bool isCondition{false};             // the script declares its data with P64_CONDITION_DATA
+    std::vector<std::string> triggers{}; // event names that make it check itself, as written
+    std::vector<std::string> inputs{};   // its input pins that read conditions
+    std::vector<std::string> errors{};   // problems found, one sentence each
+
+    [[nodiscard]] bool readsConditions(const std::string &pin) const;
+  };
+
+  /** 'pins' are the script's own pins (parseEventPins of the same source). */
+  Condition parseCondition(const std::string &sourceCode, const EventPins &pins);
+
+  /** The fields P64_CONDITION_DATA puts in front of a condition script's own (Conditions::Header). */
+  extern const char* const CONDITION_HEADER_FIELDS;
+
   /** Systems in declaration order, IN and OUT of one system merged. Problems go to 'errors'. */
   std::vector<SystemPins> parseGlobalEventPins(const std::string &sourceCode, std::vector<std::string> *errors = nullptr);
 

@@ -47,6 +47,10 @@ namespace P64::User::EventTest
     KitSpawned, KitDoorOpened, SirenHeard, TallyHeard,
     SirenFar, // the siren heard its grandparent through prefab_2::
     HudFocused, HudMid, HudDone, // phase 6: the TestHud canvas's output pins
+    // conditions (docs/todo/conditionals/PLAN.md)
+    Cond,                    // an output of a condition in scene 10; 'obj' holds the COND_* tag
+    CondEval,                // the driver called Conditions::evaluate(); value: the answer
+    KitNotTrue, KitNotFalse, // the Not inside a CondKit instance; value: x of the instance
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -58,6 +62,7 @@ namespace P64::User::EventTest
     "ChainRelayed", "ChainDelayed", "BlipSpawned", "Logic", "KitSpawned", "KitDoorOpened",
     "SirenHeard", "TallyHeard", "SirenFar",
     "HudFocused", "HudMid", "HudDone",
+    "Cond", "CondEval", "KitNotTrue", "KitNotFalse",
   };
 
   struct Record
@@ -87,12 +92,17 @@ namespace P64::User::EventTest
     T_NESTING,  // phase 4: scene 7, the same records before and after To Prefab and Unpack (nestingChecks.sh)
     T_GRAPH,    // phase 5: scene 8, wired only with the Events window's operations (graphChecks.sh)
     T_CANVAS,   // phase 6: scene 9, an object shows a canvas and plays its clip; its marker, clip end and focus reach a script
+    T_CONDITIONS, // conditions: scene 10, checks, triggers, edges, enable, reset, logic nodes, prefab scope
     T_COUNT
   };
 
   extern uint32_t currFrame;
   extern uint32_t activeTest;
   extern std::vector<Record> records;
+
+  // conditions: the "game state" the test conditions answer from, set by the driver of scene 10
+  extern bool condSlots[8];
+  extern uint32_t kitValue; // a CondKit's condition is true while this is the x of its instance
 
   inline void add(Rec type, const Events::Event& ev, uint16_t obj = 0) {
     records.push_back({type, currFrame, ev.value, ev.sender, ev.instigator, obj});
@@ -145,5 +155,47 @@ namespace P64::User::EventTest
     {"BridgeB.Received",  "scene::L.BridgeB.Received"_event,  18},
     {"Spawner.Spawned",   "scene::L.Spawner.Spawned"_event,   19},
     {"FrameDelay.Elapsed","scene::L.FrameDelay.Elapsed"_event,20},
+  };
+  inline constexpr auto COND_TICK   = "global::Test.CondTick"_event; // the TestCond conditions check themselves
+  inline constexpr auto KIT_TICK    = "global::Test.KitTick"_event;  // the conditions inside CondKit instances do
+  inline constexpr auto COND_KICK   = "scene::C.Kick"_event;         // bound to Enable and to Check of 'Gated'
+
+  // outputs of the conditions in scene 10, recorded with their tag in Record::obj
+  enum : uint16_t
+  {
+    COND_A_TRUE = 1, COND_A_FALSE, COND_A_NEWLY_TRUE, COND_A_NEWLY_FALSE, COND_A_RESULT,
+    COND_M_TRUE, COND_M_FALSE, COND_M_RESULT,
+    COND_AND_TRUE, COND_AND_FALSE, COND_AND_NEWLY_TRUE, COND_AND_NEWLY_FALSE,
+    COND_OR_NEWLY_TRUE, COND_OR_NEWLY_FALSE,
+    COND_XOR_NEWLY_TRUE, COND_XOR_NEWLY_FALSE,
+    COND_NOT_TRUE, COND_NOT_FALSE,
+    COND_NAND_NEWLY_TRUE, COND_NAND_NEWLY_FALSE,
+    COND_ORPHAN_TRUE, COND_ORPHAN_FALSE,
+    COND_GATED_TRUE,
+  };
+  inline constexpr LogicName COND_NAMES[] = {
+    {"A.True",          "scene::C.A.True"_event,          COND_A_TRUE},
+    {"A.False",         "scene::C.A.False"_event,         COND_A_FALSE},
+    {"A.NewlyTrue",     "scene::C.A.NewlyTrue"_event,     COND_A_NEWLY_TRUE},
+    {"A.NewlyFalse",    "scene::C.A.NewlyFalse"_event,    COND_A_NEWLY_FALSE},
+    {"A.Result",        "scene::C.A.Result"_event,        COND_A_RESULT},
+    {"M.True",          "scene::C.M.True"_event,          COND_M_TRUE},
+    {"M.False",         "scene::C.M.False"_event,         COND_M_FALSE},
+    {"M.Result",        "scene::C.M.Result"_event,        COND_M_RESULT},
+    {"And.True",        "scene::C.And.True"_event,        COND_AND_TRUE},
+    {"And.False",       "scene::C.And.False"_event,       COND_AND_FALSE},
+    {"And.NewlyTrue",   "scene::C.And.NewlyTrue"_event,   COND_AND_NEWLY_TRUE},
+    {"And.NewlyFalse",  "scene::C.And.NewlyFalse"_event,  COND_AND_NEWLY_FALSE},
+    {"Or.NewlyTrue",    "scene::C.Or.NewlyTrue"_event,    COND_OR_NEWLY_TRUE},
+    {"Or.NewlyFalse",   "scene::C.Or.NewlyFalse"_event,   COND_OR_NEWLY_FALSE},
+    {"Xor.NewlyTrue",   "scene::C.Xor.NewlyTrue"_event,   COND_XOR_NEWLY_TRUE},
+    {"Xor.NewlyFalse",  "scene::C.Xor.NewlyFalse"_event,  COND_XOR_NEWLY_FALSE},
+    {"Not.True",        "scene::C.Not.True"_event,        COND_NOT_TRUE},
+    {"Not.False",       "scene::C.Not.False"_event,       COND_NOT_FALSE},
+    {"Nand.NewlyTrue",  "scene::C.Nand.NewlyTrue"_event,  COND_NAND_NEWLY_TRUE},
+    {"Nand.NewlyFalse", "scene::C.Nand.NewlyFalse"_event, COND_NAND_NEWLY_FALSE},
+    {"Orphan.True",     "scene::C.Orphan.True"_event,     COND_ORPHAN_TRUE},
+    {"Orphan.False",    "scene::C.Orphan.False"_event,    COND_ORPHAN_FALSE},
+    {"Gated.True",      "scene::C.Gated.True"_event,      COND_GATED_TRUE},
   };
 }

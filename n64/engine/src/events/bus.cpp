@@ -10,6 +10,7 @@
 #include <libdragon.h>
 
 #include "events/bus.h"
+#include "events/conditions.h"
 #include "debug/debugMenu.h"
 #include "debug/debugDraw.h"
 #include "busCore.h"
@@ -253,7 +254,10 @@ namespace
       if(refs[c].type != P64::Comp::Code::ID) continue;
       auto *code = reinterpret_cast<P64::Comp::Code*>(reinterpret_cast<char*>(obj) + refs[c].offset);
       const auto *script = code->script;
-      if(!script || !script->onInput || !script->inputHashes) continue;
+      if(!script) continue;
+      // Fork: conditions, their own pins (Check, Enable, ...) and the internal re-check
+      if(script->evaluate) calls += P64::Conditions::Internal::onDirect(*obj, *code, event.ev);
+      if(!script->onInput || !script->inputHashes) continue;
       for(uint32_t pin = 0; pin < script->inputCount; ++pin) {
         if(script->inputHashes[pin] != event.ev.id) continue;
         P64::Comp::Code::onInput(*obj, code, static_cast<uint8_t>(pin), event.ev);
@@ -261,21 +265,6 @@ namespace
       }
     }
     return calls;
-  }
-
-  // the component index of 'componentData' on 'obj', or 0xFF
-  uint8_t componentIndexOf(const P64::Object& obj, const void* componentData)
-  {
-    auto refs = obj.getCompRefs();
-    for(uint32_t c = 0; c < obj.compCount; ++c) {
-      const char* data = reinterpret_cast<const char*>(&obj) + refs[c].offset;
-      if(data == componentData) return static_cast<uint8_t>(c);
-      // a script's data sits right behind its Code component
-      if(refs[c].type == P64::Comp::Code::ID && data + sizeof(P64::Comp::Code) == componentData) {
-        return static_cast<uint8_t>(c);
-      }
-    }
-    return 0xFF;
   }
 
   void markScoped(P64::Object& obj)
@@ -348,11 +337,31 @@ P64::Events::Listener P64::Events::listenIn(Object& inScopeOf, EventId id, Liste
   return Internal::listenBound(id.hash, id.scope, instance, fn, user);
 }
 
+uint8_t P64::Events::Internal::componentIndexOf(const Object& obj, const void* componentData)
+{
+  auto refs = obj.getCompRefs();
+  for(uint32_t c = 0; c < obj.compCount; ++c) {
+    const char* data = reinterpret_cast<const char*>(&obj) + refs[c].offset;
+    if(data == componentData) return static_cast<uint8_t>(c);
+    // a script's data sits right behind its Code component
+    if(refs[c].type == P64::Comp::Code::ID && data + sizeof(P64::Comp::Code) == componentData) {
+      return static_cast<uint8_t>(c);
+    }
+  }
+  return 0xFF;
+}
+
+bool P64::Events::Internal::sendChecked(uint16_t targetId, uint32_t inputHash, uint32_t value, uint16_t sender)
+{
+  if(targetId == 0) return false;
+  return bus.post(inputHash, Scope::Direct, targetId, value, sender);
+}
+
 void P64::Events::fire(Object& obj, const void* componentData, uint8_t pin, uint32_t value, uint16_t instigator)
 {
   auto *links = obj.getComponent<Comp::EventLinks>();
   if(!links) return; // nothing bound on this object
-  const uint8_t comp = componentData ? componentIndexOf(obj, componentData) : Comp::EventLinks::COMP_OBJECT;
+  const uint8_t comp = componentData ? Internal::componentIndexOf(obj, componentData) : Comp::EventLinks::COMP_OBJECT;
 
   for(uint32_t i = 0; i < links->count; ++i) {
     const auto &binding = links->bindings()[i];
@@ -548,6 +557,7 @@ void P64::Events::Internal::onSceneDestroyed()
   bus.dropQueuedSceneEvents();
   bus.unsubscribeAllInstances();
   Contacts::reset();
+  Conditions::Internal::onSceneDestroyed();
   newPrefabRoots.clear();
 }
 

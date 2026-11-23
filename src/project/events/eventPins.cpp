@@ -15,7 +15,22 @@ int Project::Events::PinList::indexOf(bool input, const std::string &pin) const
 {
   const auto &list = input ? in : out;
   auto it = std::find(list.begin(), list.end(), pin);
-  return it == list.end() ? -1 : static_cast<int>(it - list.begin());
+  if(it == list.end())return -1;
+  const int pos = static_cast<int>(it - list.begin());
+  const int conditionStart = input ? conditionIn : conditionOut;
+  if(conditionStart >= 0 && pos >= conditionStart) return P64::Events::Pins::CONDITION_PIN_BASE + (pos - conditionStart);
+  return pos;
+}
+
+bool Project::Events::PinList::isConditionPin(bool input, const std::string &pin) const
+{
+  const int index = indexOf(input, pin);
+  return index >= P64::Events::Pins::CONDITION_PIN_BASE;
+}
+
+bool Project::Events::PinList::readsConditions(const std::string &pin) const
+{
+  return std::find(conditionInputs.begin(), conditionInputs.end(), pin) != conditionInputs.end();
 }
 
 Project::Events::PinList Project::Events::pinsOf(Project &project, const Component::Entry &comp)
@@ -27,6 +42,15 @@ Project::Events::PinList Project::Events::pinsOf(Project &project, const Compone
     if(auto *script = project.getAssets().getEntryByUUID(uuid)) {
       res.in = script->pins.in;
       res.out = script->pins.out;
+      // Fork: conditions, the pins every condition has come after the script's own
+      if(script->condition.isCondition) {
+        res.conditionIn = static_cast<int>(res.in.size());
+        res.conditionOut = static_cast<int>(res.out.size());
+        for(const char* name : P64::Events::Pins::CONDITION_IN) res.in.emplace_back(name);
+        for(const char* name : P64::Events::Pins::CONDITION_OUT) res.out.emplace_back(name);
+        res.conditionInputs = script->condition.inputs;
+        res.triggers = script->condition.triggers;
+      }
     }
     return res;
   }

@@ -1,0 +1,889 @@
+{
+  "conf": {
+    "audioFreq": 32000,
+    "clearColor": [
+      0.1416493058204651,
+      0.16373443603515625,
+      0.2661290168762207,
+      1.0
+    ],
+    "doClearColor": true,
+    "doClearDepth": true,
+    "fbFormat": 0,
+    "fbHeight": 240,
+    "fbWidth": 320,
+    "filter": 1,
+    "frameLimit": 0,
+    "gravity": [
+      0.0,
+      -9.8100004196167,
+      0.0
+    ],
+    "interpolatePhysicsTransforms": true,
+    "layers2D": [
+      {
+        "blender": 0,
+        "depthCompare": false,
+        "depthWrite": false,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "2D"
+      }
+    ],
+    "layers3D": [
+      {
+        "blender": 0,
+        "depthCompare": true,
+        "depthWrite": true,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "3D Opaque"
+      },
+      {
+        "blender": 5242944,
+        "depthCompare": true,
+        "depthWrite": false,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "3D Transp."
+      }
+    ],
+    "layersPtx": [
+      {
+        "blender": 0,
+        "depthCompare": true,
+        "depthWrite": true,
+        "fog": false,
+        "fogColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fogColorMode": 0,
+        "fogMax": 0.0,
+        "fogMin": 0.0,
+        "lightMode": 0,
+        "name": "PTX Opaque"
+      }
+    ],
+    "name": "conditions",
+    "physicsTickRate": 11,
+    "positionSolverIterations": 6,
+    "renderPipeline": 0,
+    "renderScale": 100.0,
+    "velocitySolverIterations": 7
+  },
+  "version": 2,
+  "graph": {
+    "children": [
+      {
+        "children": [],
+        "components": [
+          {
+            "data": {
+              "aspect": 0.0,
+              "far": 50.0,
+              "fov": 65.0,
+              "mode": 0,
+              "near": 1.0,
+              "orthoSize": 0.029999999329447746,
+              "projection": 0,
+              "targetMode": 0,
+              "targetObjUUID": 0,
+              "visMask": 255,
+              "vpOffset": [
+                0,
+                0
+              ],
+              "vpSize": [
+                320,
+                240
+              ],
+              "worldOffset": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "enabled": true,
+            "id": 3,
+            "name": "Camera",
+            "uuid": 10009
+          }
+        ],
+        "enabled": true,
+        "name": "Camera",
+        "pos": [
+          0.0,
+          0.0,
+          2.7144417762756348
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          0.9999967217445374,
+          0.9999942183494568,
+          0.9999811053276062
+        ],
+        "selectable": true,
+        "uuid": 10008,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10010,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426388
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Driver",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10011,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10012,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "0"
+              },
+              "script": 14240860050882426384
+            },
+            "events": {
+              "out": {
+                "True": [
+                  "scene::C.A.True"
+                ],
+                "False": [
+                  "scene::C.A.False"
+                ],
+                "NewlyTrue": [
+                  "scene::C.A.NewlyTrue"
+                ],
+                "NewlyFalse": [
+                  "scene::C.A.NewlyFalse"
+                ],
+                "Result": [
+                  "scene::C.A.Result"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "CondA",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10013,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10014,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "1"
+              },
+              "script": 14240860050882426384
+            },
+            "events": {
+              "out": {
+                "Result": [
+                  "scene::C.B.Result"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "CondB",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10015,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10016,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "2"
+              },
+              "script": 14240860050882426385
+            },
+            "events": {
+              "out": {
+                "True": [
+                  "scene::C.M.True"
+                ],
+                "False": [
+                  "scene::C.M.False"
+                ],
+                "Result": [
+                  "scene::C.M.Result"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "CondM",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10017,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10018,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350672
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.A.Result",
+                  "scene::C.B.Result"
+                ]
+              },
+              "out": {
+                "True": [
+                  "scene::C.And.True"
+                ],
+                "False": [
+                  "scene::C.And.False"
+                ],
+                "NewlyTrue": [
+                  "scene::C.And.NewlyTrue"
+                ],
+                "NewlyFalse": [
+                  "scene::C.And.NewlyFalse"
+                ],
+                "Result": [
+                  "scene::C.And.Result"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "And",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10019,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10020,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350673
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.A.Result",
+                  "scene::C.B.Result"
+                ]
+              },
+              "out": {
+                "NewlyTrue": [
+                  "scene::C.Or.NewlyTrue"
+                ],
+                "NewlyFalse": [
+                  "scene::C.Or.NewlyFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Or",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10021,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10022,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350674
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.A.Result",
+                  "scene::C.B.Result"
+                ]
+              },
+              "out": {
+                "NewlyTrue": [
+                  "scene::C.Xor.NewlyTrue"
+                ],
+                "NewlyFalse": [
+                  "scene::C.Xor.NewlyFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Xor",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10023,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10024,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350675
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.M.Result"
+                ]
+              },
+              "out": {
+                "True": [
+                  "scene::C.Not.True"
+                ],
+                "False": [
+                  "scene::C.Not.False"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Not",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10025,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10026,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350675
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.And.Result"
+                ]
+              },
+              "out": {
+                "NewlyTrue": [
+                  "scene::C.Nand.NewlyTrue"
+                ],
+                "NewlyFalse": [
+                  "scene::C.Nand.NewlyFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Nand",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10027,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10028,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350672
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "scene::C.Missing.Result"
+                ]
+              },
+              "out": {
+                "True": [
+                  "scene::C.Orphan.True"
+                ],
+                "False": [
+                  "scene::C.Orphan.False"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Orphan",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10029,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10030,
+            "enabled": true,
+            "data": {
+              "args": {
+                "slot": "3",
+                "conditionStartsEnabled": "0"
+              },
+              "script": 14240860050882426384
+            },
+            "events": {
+              "in": {
+                "Enable": [
+                  "scene::C.Kick"
+                ],
+                "Check": [
+                  "scene::C.Kick"
+                ]
+              },
+              "out": {
+                "True": [
+                  "scene::C.Gated.True"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Gated",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10031,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [],
+        "enabled": true,
+        "name": "K10",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {
+          "13911321452997764027": "1:10.0,0.0,0.0"
+        },
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10032,
+        "uuidPrefab": 735700040,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [],
+        "enabled": true,
+        "name": "K20",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {
+          "13911321452997764027": "1:20.0,0.0,0.0"
+        },
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10033,
+        "uuidPrefab": 735700040,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10034,
+            "enabled": true,
+            "data": {
+              "args": {
+                "prefab": "735700040"
+              },
+              "script": 13898108450065350670
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Spawner",
+        "pos": [
+          30.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10035,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "Scene",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "scale": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "selectable": true,
+    "uuid": 10036,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

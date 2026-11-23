@@ -1,0 +1,182 @@
+{
+  "version": 2,
+  "uuid": 735700040,
+  "obj": {
+    "children": [
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10001,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426386
+            },
+            "events": {
+              "out": {
+                "Result": [
+                  "prefab::Cond.Result"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Cond",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10002,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10003,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 13898108450065350675
+            },
+            "events": {
+              "in": {
+                "Inputs": [
+                  "prefab::Cond.Result"
+                ]
+              },
+              "out": {
+                "True": [
+                  "prefab::Kit.NotTrue"
+                ],
+                "False": [
+                  "prefab::Kit.NotFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Not",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10004,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 10005,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426387
+            },
+            "events": {
+              "in": {
+                "NotTrue": [
+                  "prefab::Kit.NotTrue"
+                ],
+                "NotFalse": [
+                  "prefab::Kit.NotFalse"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Watch",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 10006,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "CondKit",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "selectable": true,
+    "uuid": 10007,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

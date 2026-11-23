@@ -18,6 +18,7 @@ namespace P64::Script
   typedef void(*FuncObjDataColl)(Object&, void*, const P64::Coll::CollEvent&);
   typedef void(*FuncObjDataInput)(Object&, void*, uint8_t, const Events::Event&);
   typedef void(*FuncObjContact)(Object&, void*, uint16_t otherId);
+  typedef bool(*FuncObjCondition)(Object&, void*);
 
   struct ScriptEntry
   {
@@ -50,6 +51,9 @@ namespace P64::Script
     // Fork: event graph. Collision enter/exit, see events/contactEvents.h.
     FuncObjContact onCollEnter;
     FuncObjContact onCollExit;
+
+    // Fork: conditions. Set for scripts declared with P64_CONDITION_DATA, see events/conditions.h.
+    FuncObjCondition evaluate;
   };
 
   // Note: generated and implement in the project:

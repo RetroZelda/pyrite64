@@ -419,11 +419,13 @@ if(PYRITE64_BUILD_TESTS)
         tests/layer.cpp
         tests/eventBus.cpp
         tests/eventEditor.cpp
+        tests/conditions.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
         n64/engine/src/events/busCore.cpp
+        n64/engine/src/events/conditionCore.cpp
     )
     # n64/engine: the event bus core is engine code written to also compile on the host
     target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include

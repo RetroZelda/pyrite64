@@ -266,6 +266,9 @@ namespace
     // Fork: event graph, the pins the script declares
     if(type == Project::FileType::CODE_OBJ) {
       entry.pins = Utils::CPP::parseEventPins(code);
+      // Fork: conditions
+      entry.condition = Utils::CPP::parseCondition(code, entry.pins);
+      for(const auto &err : entry.condition.errors) entry.pins.errors.push_back(err);
     } else {
       entry.systemPins = Utils::CPP::parseGlobalEventPins(code, &entry.pins.errors);
     }

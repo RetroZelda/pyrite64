@@ -191,12 +191,25 @@ std::vector<Project::Events::SourceUse> Project::Events::scanSource(const std::s
   std::vector<SourceUse> res{};
   static const std::regex literal(R"re("([^"\\\n]*)"_(event|pin)\b)re");
 
+  // Fork: conditions. The names in P64_CONDITION_TRIGGERS(...) are not counted here: the build
+  // binds them to the condition's Check input, which says more ("listens", not "may fire").
+  std::vector<std::pair<size_t, size_t>> triggerLists{};
+  for(size_t at = code.find("P64_CONDITION_TRIGGERS("); at != std::string::npos; at = code.find("P64_CONDITION_TRIGGERS(", at + 1)) {
+    const auto end = code.find(')', at);
+    triggerLists.emplace_back(at, end == std::string::npos ? code.size() : end);
+  }
+  auto inTriggerList = [&](size_t pos) {
+    for(const auto &[from, to] : triggerLists) if(pos > from && pos < to) return true;
+    return false;
+  };
+
   int line = 1;
   size_t lineStartPos = 0;
   auto begin = std::sregex_iterator(code.begin(), code.end(), literal);
   for(auto it = begin; it != std::sregex_iterator(); ++it)
   {
     const auto pos = static_cast<size_t>(it->position(0));
+    if(inTriggerList(pos))continue;
     for(size_t i = lineStartPos; i < pos; ++i) if(code[i] == '\n') ++line;
     lineStartPos = pos;
     res.push_back({
@@ -375,7 +388,11 @@ std::vector<Project::Events::Message> Project::Events::Index::check(const Catalo
     }
 
     for(const auto *use : list) {
-      if(use->kind == UseKind::BoundIn && !anyFires) {
+      // Fork: conditions. An input that reads conditions gets the message below (no condition provides it).
+      const bool readsCondition = std::any_of(conditionReads.begin(), conditionReads.end(), [&](const auto &read) {
+        return read.second == use->where && canonicalName(read.first) == name;
+      });
+      if(use->kind == UseKind::BoundIn && !anyFires && !readsCondition) {
         res.push_back({Level::Warning, use->where + " listens to '" + name + "', but nothing fires it (no output, code or system uses this name)"});
       }
       if(use->kind == UseKind::BoundOut && !anyListens) {
@@ -407,6 +424,12 @@ std::vector<Project::Events::Message> Project::Events::Index::check(const Catalo
         res.push_back({Level::Warning, "'" + names[i] + "' and '" + names[j] + "' differ by one character and one is only fired, the other only listened to: is one a typo?"});
       }
     }
+  }
+
+  // Fork: conditions. An input that reads conditions, bound to a name no condition provides
+  for(const auto &[name, where] : conditionReads) {
+    if(conditionResults.contains(canonicalName(name)))continue;
+    res.push_back({Level::Warning, where + " reads '" + name + "', but no condition's Result is bound to it; it counts as false"});
   }
 
   // send() to pins nobody declares

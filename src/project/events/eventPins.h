@@ -17,8 +17,27 @@ namespace Project::Events
     std::vector<std::string> in{};
     std::vector<std::string> out{};
 
+    // Fork: conditions (docs/todo/conditionals/PLAN.md). A condition script's lists end with the
+    // condition pins; these are the positions they start at (-1: not a condition).
+    int conditionIn{-1};
+    int conditionOut{-1};
+    std::vector<std::string> conditionInputs{}; // input pins that read conditions (P64_CONDITION_INPUTS)
+    std::vector<std::string> triggers{};        // events the script binds to Check (P64_CONDITION_TRIGGERS)
+
     [[nodiscard]] bool empty() const { return in.empty() && out.empty(); }
+    [[nodiscard]] bool isCondition() const { return conditionOut >= 0; }
+
+    /**
+     * The pin's index as the runtime knows it, -1 if there is no such pin: the position in the
+     * list, and for a condition pin P64::Events::Pins::CONDITION_PIN_BASE + its position among them.
+     */
     [[nodiscard]] int indexOf(bool input, const std::string &pin) const;
+
+    /** 'pin' is one of the pins every condition has (not one the script declares itself). */
+    [[nodiscard]] bool isConditionPin(bool input, const std::string &pin) const;
+
+    /** The input pin reads conditions: Result outputs are wired into it. */
+    [[nodiscard]] bool readsConditions(const std::string &pin) const;
   };
 
   /** Pins of a component: a Code component's script pins, or an engine component's own. */

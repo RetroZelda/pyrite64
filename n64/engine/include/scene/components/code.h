@@ -12,6 +12,15 @@ namespace Coll
   struct CollEvent;
 }
 
+// Fork: conditions, see events/conditions.h
+namespace P64::Comp { struct Code; }
+namespace P64::Conditions::Internal
+{
+  void onCodeInit(Object& obj, Comp::Code& code);
+  void onCodeDestroy(Object& obj, Comp::Code& code);
+  void onPin(Object& obj, Comp::Code& code, uint8_t pin, const Events::Event& ev);
+}
+
 namespace P64::Comp
 {
   struct Code
@@ -29,6 +38,10 @@ namespace P64::Comp
     static constexpr uint32_t FN_INPUT        = 1 << 8; // Fork: event graph
     static constexpr uint32_t FN_COLL_ENTER   = 1 << 9;
     static constexpr uint32_t FN_COLL_EXIT    = 1 << 10;
+    static constexpr uint32_t FN_CONDITION    = 1 << 11; // Fork: conditions, the script has evaluate()
+
+    // pins from here on are the condition pins (Events::Pins::CONDITION_PIN_BASE)
+    static constexpr uint8_t CONDITION_PIN_BASE = 0x80;
 
     // store direct pointer to avoid lookup each time
     Script::ScriptEntry *script;
@@ -54,6 +67,7 @@ namespace P64::Comp
     static void initDelete(Object& obj, Code* data, uint16_t* initData) {
       if (initData == nullptr) {
 
+        if(data->usedFunctions & FN_CONDITION) Conditions::Internal::onCodeDestroy(obj, *data);
         if(data->script->destroy) {
           data->script->destroy(obj, data->getCodeData());
         }
@@ -81,6 +95,12 @@ namespace P64::Comp
       if(data->script->onCollEnter) data->usedFunctions |= FN_COLL_ENTER;
       if(data->script->onCollExit) data->usedFunctions |= FN_COLL_EXIT;
       if(data->usedFunctions & (FN_COLL_ENTER | FN_COLL_EXIT)) obj.setFlag(ObjectFlags::WANTS_CONTACTS, true);
+
+      // Fork: conditions. Before init(), so the script finds its condition ready.
+      if(data->script->evaluate && dataSize >= 4) {
+        data->usedFunctions |= FN_CONDITION;
+        Conditions::Internal::onCodeInit(obj, *data);
+      }
 
       if(data->script->init) {
         data->script->init(obj, data->getCodeData());
@@ -137,6 +157,10 @@ namespace P64::Comp
 
     // Fork: event graph, an input pin of the script received an event
     static void onInput(Object& obj, Code* data, uint8_t pin, const Events::Event& event) {
+      if(pin >= CONDITION_PIN_BASE) {
+        Conditions::Internal::onPin(obj, *data, static_cast<uint8_t>(pin - CONDITION_PIN_BASE), event);
+        return;
+      }
       if(data->usedFunctions & FN_INPUT) {
         data->script->onInput(obj, data->getCodeData(), pin, event);
       }
