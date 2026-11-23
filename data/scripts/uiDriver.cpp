@@ -48,9 +48,16 @@ namespace P64::UI
             ObjectEvent outbox[MAX_UI_EVENTS]{};
             uint8_t     outboxCount{0};
 
+            // Fork: event graph. Events posted from outside the model callback (UI::post),
+            // moved into the outbox at the start of the next update.
+            ObjectEvent inbox[MAX_UI_EVENTS]{};
+            uint8_t     inboxCount{0};
+
             void update(float deltaTime) override
             {
                 outboxCount = 0;
+                for (uint8_t e = 0; e < inboxCount; ++e) outbox[outboxCount++] = inbox[e];
+                inboxCount = 0;
                 EventSink sink{ outbox, &outboxCount, MAX_UI_EVENTS, ownerObjId };
                 if (model_callback)
                     model_callback(data, sink, deltaTime);
@@ -244,6 +251,14 @@ namespace P64::UI
         view->clips[c].elapsed = view->clips[c].prevElapsed = seconds;
     }
 
+    template<UISceneType Scene>
+    void post(uint16_t type, uint32_t value)
+    {
+        auto* view = getTypedView<Scene>();
+        if (!view || view->inboxCount >= view->MAX_UI_EVENTS) return;
+        view->inbox[view->inboxCount++] = ObjectEvent{ view->ownerObjId, type, value };
+    }
+
     bool bindController(ControllerCallback callback)
     {
         if (detail::controller_callback)
@@ -271,6 +286,12 @@ namespace P64::UI
         detail::layers[idx] = static_cast<int8_t>(layer);
         if (detail::controller_callback)
             detail::controller_callback(scene, enabled);
+    }
+
+    void setSceneEnabled(UISceneType scene, bool enabled)
+    {
+        auto idx = static_cast<size_t>(scene);
+        setSceneState(scene, enabled, detail::layers[idx]);
     }
 
     void init()

@@ -271,6 +271,7 @@ struct Editor::EventGraphWindow::State
 
   // canvas content
   std::map<uint32_t, std::shared_ptr<GraphNode>> objectNodes{};
+  std::map<uint64_t, std::shared_ptr<GraphNode>> canvasNodes{};
   std::map<std::string, std::shared_ptr<GraphNode>> eventNodes{};
   std::shared_ptr<GraphNode> globalNode{}, scopeNode{};
   std::map<const ImFlow::Pin*, PinInfo> pins{};
@@ -331,6 +332,9 @@ struct Editor::EventGraphWindow::State
     auto &nodes = scope["nodes"];
     if(!nodes.is_object()) nodes = nlohmann::json::object();
     for(auto &[uuid, node] : objectNodes) nodes[std::to_string(uuid)]["pos"] = vecJson(node->getPos());
+    auto &canvasPos = scope["canvasNodes"];
+    if(!canvasPos.is_object()) canvasPos = nlohmann::json::object();
+    for(auto &[uuid, node] : canvasNodes) canvasPos[std::to_string(uuid)]["pos"] = vecJson(node->getPos());
     auto &events = scope["events"];
     if(!events.is_object()) events = nlohmann::json::object();
     for(auto &[name, node] : eventNodes) events[name]["pos"] = vecJson(node->getPos());
@@ -374,6 +378,23 @@ struct Editor::EventGraphWindow::State
     auto set = shownByHand();
     if(shown) set.insert(uuid); else set.erase(uuid);
     layoutScope()["shown"] = nlohmann::json(std::vector<uint32_t>{set.begin(), set.end()});
+  }
+
+  std::set<uint64_t> canvasesByHand()
+  {
+    std::set<uint64_t> res{};
+    auto &scope = layoutScope();
+    if(scope.contains("canvases") && scope["canvases"].is_array()) {
+      for(auto &v : scope["canvases"]) if(v.is_number_unsigned()) res.insert(v.get<uint64_t>());
+    }
+    return res;
+  }
+
+  void setCanvasByHand(uint64_t uuid, bool shown)
+  {
+    auto set = canvasesByHand();
+    if(shown) set.insert(uuid); else set.erase(uuid);
+    layoutScope()["canvases"] = nlohmann::json(std::vector<uint64_t>{set.begin(), set.end()});
   }
 
   bool flag(const char* name)
@@ -443,6 +464,7 @@ struct Editor::EventGraphWindow::State
     canvas.getNodes().clear();
     rebuilding = false;
     objectNodes.clear();
+    canvasNodes.clear();
     eventNodes.clear();
     globalNode = nullptr;
     scopeNode = nullptr;
@@ -466,6 +488,11 @@ struct Editor::EventGraphWindow::State
       canvas.getNodes().erase(node->getUID());
     }
     objectNodes.clear();
+    for(auto &[uuid, node] : canvasNodes) {
+      resetPins(*node);
+      canvas.getNodes().erase(node->getUID());
+    }
+    canvasNodes.clear();
     for(auto &[name, node] : eventNodes) {
       resetPins(*node);
       canvas.getNodes().erase(node->getUID());
@@ -520,14 +547,15 @@ struct Editor::EventGraphWindow::State
     resetPins(node);
     std::string title = src.name;
     ImU32 header = IM_COL32(58, 88, 120, 255);
-    if(src.instance) { title += "  " ICON_MDI_PACKAGE_VARIANT_CLOSED " " + src.prefab; header = IM_COL32(104, 76, 140, 255); }
+    if(src.canvas) { title = ICON_MDI_MONITOR_DASHBOARD " " + src.name + "  (UI canvas)"; header = IM_COL32(40, 110, 120, 255); }
+    else if(src.instance) { title += "  " ICON_MDI_PACKAGE_VARIANT_CLOSED " " + src.prefab; header = IM_COL32(104, 76, 140, 255); }
     else if(src.builtin) header = IM_COL32(62, 112, 84, 255);
     node.setTitle(title);
     node.setStyle(nodeStyle(header, warn));
     node.subtitle = warn ? ICON_MDI_ALERT " Loop without a delay" : "";
     node.subtitleTip = warn ? "Its outputs reach its own inputs again with no Delay or Frame Delay in between.\n"
                               "Allowed, but an event chain that keeps going is cut after 16 hops." : "";
-    const std::string nodeKey = std::to_string(src.uuid);
+    const std::string nodeKey = src.canvas ? "c" + std::to_string(src.canvas) : std::to_string(src.uuid);
     for(const auto &cat : src.categories) {
       Section sec{cat.key, cat.title, sectionOpen(nodeKey, cat.key, cat.openByDefault), {}, {}};
       for(const auto &pin : cat.pins) {
@@ -612,6 +640,7 @@ struct Editor::EventGraphWindow::State
     std::map<uint32_t, std::set<uint32_t>> next{};
     std::map<std::string, std::vector<uint32_t>> eventIn{}, eventOut{};
     for(const auto &w : wires) {
+      if(w.from.pin.canvas || w.to.pin.canvas)continue; // a canvas is no object of the graph
       if(w.from.type == G::End::Type::Pin && w.to.type == G::End::Type::Pin) next[w.from.pin.node].insert(w.to.pin.node);
       if(w.from.type == G::End::Type::Pin && w.to.type == G::End::Type::Event) eventIn[w.name].push_back(w.from.pin.node);
       if(w.from.type == G::End::Type::Event && w.to.type == G::End::Type::Pin) eventOut[w.name].push_back(w.to.pin.node);
@@ -638,11 +667,12 @@ struct Editor::EventGraphWindow::State
   // Places nodes without a saved position in columns: a node goes one column right of everything
   // that wires into it, so events flow left to right. Saved positions are kept.
   std::map<std::string, ImVec2> arrange(const std::vector<G::Wire> &wires, const std::set<uint32_t> &shown,
+                                        const std::set<uint64_t> &shownCanvases,
                                         const std::set<std::string> &eventNames, bool showGlobal, bool showScope)
   {
     auto keyOf = [](const G::End &end, const std::string &name) -> std::string {
       switch(end.type) {
-        case G::End::Type::Pin: return "o:" + std::to_string(end.pin.node);
+        case G::End::Type::Pin: return end.pin.canvas ? "c:" + std::to_string(end.pin.canvas) : "o:" + std::to_string(end.pin.node);
         case G::End::Type::Event: return "e:" + name;
         case G::End::Type::Global: return "global";
         case G::End::Type::Scope: return "scope";
@@ -653,6 +683,7 @@ struct Editor::EventGraphWindow::State
     if(showScope) keys.push_back("scope");
     for(const auto &node : model.nodes) if(shown.contains(node.uuid)) keys.push_back("o:" + std::to_string(node.uuid));
     for(const auto &name : eventNames) keys.push_back("e:" + name);
+    for(auto uuid : shownCanvases) keys.push_back("c:" + std::to_string(uuid));
 
     std::map<std::string, int> rank{};
     for(const auto &k : keys) rank[k] = 0;
@@ -676,7 +707,7 @@ struct Editor::EventGraphWindow::State
       if(k == "scope") return 40.0f + 22.0f * (float)model.scopeEvents.size();
       if(k == "global") return 60.0f + 26.0f * (float)model.systems.size();
       if(k.starts_with("e:")) return 70.0f;
-      const auto *node = model.find((uint32_t)std::stoul(k.substr(2)));
+      const auto *node = k.starts_with("c:") ? model.findCanvas(std::stoull(k.substr(2))) : model.find((uint32_t)std::stoul(k.substr(2)));
       float h = 34.0f;
       if(node) for(const auto &cat : node->categories) {
         size_t ins = 0, outs = 0;
@@ -764,16 +795,20 @@ struct Editor::EventGraphWindow::State
     auto wires = G::wires(model, eventNames, showGlobal, showScope);
 
     std::set<uint32_t> shown = shownByHand();
+    std::set<uint64_t> shownCanvases = canvasesByHand();
     for(const auto &node : model.nodes) if(node.bound() || focus) shown.insert(node.uuid);
     for(const auto &w : wires) {
-      if(w.from.type == G::End::Type::Pin) shown.insert(w.from.pin.node);
-      if(w.to.type == G::End::Type::Pin) shown.insert(w.to.pin.node);
+      for(const auto *end : {&w.from, &w.to}) {
+        if(end->type != G::End::Type::Pin)continue;
+        if(end->pin.canvas) shownCanvases.insert(end->pin.canvas);
+        else shown.insert(end->pin.node);
+      }
     }
     const auto loops = loopNodes(wires);
 
     // object nodes
     auto &savedNodes = scope["nodes"];
-    const auto spots = arrange(wires, shown, eventNames, showGlobal, showScope);
+    const auto spots = arrange(wires, shown, shownCanvases, eventNames, showGlobal, showScope);
     auto spot = [&](const std::string &k) { auto it = spots.find(k); return it != spots.end() ? it->second : ImVec2{40.0f, 40.0f}; };
     for(auto it = objectNodes.begin(); it != objectNodes.end();) {
       if(!shown.contains(it->first) || !model.find(it->first)) {
@@ -791,6 +826,27 @@ struct Editor::EventGraphWindow::State
         node = addNode(pos);
       }
       fillObjectNode(*node, src, loops.contains(src.uuid));
+    }
+
+    // canvas nodes
+    auto &savedCanvases = scope["canvasNodes"];
+    for(auto it = canvasNodes.begin(); it != canvasNodes.end();) {
+      if(!shownCanvases.contains(it->first) || !model.findCanvas(it->first)) {
+        resetPins(*it->second);
+        canvas.getNodes().erase(it->second->getUID());
+        it = canvasNodes.erase(it);
+      } else ++it;
+    }
+    for(auto uuid : shownCanvases) {
+      const auto *src = model.findCanvas(uuid);
+      if(!src)continue;
+      auto &node = canvasNodes[uuid];
+      if(!node) {
+        const auto keyStr = std::to_string(uuid);
+        ImVec2 pos = savedCanvases.is_object() && savedCanvases.contains(keyStr) ? jsonVec(savedCanvases[keyStr]["pos"]) : spot("c:" + keyStr);
+        node = addNode(pos);
+      }
+      fillObjectNode(*node, *src, false);
     }
 
     // event nodes
@@ -1035,6 +1091,15 @@ struct Editor::EventGraphWindow::State
         }
         return;
       }
+      for(auto &[uuid, node] : canvasNodes) {
+        if(node.get() != hovered)continue;
+        if(canvasesByHand().contains(uuid) && ImGui::Selectable(ICON_MDI_EYE_OFF " Hide from the graph")) {
+          setCanvasByHand(uuid, false);
+          signature = 0;
+        }
+        ImGui::TextDisabled("Its bindings are saved in the canvas file");
+        return;
+      }
       for(auto &[name, node] : eventNodes) {
         if(node.get() != hovered)continue;
         if(ImGui::Selectable(ICON_MDI_CLOSE " Remove the event node")) {
@@ -1090,6 +1155,21 @@ struct Editor::EventGraphWindow::State
         if(++count > 40)break;
         if(ImGui::Selectable(name.c_str())) addEventNode(name, popupPos);
       }
+      ImGui::EndMenu();
+    }
+    if(ImGui::BeginMenu(ICON_MDI_MONITOR_DASHBOARD " UI canvas")) {
+      int count = 0;
+      for(const auto &node : model.canvases) {
+        if(canvasNodes.contains(node.canvas))continue;
+        if(!popupFilter.empty() && node.name.find(popupFilter) == std::string::npos)continue;
+        ++count;
+        if(ImGui::Selectable(node.name.c_str())) {
+          setCanvasByHand(node.canvas, true);
+          layoutScope()["canvasNodes"][std::to_string(node.canvas)]["pos"] = vecJson(popupPos);
+          signature = 0;
+        }
+      }
+      if(count == 0) ImGui::TextDisabled(model.canvases.empty() ? "The project has no canvas" : "Every canvas is shown");
       ImGui::EndMenu();
     }
     if(ImGui::BeginMenu(ICON_MDI_PUZZLE_OUTLINE " Built-in object")) {

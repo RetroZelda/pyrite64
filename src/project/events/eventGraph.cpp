@@ -18,6 +18,7 @@
 #include "../scene/object.h"
 #include "../scene/prefab.h"
 #include "../component/components.h"
+#include "../canvas/canvas.h"
 
 namespace fs = std::filesystem;
 using namespace Project::Events;
@@ -382,6 +383,47 @@ namespace
     return node;
   }
 
+  // a UI canvas: its pins grouped as the canvas editor shows them
+  Node canvasNode(const Ctx &c, const Project::Canvas &canvas, uint64_t uuid)
+  {
+    Node node{};
+    node.canvas = uuid;
+    node.name = canvas.name;
+    node.prefab = "UI canvas";
+    const auto pins = canvasPins(canvas);
+    Category show{"v", "Canvas", true, {}}, clips{"clips", "Clips", true, {}}, events{"events", "Events", true, {}}, focus{"focus", "Focus", true, {}};
+    for(const bool input : {true, false}) {
+      for(const auto &name : input ? pins.in : pins.out) {
+        Pin pin{};
+        pin.ref = {0, {}, 0, name, input, false, uuid};
+        pin.label = name;
+        const auto &map = input ? canvas.bindings.in : canvas.bindings.out;
+        if(auto it = map.find(name); it != map.end()) pin.names = it->second;
+        finishPin(c, pin, false);
+        for(const auto &n : pin.names) {
+          const auto scope = parse(n).id.scope;
+          if(pin.problem.empty() && (scope == Scope::Prefab || scope == Scope::Object)) {
+            pin.problem = "a canvas is not in the object tree, so it can only use ui::, scene::, global:: or a game namespace";
+          }
+        }
+        Category &cat = (name == "Show" || name == "Hide") ? show
+          : (name.starts_with("Event.") ? events
+          : ((name.starts_with("Focused.") || name.starts_with("Blurred.") || name.starts_with("Activated.")) ? focus : clips));
+        cat.pins.push_back(pin);
+      }
+    }
+    for(auto *cat : {&show, &clips, &events, &focus}) if(!cat->pins.empty()) node.categories.push_back(*cat);
+    return node;
+  }
+
+  Project::Canvas* findCanvasAsset(Project::Project &project, uint64_t uuid)
+  {
+    for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::CANVAS)) {
+      if(entry.canvas && entry.conf.uuid == uuid) return entry.canvas.get();
+    }
+    return nullptr;
+  }
+
   bool usableHere(const Model &model, const std::string &name)
   {
     if(!nameProblem(name).empty()) return false;
@@ -396,7 +438,7 @@ namespace
 
 bool Project::Events::Graph::PinRef::operator<(const PinRef &other) const
 {
-  return std::tie(node, path, comp, pin, input, link) < std::tie(other.node, other.path, other.comp, other.pin, other.input, other.link);
+  return std::tie(node, path, comp, pin, input, link, canvas) < std::tie(other.node, other.path, other.comp, other.pin, other.input, other.link, other.canvas);
 }
 
 bool Project::Events::Graph::Node::bound() const
@@ -416,9 +458,15 @@ const Node* Project::Events::Graph::Model::find(uint32_t uuid) const
   return nullptr;
 }
 
+const Node* Project::Events::Graph::Model::findCanvas(uint64_t uuid) const
+{
+  for(const auto &node : canvases) if(node.canvas == uuid) return &node;
+  return nullptr;
+}
+
 const Pin* Project::Events::Graph::Model::findPin(const PinRef &ref) const
 {
-  const auto *node = find(ref.node);
+  const auto *node = ref.canvas ? findCanvas(ref.canvas) : find(ref.node);
   if(!node) return nullptr;
   for(const auto &cat : node->categories) {
     for(const auto &pin : cat.pins) if(pin.ref == ref) return &pin;
@@ -467,8 +515,17 @@ Model Project::Events::Graph::collect(Project &project, Object &root, Kind kind,
     if(ev.engine && namespaceOf(name) == scopeNs) model.scopeEvents.push_back(name);
   }
 
+  for(const auto &entry : project.getAssets().getTypeEntries(FileType::CANVAS)) {
+    if(entry.canvas) model.canvases.push_back(canvasNode(c, *entry.canvas, entry.conf.uuid));
+  }
+
   for(const auto &use : scanSourceDir(fs::path{project.getPath()} / "src" / "user")) {
     if(!use.isPin) model.codeNames.insert(key(use.name));
+  }
+  for(const auto &node : model.canvases) {
+    for(const auto &cat : node.categories) {
+      for(const auto &pin : cat.pins) for(const auto &name : pin.names) model.allNames.insert(key(name));
+    }
   }
   for(const auto &node : model.nodes) {
     for(const auto &cat : node.categories) {
@@ -482,7 +539,11 @@ std::vector<Wire> Project::Events::Graph::wires(const Model &model, const std::s
 {
   struct Sides { std::vector<PinRef> out{}, in{}; };
   std::map<std::string, Sides> byName{};
-  for(const auto &node : model.nodes) {
+  std::vector<const Node*> all{};
+  for(const auto &node : model.nodes) all.push_back(&node);
+  for(const auto &node : model.canvases) all.push_back(&node);
+  for(const auto *nodePtr : all) {
+    const auto &node = *nodePtr;
     for(const auto &cat : node.categories) {
       for(const auto &pin : cat.pins) {
         for(const auto &name : pin.names) {
@@ -543,11 +604,11 @@ std::string Project::Events::Graph::wireName(const Model &model, const PinRef &o
   return {};
 }
 
-std::string Project::Events::Graph::autoName(const Model &model, const PinRef &out)
+std::string Project::Events::Graph::autoName(const Model &model, const PinRef &out, const std::string &ns)
 {
-  const auto *node = model.find(out.node);
+  const auto *node = out.canvas ? model.findCanvas(out.canvas) : model.find(out.node);
   const auto *pin = model.findPin(out);
-  const std::string base = model.ns + "::" + sanitize(node ? node->name : "Object") + "." +
+  const std::string base = (ns.empty() ? model.ns : ns) + "::" + sanitize(node ? node->name : "Object") + "." +
                            sanitize(pin ? pin->label : out.pin);
   std::string candidate = base;
   for(int n = 2; model.allNames.contains(candidate) || model.codeNames.contains(candidate); ++n) {
@@ -558,8 +619,16 @@ std::string Project::Events::Graph::autoName(const Model &model, const PinRef &o
 
 bool Project::Events::Graph::bind(Project &project, Object &root, const Model &model, const PinRef &ref, const std::string &name)
 {
-  (void)project;
   if(name.empty()) return false;
+  if(ref.canvas) {
+    auto *canvas = findCanvasAsset(project, ref.canvas);
+    if(!canvas) return false;
+    auto &names = (ref.input ? canvas->bindings.in : canvas->bindings.out)[ref.pin];
+    if(std::find(names.begin(), names.end(), name) != names.end()) return false;
+    names.push_back(name);
+    canvas->save();
+    return true;
+  }
   const auto *node = model.find(ref.node);
   auto *obj = findObj(root, ref.node);
   if(!node || !obj) return false;
@@ -605,7 +674,16 @@ bool Project::Events::Graph::bind(Project &project, Object &root, const Model &m
 
 bool Project::Events::Graph::unbind(Project &project, Object &root, const Model &model, const PinRef &ref, const std::string &name)
 {
-  (void)project;
+  if(ref.canvas) {
+    auto *canvas = findCanvasAsset(project, ref.canvas);
+    if(!canvas) return false;
+    auto &map = ref.input ? canvas->bindings.in : canvas->bindings.out;
+    auto it = map.find(ref.pin);
+    if(it == map.end() || std::erase(it->second, name) == 0) return false;
+    if(it->second.empty()) map.erase(it);
+    canvas->save();
+    return true;
+  }
   const auto *node = model.find(ref.node);
   auto *obj = findObj(root, ref.node);
   if(!node || !obj) return false;
@@ -663,7 +741,7 @@ std::string Project::Events::Graph::connect(Project &project, Object &root, cons
   if(out.input || !in.input) return {};
   auto name = wireName(model, out);
   if(name.empty()) {
-    name = autoName(model, out);
+    name = autoName(model, out, (out.canvas || in.canvas) ? "ui" : "");
     if(!Graph::bind(project, root, model, out, name)) return {};
   }
   Graph::bind(project, root, model, in, name);
@@ -679,8 +757,13 @@ bool Project::Events::Graph::disconnect(Project &project, Object &root, const Mo
 
   // a direct wire: the output keeps firing while something else still listens, or when the
   // event is not one this graph makes
-  if(namespaceOf(wire.name) != model.ns || model.codeNames.contains(key(wire.name))) return changed;
-  for(const auto &node : model.nodes) {
+  const bool canvasWire = wire.from.pin.canvas || wire.to.pin.canvas;
+  if(namespaceOf(wire.name) != (canvasWire ? std::string{"ui"} : model.ns) || model.codeNames.contains(key(wire.name))) return changed;
+  std::vector<const Node*> everyNode{};
+  for(const auto &node : model.nodes) everyNode.push_back(&node);
+  for(const auto &node : model.canvases) everyNode.push_back(&node);
+  for(const auto *nodePtr : everyNode) {
+    const auto &node = *nodePtr;
     for(const auto &cat : node.categories) {
       for(const auto &pin : cat.pins) {
         if(!pin.ref.input || pin.ref == wire.to.pin)continue;
@@ -725,6 +808,10 @@ namespace
 
 std::string Project::Events::Graph::describe(Project &project, Object &root, const PinRef &ref)
 {
+  if(ref.canvas) {
+    auto *canvas = findCanvasAsset(project, ref.canvas);
+    return "canvas:" + (canvas ? canvas->name : std::string{"?"}) + "|" + ref.pin;
+  }
   std::string res = objectPath(root, ref.node);
   if(auto *obj = findObj(root, ref.node); obj && !ref.path.empty() && obj->isPrefabInstance()) {
     // the inner object's names, as parsePin() reads them
@@ -745,6 +832,15 @@ PinRef Project::Events::Graph::parsePin(Project &project, Object &root, const Mo
   if(bar == std::string::npos) return {};
   const auto path = text.substr(0, bar);
   const auto spec = text.substr(bar + 1);
+
+  if(path.starts_with("canvas:")) {
+    for(const auto &node : model.canvases) {
+      if(node.name != path.substr(7))continue;
+      PinRef ref{0, {}, 0, spec, input, false, node.canvas};
+      return model.findPin(ref) ? ref : PinRef{};
+    }
+    return {};
+  }
 
   // the object: names from the top; inside an instance they continue into its prefab
   Object *node = &root;

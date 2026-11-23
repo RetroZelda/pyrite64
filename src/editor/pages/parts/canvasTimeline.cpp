@@ -418,7 +418,9 @@ void Editor::CanvasTimeline::draw(Project::Canvas& canvas, uint64_t selectedUuid
             auto& ev = clip.events[ei];
             float ex = timeToX(ev.time), ey = evY + evLaneH * 0.5f;
             ImU32 ecol = (ev.action == Project::CanvasTimelineEvent::Action::Seek)
-                       ? IM_COL32(120, 220, 160, 255) : IM_COL32(230, 150, 120, 255);
+                       ? IM_COL32(120, 220, 160, 255)
+                       : (ev.action == Project::CanvasTimelineEvent::Action::FireOutput // Fork: event graph
+                          ? IM_COL32(190, 150, 235, 255) : IM_COL32(230, 150, 120, 255));
             if (ei == selEvent) ecol = IM_COL32(255, 220, 120, 255);
             dl->AddTriangleFilled({ex - 4, ey - 5}, {ex + 4, ey - 5}, {ex, ey + 5}, ecol);
             ImGui::PushID(3000 + ei);
@@ -542,10 +544,15 @@ void Editor::CanvasTimeline::draw(Project::Canvas& canvas, uint64_t selectedUuid
         } else {
             ImGui::SetNextItemWidth(90);
             if (ImGui::DragFloat("Time##evi", &ev.time, 0.02f, 0.f, clip.duration, "%.2f")) Editor::CanvasHistory::markChanged("Event time");
-            int act = (int)ev.action; const char* ACTS[] = { "FireEvent", "Seek" };
+            int act = (int)ev.action; const char* ACTS[] = { "FireEvent", "Seek", "FireOutput" };
             ImGui::SameLine(); ImGui::SetNextItemWidth(110);
-            if (ImGui::Combo("Action##evi", &act, ACTS, 2)) { ev.action = (Project::CanvasTimelineEvent::Action)act; Editor::CanvasHistory::markChanged("Event action"); }
-            if (ev.action == Project::CanvasTimelineEvent::Action::FireEvent) {
+            if (ImGui::Combo("Action##evi", &act, ACTS, 3)) { ev.action = (Project::CanvasTimelineEvent::Action)act; Editor::CanvasHistory::markChanged("Event action"); }
+            if (ev.action == Project::CanvasTimelineEvent::Action::FireOutput) {
+                // Fork: event graph, fires the canvas's Marker.<name> output pin
+                ImGui::SetNextItemWidth(140);
+                if (ImGui::InputTextWithHint("Marker##evi", "name", &ev.eventName)) Editor::CanvasHistory::markChanged("Marker name");
+                ImGui::SetItemTooltip("Fires the canvas's output pin Marker.<name>; bind it in Event Pins");
+            } else if (ev.action == Project::CanvasTimelineEvent::Action::FireEvent) {
                 ImGui::SetNextItemWidth(140);
                 std::string en = ev.eventName.empty() ? "(event)" : ev.eventName;
                 if (ImGui::BeginCombo("Name##evi", en.c_str())) {

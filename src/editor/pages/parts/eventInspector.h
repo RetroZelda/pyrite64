@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace Project { class Object; }
+namespace Project { class Object; struct Canvas; }
 namespace Project::Component { struct Entry; }
 
 namespace Editor::EventInspector
@@ -40,4 +40,7 @@ namespace Editor::EventInspector
    * where the default target reaches nothing.
    */
   void drawLinks(Project::Object &instance, bool readOnly, bool inScene);
+
+  /** The pins of a UI canvas and their bindings, for the canvas editor (PLAN 9). */
+  void drawCanvas(Project::Canvas &canvas);
 }

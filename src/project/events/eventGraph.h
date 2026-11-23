@@ -36,7 +36,9 @@ namespace Project::Events::Graph
     std::string pin{};            // the pin; for a parent link, the link as the prefab writes it
     bool input{false};
     bool link{false};             // a parent link of an instance node
+    uint64_t canvas{0};           // a pin of this UI canvas (node is 0), PLAN 9
 
+    [[nodiscard]] bool valid() const { return node != 0 || canvas != 0; }
     bool operator==(const PinRef&) const = default;
     bool operator<(const PinRef &other) const;
   };
@@ -69,6 +71,7 @@ namespace Project::Events::Graph
     std::string prefab{};  // instance nodes: the prefab's name
     bool builtin{false};   // a built-in event object (an engine script)
     bool delay{false};     // Delay or Frame Delay: a loop through it is fine
+    uint64_t canvas{0};    // a UI canvas node (uuid is 0)
     std::vector<Category> categories{};
 
     [[nodiscard]] bool bound() const;
@@ -89,12 +92,14 @@ namespace Project::Events::Graph
     std::string ns{};      // namespace of the events the graph creates
     std::string title{};
     std::vector<Node> nodes{};              // in tree order
+    std::vector<Node> canvases{};           // every UI canvas of the project, PLAN 9
     std::vector<System> systems{};          // sorted, Engine last
     std::vector<std::string> scopeEvents{}; // the scope node: scene::Loaded, ... or prefab::Spawned, ...
     std::set<std::string> codeNames{};      // "..."_event literals in game code
     std::set<std::string> allNames{};       // every name some pin is bound to
 
     [[nodiscard]] const Node* find(uint32_t uuid) const;
+    [[nodiscard]] const Node* findCanvas(uint64_t uuid) const;
     [[nodiscard]] const Pin* findPin(const PinRef &ref) const;
   };
 
@@ -133,8 +138,11 @@ namespace Project::Events::Graph
   /** The event an output pin uses on a new wire: its first one that connects here, or empty. */
   std::string wireName(const Model &model, const PinRef &out);
 
-  /** The name a new wire from 'out' creates: <ns>::<Object>.<Pin>, made unique in the graph. */
-  std::string autoName(const Model &model, const PinRef &out);
+  /**
+   * The name a new wire from 'out' creates: <ns>::<Object>.<Pin>, made unique in the graph. A wire
+   * to or from a canvas makes a ui:: event, since a canvas belongs to no graph (pass ns "ui").
+   */
+  std::string autoName(const Model &model, const PinRef &out, const std::string &ns = {});
 
   // Edits. 'root' is the same object collect() was given; each returns true if something changed.
 
@@ -156,7 +164,7 @@ namespace Project::Events::Graph
   /**
    * A pin as text, for the command line and messages: the object's path, '|', then the category
    * and the pin. "Lever|LeverScript.Pulled", "Lever|Object.Enable", "K1/Plate|TestPlate.Press"
-   * (a pin inside the instance K1), "K2|link.prefab_1::Alarm" (a parent link).
+   * (a pin inside the instance K1), "K2|link.prefab_1::Alarm" (a parent link), "canvas:HUD|Show".
    */
   std::string describe(Project &project, Object &root, const PinRef &ref);
 

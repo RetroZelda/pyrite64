@@ -46,6 +46,7 @@ namespace P64::User::EventTest
     // phase 4, value: x position of the prefab instance the recorder sits in
     KitSpawned, KitDoorOpened, SirenHeard, TallyHeard,
     SirenFar, // the siren heard its grandparent through prefab_2::
+    HudFocused, HudMid, HudDone, // phase 6: the TestHud canvas's output pins
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -56,6 +57,7 @@ namespace P64::User::EventTest
     "ZoneEnterCb", "ZoneExitCb", "LampReady", "LampDisabled", "LampEnabled", "DoomedDestroyed",
     "ChainRelayed", "ChainDelayed", "BlipSpawned", "Logic", "KitSpawned", "KitDoorOpened",
     "SirenHeard", "TallyHeard", "SirenFar",
+    "HudFocused", "HudMid", "HudDone",
   };
 
   struct Record
@@ -84,6 +86,7 @@ namespace P64::User::EventTest
     T_PREFABS,  // phase 4: prefab scope per instance, nesting, numbered names, overrides, links, spawning
     T_NESTING,  // phase 4: scene 7, the same records before and after To Prefab and Unpack (nestingChecks.sh)
     T_GRAPH,    // phase 5: scene 8, wired only with the Events window's operations (graphChecks.sh)
+    T_CANVAS,   // phase 6: scene 9, an object shows a canvas and plays its clip; its marker, clip end and focus reach a script
     T_COUNT
   };
 

@@ -1,0 +1,100 @@
+{
+  "animations": [
+    {
+      "autoPlay": false,
+      "duration": 0.10000000149011612,
+      "events": [
+        {
+          "action": 2,
+          "eventName": "Mid",
+          "seekTime": 0.0,
+          "targetAnim": -1,
+          "time": 0.05000000074505806
+        }
+      ],
+      "name": "Flash",
+      "timeSource": 0,
+      "timeVar": "",
+      "tracks": []
+    }
+  ],
+  "conf": {
+    "gridSizeX": 8,
+    "gridSizeY": 8,
+    "showGrid": true,
+    "viewportHeight": 240,
+    "viewportWidth": 320
+  },
+  "elements": [
+    {
+      "children": [],
+      "name": "Button",
+      "props": {
+        "color": {
+          "isBound": false,
+          "val": [
+            80,
+            160,
+            220,
+            255
+          ]
+        },
+        "focusable": {
+          "isBound": false,
+          "val": true
+        },
+        "height": {
+          "isBound": false,
+          "val": 16.0
+        },
+        "width": {
+          "isBound": false,
+          "val": 40.0
+        }
+      },
+      "rotation": {
+        "isBound": false,
+        "val": 0.0
+      },
+      "type": 2,
+      "uuid": 7357000000000000101,
+      "visible": {
+        "isBound": false,
+        "val": true
+      },
+      "x": {
+        "isBound": false,
+        "val": 140.0
+      },
+      "y": {
+        "isBound": false,
+        "val": 200.0
+      }
+    }
+  ],
+  "eventBindings": {
+    "in": {
+      "PlayClip.Flash": [
+        "ui::Driver.Flash"
+      ],
+      "Show": [
+        "ui::Driver.Show"
+      ]
+    },
+    "out": {
+      "ClipFinished.Flash": [
+        "ui::TestHud.ClipFinishedFlash"
+      ],
+      "Focused.Button": [
+        "ui::TestHud.FocusedButton"
+      ],
+      "Marker.Mid": [
+        "ui::TestHud.MarkerMid"
+      ]
+    }
+  },
+  "events": [],
+  "name": "TestHud",
+  "uuid": 7357000000000000100,
+  "variables": []
+}

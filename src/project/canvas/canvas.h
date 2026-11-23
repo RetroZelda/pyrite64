@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "json.hpp"          // nlohmann::json (via tiny3d include path)
+#include "../events/eventBindings.h" // Fork: event graph
 
 namespace Project
 {
@@ -128,12 +129,13 @@ namespace Project
 
     // A timeline event: either fires a named canvas event into the event channel,
     // or performs a built-in Seek (jump a clip to a time). Looping = Seek-to-0 at the end.
+    // Fork: event graph. FireOutput fires the canvas's Marker.<eventName> output pin.
     struct CanvasTimelineEvent
     {
-        enum class Action : uint8_t { FireEvent = 0, Seek };
+        enum class Action : uint8_t { FireEvent = 0, Seek, FireOutput };
         float time{0.0f};
         Action action{Action::FireEvent};
-        std::string eventName;                  // FireEvent: the canvas event name
+        std::string eventName;                  // FireEvent: the canvas event name; FireOutput: the marker
         int   targetAnim{-1};                   // Seek: clip index to seek (-1 = self)
         float seekTime{0.0f};                   // Seek: target time (seconds)
 
@@ -222,6 +224,7 @@ namespace Project
         std::vector<CanvasEventDef> events;
         std::vector<CanvasAnimation> animations;  // canvas-scoped clips (Phase 5)
         std::vector<CanvasElement> elements;
+        Events::Bindings bindings;                // Fork: event graph, the canvas's pins ("eventBindings")
 
         void load(const std::string& filePath);
         void save(const std::string& filePath) const;

@@ -5,6 +5,7 @@
 #include "pyrite64_version.h"
 #include "editorScene.h"
 #include "../../cli.h"
+#include "parts/eventInspector.h"
 
 #include "IconsMaterialDesignIcons.h"
 #include "imgui.h"
@@ -522,6 +523,7 @@ void Editor::Scene::draw()
       canvasSettings.draw(*openedCanvas);
       canvasVariables.draw(*openedCanvas);
       canvasEvents.draw(*openedCanvas);
+      Editor::EventInspector::drawCanvas(*openedCanvas); // Fork: event graph
     } else {
       assetInspector.draw();
     }

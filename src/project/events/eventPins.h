@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace Project { class Project; }
+namespace Project { class Project; struct Canvas; struct CanvasElement; }
 namespace Project::Component { struct Entry; }
 
 namespace Project::Events
@@ -29,4 +29,15 @@ namespace Project::Events
 
   /** A component's name for messages and nodes: the script name for a Code component. */
   std::string displayName(Project &project, const Component::Entry &comp);
+
+  /**
+   * Pins of a UI canvas (PLAN 9), from its content. Inputs: Show, Hide, PlayClip.<clip>,
+   * StopClip.<clip>, Event.<event>. Outputs: Focused/Blurred/Activated.<element> for focusable
+   * elements, ClipFinished.<clip>, Marker.<name> for "Fire output" timeline markers. Clips are the
+   * canvas's own (not element clips); the order is fixed, generated code indexes it.
+   */
+  PinList canvasPins(const Canvas &canvas);
+
+  /** A canvas element is focusable (its "focusable" property is set, not bound). */
+  bool elementFocusable(const CanvasElement &element);
 }

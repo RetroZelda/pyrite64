@@ -6,6 +6,8 @@
 #include "../utils/fs.h"
 #include "../utils/string.h"
 #include "../utils/logger.h"
+#include "../project/events/eventPins.h"
+#include "../project/events/eventRules.h"
 #include "../project/canvas/canvas.h"
 
 #include <filesystem>
@@ -815,10 +817,15 @@ namespace
     }
 
     // A UI element carrying a component script (Phase 3).
+    // Fork: event graph. A focusable element without a script takes part too when one of its
+    // Focused/Blurred/Activated pins is bound; its scriptIdx is NO_SCRIPT.
+    constexpr uint32_t NO_SCRIPT = 0xFFFFFFFFu;
+
     struct ScriptedElem
     {
-        uint32_t scriptIdx;  // index into the generated ScriptEntry table
+        uint32_t scriptIdx;  // index into the generated ScriptEntry table, or NO_SCRIPT
         bool     focusable;  // participates in focus navigation
+        std::string name{};  // element name, for its focus pins
     };
 
     bool elemFocusable(const CanvasElement& e)
@@ -928,18 +935,139 @@ namespace
     }
 
     // Walk the tree collecting elements that reference a resolvable script.
-    void collectScriptedElements(const CanvasElement& e,
+    bool focusPinBound(const Canvas& c, const std::string& elemName)
+    {
+        for (const char* kind : {"Focused.", "Blurred.", "Activated."}) {
+            auto it = c.bindings.out.find(std::string{kind} + elemName);
+            if (it != c.bindings.out.end() && !it->second.empty()) return true;
+        }
+        return false;
+    }
+
+    void collectScriptedElements(const Canvas& canvas, const CanvasElement& e,
                                  const std::unordered_map<uint64_t, uint32_t>& codeIdx,
                                  std::vector<ScriptedElem>& out)
     {
+        bool added = false;
         if (e.scriptUuid != 0)
         {
             auto it = codeIdx.find(e.scriptUuid);
-            if (it != codeIdx.end())
-                out.push_back({it->second, elemFocusable(e)});
+            if (it != codeIdx.end()) { out.push_back({it->second, elemFocusable(e), e.name}); added = true; }
         }
+        if (!added && elemFocusable(e) && focusPinBound(canvas, e.name))
+            out.push_back({NO_SCRIPT, true, e.name});
         for (const auto& c : e.children)
-            collectScriptedElements(c, codeIdx, out);
+            collectScriptedElements(canvas, c, codeIdx, out);
+    }
+
+    std::vector<ScriptedElem> scriptedElems(const Canvas& c, const std::unordered_map<uint64_t, uint32_t>& codeIdx)
+    {
+        std::vector<ScriptedElem> se;
+        for (const auto& e : c.elements) collectScriptedElements(c, e, codeIdx, se);
+        return se;
+    }
+
+    // ---- Fork: event graph, a canvas's pins on the event bus (PLAN 9) ----
+
+    // the valid names one pin of the canvas is bound to (the build reports the others)
+    std::vector<std::string> boundNames(const Canvas& c, bool input, const std::string& pin)
+    {
+        std::vector<std::string> res;
+        const auto& map = input ? c.bindings.in : c.bindings.out;
+        auto it = map.find(pin);
+        if (it == map.end()) return res;
+        for (const auto& n : it->second) {
+            auto parsed = ::Project::Events::parse(n);
+            if (parsed.error != P64::Events::NameError::None) continue;
+            if (parsed.id.scope == P64::Events::Scope::Prefab || parsed.id.scope == P64::Events::Scope::Object) continue;
+            res.push_back(n);
+        }
+        return res;
+    }
+
+    // index of a bound output pin of the canvas, -1 when nothing is bound to it
+    int outPin(const Canvas& c, const std::string& pin)
+    {
+        auto pins = ::Project::Events::canvasPins(c);
+        int idx = pins.indexOf(false, pin);
+        return (idx >= 0 && !boundNames(c, false, pin).empty()) ? idx : -1;
+    }
+
+    std::string eventIdExpr(const std::string& name)
+    {
+        auto parsed = ::Project::Events::parse(name);
+        const char* scope = "Global";
+        if (parsed.id.scope == P64::Events::Scope::Scene) scope = "Scene";
+        else if (parsed.id.scope == P64::Events::Scope::UI) scope = "UI";
+        char hex[16];
+        snprintf(hex, sizeof hex, "0x%08Xu", (unsigned)parsed.id.hash);
+        return std::string{"P64::Events::EventId{"} + hex + ", P64::Events::Scope::" + scope + ", 0}";
+    }
+
+    // fireOut_<Canvas>(pin, value, sender) posts what an output pin is bound to; onIn_<Canvas>
+    // acts on an input pin's events. Listeners are registered in uiInitializeBindings.
+    void generatePinGlue(std::string& src, const Canvas& c)
+    {
+        auto pins = ::Project::Events::canvasPins(c);
+        src += "    // Fork: event graph, the pins of canvas " + c.name + "\n";
+        src += "    [[maybe_unused]] static void fireOut_" + c.name + "(uint8_t pin, uint32_t value, uint16_t sender)\n    {\n";
+        src += "        (void)value; (void)sender;\n        switch (pin)\n        {\n";
+        for (size_t i = 0; i < pins.out.size(); ++i) {
+            auto names = boundNames(c, false, pins.out[i]);
+            if (names.empty()) continue;
+            src += "            case " + std::to_string(i) + ": // " + pins.out[i] + "\n";
+            for (const auto& n : names) src += "                P64::Events::post(" + eventIdExpr(n) + ", value, sender); // " + n + "\n";
+            src += "                break;\n";
+        }
+        src += "            default: break;\n        }\n    }\n";
+
+        size_t listeners = 0;
+        for (const auto& pin : pins.in) listeners += boundNames(c, true, pin).size();
+        if (listeners == 0) { src += "\n"; return; }
+
+        const std::string scene = "P64::UI::UISceneType::" + c.name;
+        src += "    static P64::Events::Listener inListen_" + c.name + "[" + std::to_string(listeners) + "]{};\n";
+        src += "    static void onIn_" + c.name + "(const P64::Events::Event& ev, void* user)\n    {\n";
+        src += "        (void)ev;\n        switch ((uint32_t)(uintptr_t)user)\n        {\n";
+        for (size_t i = 0; i < pins.in.size(); ++i) {
+            const auto& pin = pins.in[i];
+            if (boundNames(c, true, pin).empty()) continue;
+            std::string action;
+            if (pin == "Show") action = "P64::UI::setSceneEnabled(" + scene + ", true);";
+            else if (pin == "Hide") action = "P64::UI::setSceneEnabled(" + scene + ", false);";
+            else if (pin.rfind("PlayClip.", 0) == 0 || pin.rfind("StopClip.", 0) == 0) {
+                const bool play = pin[0] == 'P';
+                const auto clip = pin.substr(9);
+                for (size_t ai = 0; ai < c.animations.size(); ++ai) {
+                    if (c.animations[ai].name != clip) continue;
+                    action = std::string{"P64::UI::"} + (play ? "playAnimation" : "stopAnimation") + "<" + scene
+                           + ">((P64::UI::Types::" + c.name + "Data::Anim)" + std::to_string(ai) + ");";
+                    break;
+                }
+            } else if (pin.rfind("Event.", 0) == 0) {
+                int idx = eventIndex(c, pin.substr(6));
+                if (idx >= 0) action = "P64::UI::post<" + scene + ">((uint16_t)" + std::to_string(idx) + ", ev.value);";
+            }
+            if (action.empty()) continue;
+            src += "            case " + std::to_string(i) + ": " + action + " break; // " + pin + "\n";
+        }
+        src += "            default: break;\n        }\n    }\n\n";
+    }
+
+    void generatePinListen(std::string& src, const Canvas& c)
+    {
+        auto pins = ::Project::Events::canvasPins(c);
+        size_t k = 0;
+        std::string lines;
+        for (size_t i = 0; i < pins.in.size(); ++i) {
+            for (const auto& n : boundNames(c, true, pins.in[i])) {
+                lines += "        inListen_" + c.name + "[" + std::to_string(k++) + "] = P64::Events::listen(" + eventIdExpr(n)
+                       + ", onIn_" + c.name + ", (void*)(uintptr_t)" + std::to_string(i) + "u); // " + pins.in[i] + " <- " + n + "\n";
+            }
+        }
+        if (k == 0) return;
+        // registered at every scene load: drop the previous scene's first
+        src += "        for (auto& l : inListen_" + c.name + ") P64::Events::unlisten(l);\n" + lines;
     }
 
     void generateUISceneTypes(const std::vector<const Canvas*>& canvases,
@@ -950,8 +1078,7 @@ namespace
         bool needsUiHeader = false;
         for (const auto* c : canvases)
         {
-            std::vector<ScriptedElem> se;
-            for (const auto& e : c->elements) collectScriptedElements(e, codeIdx, se);
+            std::vector<ScriptedElem> se = scriptedElems(*c, codeIdx);
             if (!se.empty() || !c->animations.empty()) { needsUiHeader = true; break; }
         }
 
@@ -1030,8 +1157,7 @@ namespace
 
             // Component-script state block (Phase 3): one flat blob per scripted element
             // + the current focus index. Reset/recreated per scene via UI::init().
-            std::vector<ScriptedElem> se;
-            for (const auto& e : c->elements) collectScriptedElements(e, codeIdx, se);
+            std::vector<ScriptedElem> se = scriptedElems(*c, codeIdx);
             if (!se.empty())
             {
                 src += "        // UI component-script state (Phase 3)\n";
@@ -1154,6 +1280,7 @@ namespace
             instantiations += "template void " + base + "::stopAnimation<" + scType + ">(" + animE + ");\n";
             instantiations += "template void " + base + "::seekAnimation<" + scType + ">(" + animE + ", float);\n";
             instantiations += "template " + dataT + "* " + base + "::getViewData<" + scType + ">();\n";
+            instantiations += "template void " + base + "::post<" + scType + ">(uint16_t, uint32_t);\n"; // Fork: event graph
         }
 
         src = Utils::replaceAll(src, "__UI_INIT_ENTRIES__", initEntries);
@@ -1170,8 +1297,7 @@ namespace
         src += "    static void behavior_" + c.name + "(P64::UI::Types::" + c.name
              + "Data& data, uint16_t ownerId, P64::UI::BehaviorPhase phase, float dt,"
                " const P64::ObjectEvent* ev)\n    {\n";
-        src += "        P64::Object* host = P64::ObjectRef{ownerId}.get();\n";
-        src += "        if (!host) return;\n";
+        src += "        P64::Object* host = P64::ObjectRef{ownerId}.get(); // null: no model bound, only pins work\n";
 
         // element -> script index + focusable tables
         src += "        static const uint32_t elemScript[" + std::to_string(n) + "] = {";
@@ -1181,23 +1307,33 @@ namespace
         for (size_t i = 0; i < n; ++i) src += std::string(i ? ", " : " ") + (se[i].focusable ? "true" : "false");
         src += " };\n";
         src += "        constexpr int N = " + std::to_string(n) + ";\n";
-        src += "        using P64::Script::getCodeByIndex;\n\n";
+        src += "        using P64::Script::getCodeByIndex;\n";
+        // Fork: event graph. Elements without a script (NO_SCRIPT) and calls without a host skip
+        // the script; focus changes also fire the element's Focused/Blurred/Activated pins.
+        src += "        static P64::Script::ScriptEntry noScript{};\n";
+        src += "        auto script = [&](int i) -> P64::Script::ScriptEntry& { return (host && elemScript[i] != 0xFFFFFFFFu) ? getCodeByIndex(elemScript[i]) : noScript; };\n";
+        for (const char* kind : {"Focused", "Blurred", "Activated"}) {
+            src += std::string("        static const int16_t pin") + kind + "[" + std::to_string(n) + "] = {";
+            for (size_t i = 0; i < n; ++i) src += (i ? ", " : " ") + std::to_string(outPin(c, std::string{kind} + "." + se[i].name));
+            src += " };\n";
+        }
+        src += "        auto firePin = [&](const int16_t* table, int i) { if (i >= 0 && i < N && table[i] >= 0) fireOut_" + c.name + "((uint8_t)table[i], (uint32_t)i, ownerId); };\n\n";
 
         src += "        switch (phase)\n        {\n";
         src += "            case P64::UI::BehaviorPhase::Init:\n";
-        src += "                for (int i=0;i<N;++i){ auto& s=getCodeByIndex(elemScript[i]);\n";
-        src += "                    assertf(P64::Script::getCodeSizeByIndex(elemScript[i]) <= sizeof(P64::UI::UIElemState),\n";
+        src += "                for (int i=0;i<N;++i){ auto& s=script(i);\n";
+        src += "                    if (elemScript[i] != 0xFFFFFFFFu) assertf(P64::Script::getCodeSizeByIndex(elemScript[i]) <= sizeof(P64::UI::UIElemState),\n";
         src += "                        \"UI script data (%u) exceeds UIElemState blob\", (unsigned)P64::Script::getCodeSizeByIndex(elemScript[i]));\n";
         src += "                    if (s.init) s.init(*host, &data.__elems[i]); }\n";
         src += "                break;\n";
         src += "            case P64::UI::BehaviorPhase::Destroy:\n";
-        src += "                for (int i=0;i<N;++i){ auto& s=getCodeByIndex(elemScript[i]); if(s.destroy) s.destroy(*host,&data.__elems[i]); }\n";
+        src += "                for (int i=0;i<N;++i){ auto& s=script(i); if(s.destroy) s.destroy(*host,&data.__elems[i]); }\n";
         src += "                break;\n";
         src += "            case P64::UI::BehaviorPhase::Update:\n";
-        src += "                for (int i=0;i<N;++i){ auto& s=getCodeByIndex(elemScript[i]); if(s.update) s.update(*host,&data.__elems[i],dt); }\n";
+        src += "                for (int i=0;i<N;++i){ auto& s=script(i); if(s.update) s.update(*host,&data.__elems[i],dt); }\n";
         src += "                break;\n";
         src += "            case P64::UI::BehaviorPhase::Event:\n";
-        src += "                if (ev) for (int i=0;i<N;++i){ auto& s=getCodeByIndex(elemScript[i]); if(s.onEvent) s.onEvent(*host,&data.__elems[i],*ev); }\n";
+        src += "                if (ev) for (int i=0;i<N;++i){ auto& s=script(i); if(s.onEvent) s.onEvent(*host,&data.__elems[i],*ev); }\n";
         src += "                break;\n";
         src += "            case P64::UI::BehaviorPhase::FocusInput:\n";
         src += "            {\n";
@@ -1205,19 +1341,19 @@ namespace
         src += "                int cur = data.__focusIndex;\n";
         src += "                if (cur < 0) {\n";
         src += "                    for (int i=0;i<N;++i) if (elemFocus[i]) { cur=i; data.__focusIndex=(int8_t)i;\n";
-        src += "                        auto& s=getCodeByIndex(elemScript[i]); if(s.onFocus) s.onFocus(*host,&data.__elems[i]); break; }\n";
+        src += "                        auto& s=script(i); if(s.onFocus) s.onFocus(*host,&data.__elems[i]); firePin(pinFocused, i); break; }\n";
         src += "                }\n";
         src += "                if (cur >= 0) {\n";
         src += "                    int dir = btn.d_down ? 1 : (btn.d_up ? -1 : 0);\n";
         src += "                    if (dir != 0) {\n";
         src += "                        int nx = cur; for (int s2=0;s2<N;++s2){ nx=(nx+dir+N)%N; if(elemFocus[nx]) break; }\n";
         src += "                        if (nx != cur) {\n";
-        src += "                            auto& so=getCodeByIndex(elemScript[cur]); if(so.onBlur) so.onBlur(*host,&data.__elems[cur]);\n";
-        src += "                            auto& sn=getCodeByIndex(elemScript[nx]);  if(sn.onFocus) sn.onFocus(*host,&data.__elems[nx]);\n";
+        src += "                            auto& so=script(cur); if(so.onBlur) so.onBlur(*host,&data.__elems[cur]); firePin(pinBlurred, cur);\n";
+        src += "                            auto& sn=script(nx);  if(sn.onFocus) sn.onFocus(*host,&data.__elems[nx]); firePin(pinFocused, nx);\n";
         src += "                            data.__focusIndex=(int8_t)nx; cur=nx;\n";
         src += "                        }\n";
         src += "                    }\n";
-        src += "                    if (btn.a) { auto& s=getCodeByIndex(elemScript[cur]); if(s.onActivate) s.onActivate(*host,&data.__elems[cur]); }\n";
+        src += "                    if (btn.a) { auto& s=script(cur); if(s.onActivate) s.onActivate(*host,&data.__elems[cur]); firePin(pinActivated, cur); }\n";
         src += "                }\n";
         src += "                break;\n";
         src += "            }\n";
@@ -1346,7 +1482,12 @@ namespace
             } else {
                 src += "          if (c.playing) {\n";
                 src += "            c.prevElapsed = c.elapsed; c.elapsed += dt;\n";
-                src += "            if (c.elapsed >= dur) { c.elapsed = dur; c.playing = 0; c.finished = 1; }\n";
+                const int finishedPin = outPin(c, "ClipFinished." + a.name); // Fork: event graph
+                if (finishedPin >= 0)
+                    src += "            if (c.elapsed >= dur) { c.elapsed = dur; c.playing = 0; c.finished = 1; fireOut_" + c.name
+                         + "(" + std::to_string(finishedPin) + ", " + ci + ", ownerId); }\n";
+                else
+                    src += "            if (c.elapsed >= dur) { c.elapsed = dur; c.playing = 0; c.finished = 1; }\n";
             }
 
             for (size_t ti = 0; ti < a.tracks.size(); ++ti)
@@ -1365,6 +1506,10 @@ namespace
                     int idx = eventIndex(c, ev.eventName);
                     if (idx >= 0)
                         src += "                events.send(" + std::to_string(idx) + ");\n";
+                } else if (ev.action == CanvasTimelineEvent::Action::FireOutput) { // Fork: event graph
+                    int pin = outPin(c, "Marker." + ev.eventName);
+                    if (pin >= 0)
+                        src += "                fireOut_" + c.name + "(" + std::to_string(pin) + ", 0, ownerId);\n";
                 } else { // Seek (applied inline so loops are seamless)
                     int target = ev.targetAnim < 0 ? (int)ai : ev.targetAnim;
                     if (target >= 0 && target < (int)anims.size()) {
@@ -1425,6 +1570,8 @@ namespace
                         int idx = eventIndex(c, ev.eventName);
                         if (idx >= 0)
                             src += "                events.send(" + std::to_string(idx) + ");\n";
+                    } else if (ev.action == CanvasTimelineEvent::Action::FireOutput) {
+                        // Fork: event graph, markers of element clips have no pin (validateCanvas warns)
                     } else { // Seek targets this instance's playback (per-instance loop)
                         int target = ev.targetAnim < 0 ? (int)ai : ev.targetAnim;
                         if (target >= 0 && target < (int)re->animations.size()) {
@@ -1459,7 +1606,8 @@ namespace
         src += "#include <rdpq_text.h>\n";
         src += "#include \"script/scriptTable.h\"\n";  // component-script dispatch
         src += "#include \"ui/uiEval.h\"\n";            // ease/lerp for timeline interpolation
-        src += "#include \"renderer/drawLayer.h\"\n\n";
+        src += "#include \"renderer/drawLayer.h\"\n";
+        src += "#include \"events/bus.h\"\n\n";            // Fork: event graph, canvas pins
 
         bool anyAnims = false, anyColorAnims = false;
         auto scanClip = [&](const CanvasAnimation& a) {
@@ -1504,6 +1652,8 @@ namespace
             src += "    }\n\n";
         }
 
+        for (const auto* c : canvases) generatePinGlue(src, *c); // Fork: event graph
+
         for (const auto* c : canvases)
         {
             // Non-const: AssetRef::get() is non-const (lazy-loads on first call)
@@ -1544,8 +1694,7 @@ namespace
         // Component-script/focus behavior functions (only for canvases with scripts).
         for (const auto* c : canvases)
         {
-            std::vector<ScriptedElem> se;
-            for (const auto& e : c->elements) collectScriptedElements(e, codeIdx, se);
+            std::vector<ScriptedElem> se = scriptedElems(*c, codeIdx);
             if (!se.empty())
                 generateBehaviorFn(src, *c, se);
         }
@@ -1600,9 +1749,9 @@ namespace
         {
             src += "        P64::UI::bindViewFn<P64::UI::UISceneType::"
                  + c->name + ">(draw_" + c->name + "_fn);\n";
+            generatePinListen(src, *c); // Fork: event graph
 
-            std::vector<ScriptedElem> se;
-            for (const auto& e : c->elements) collectScriptedElements(e, codeIdx, se);
+            std::vector<ScriptedElem> se = scriptedElems(*c, codeIdx);
             if (!se.empty())
             {
                 size_t focusCount = 0;
@@ -1686,6 +1835,11 @@ namespace
                     if (!ev.eventName.empty() && eventIndex(c, ev.eventName) < 0)
                         warnCanvas(c, where + "clip '" + a.name + "' FireEvent references missing event '"
                                  + ev.eventName + "'");
+                } else if (ev.action == CanvasTimelineEvent::Action::FireOutput) { // Fork: event graph
+                    if (ev.eventName.empty())
+                        warnCanvas(c, where + "clip '" + a.name + "' has a Fire output marker without a name");
+                    else if (!where.empty())
+                        warnCanvas(c, where + "clip '" + a.name + "' Fire output markers only work in the canvas's own clips");
                 } else {
                     int tgt = ev.targetAnim < 0 ? (int)ai : ev.targetAnim;
                     if (tgt < 0 || tgt >= (int)clips.size())

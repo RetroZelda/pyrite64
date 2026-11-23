@@ -8,6 +8,7 @@
 
 #include "../project.h"
 #include "../component/components.h"
+#include "../canvas/canvas.h"
 #include "../../../n64/engine/include/events/pins.h"
 
 int Project::Events::PinList::indexOf(bool input, const std::string &pin) const
@@ -59,4 +60,45 @@ const Project::Events::PinList& Project::Events::objectPins()
     return res;
   }();
   return pins;
+}
+
+bool Project::Events::elementFocusable(const CanvasElement &element)
+{
+  auto it = element.props.find("focusable");
+  return it != element.props.end() && !it->second.isBound
+      && it->second.value.is_boolean() && it->second.value.get<bool>();
+}
+
+namespace
+{
+  void focusPins(const Project::CanvasElement &element, std::vector<std::string> &out)
+  {
+    if(Project::Events::elementFocusable(element)) {
+      for(const char* kind : {"Focused.", "Blurred.", "Activated."}) {
+        const auto pin = std::string{kind} + element.name;
+        if(std::find(out.begin(), out.end(), pin) == out.end()) out.push_back(pin);
+      }
+    }
+    for(const auto &child : element.children) focusPins(child, out);
+  }
+}
+
+Project::Events::PinList Project::Events::canvasPins(const Canvas &canvas)
+{
+  PinList res{};
+  res.in = {"Show", "Hide"};
+  for(const auto &clip : canvas.animations) res.in.push_back("PlayClip." + clip.name);
+  for(const auto &clip : canvas.animations) res.in.push_back("StopClip." + clip.name);
+  for(const auto &ev : canvas.events) res.in.push_back("Event." + ev.name);
+
+  for(const auto &element : canvas.elements) focusPins(element, res.out);
+  for(const auto &clip : canvas.animations) res.out.push_back("ClipFinished." + clip.name);
+  for(const auto &clip : canvas.animations) {
+    for(const auto &ev : clip.events) {
+      if(ev.action != CanvasTimelineEvent::Action::FireOutput || ev.eventName.empty())continue;
+      const auto pin = "Marker." + ev.eventName;
+      if(std::find(res.out.begin(), res.out.end(), pin) == res.out.end()) res.out.push_back(pin);
+    }
+  }
+  return res;
 }

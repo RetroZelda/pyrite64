@@ -84,7 +84,7 @@ nodes that generate C++.
 - [x] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
 - [x] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
 - [x] Phase 5: Event Graph window
-- [ ] Phase 6: UI canvases
+- [x] Phase 6: UI canvases
 - [ ] Phase 7: tools (debug page, event browser), example project
 - [ ] Phase 8: Kentucky Castle adoption
 - [ ] Phase 9: retire the old messages
@@ -293,6 +293,23 @@ the editor for tests and recordings; `--window`, `--edit`, `--scene` and `--obje
   scene had exactly the expected bindings each time; screenshots checked by eye.
 - Unit tests 1,759 assertions; `buildChecks.sh` 5 of 5.
 
+### Phase 6: UI canvases (done 2026-11-23)
+
+**Built:** canvas pins from content (`canvasPins`), bindings stored in the `.canvas` file
+(`eventBindings`), the "Fire output" timeline marker, generated glue in `uiBindings.cpp` (output
+pins post from clip ends, markers and focus changes; input pins listen from
+`uiInitializeBindings()`), `UI::post<Scene>()` and `UI::setSceneEnabled()`, build checks and
+index entries for canvas bindings, the canvas editor's Event Pins section, and canvas nodes in the
+Events window and the graph command line (`canvas:<Name>|<Pin>`).
+
+**Verified:**
+
+- `test_events.z64`: 14 of 14. Scene 9: an object's output shows the TestHud canvas and another
+  plays its clip; the canvas's Focused output, its Fire output marker and its clip end each reach
+  a script input, in that order. Wired with `--cmd wire`, shown in the Events window.
+- Unit tests, `graphChecks.sh` 7 of 7, `buildChecks.sh` 5 of 5.
+- Kentucky Castle (scratch copy) builds and boots with its HUD drawn.
+
 ## Decisions made autonomously
 
 Questions that came up while the owner was away, answered with the recommended option. List them
@@ -381,3 +398,22 @@ all in the final report.
    mode still are not undoable, as before.
 31. (Phase 5) The Events window is a tab beside the 3D viewport (View > Events), docked there each
    time it appears.
+32. (Phase 6) Canvas bindings are stored under `eventBindings` in the `.canvas` file, because
+   `events` already holds the canvas's own event list.
+33. (Phase 6) Canvas pins: in Show, Hide, PlayClip.<clip>, StopClip.<clip>, Event.<event>; out
+   Focused/Blurred/Activated.<element> for focusable elements, ClipFinished.<clip>, Marker.<name>.
+   Only the canvas's own clips have pins; a Fire output marker in an element clip is reported by
+   the build and does nothing.
+34. (Phase 6) A focusable element without a script joins focus navigation when one of its focus
+   pins is bound, and the pins work even when no game object bound the canvas's model (component
+   scripts still need that object).
+35. (Phase 6) Show and Hide keep the canvas's layer (new `UI::setSceneEnabled`); Event.<name> uses
+   the new `UI::post<Scene>()`, which queues into a per-canvas inbox delivered with the next
+   update's events.
+36. (Phase 6) Canvas input pins are registered by the generated `uiInitializeBindings()`, after
+   dropping the previous scene's listeners, so they need the game to call it like the rest of the
+   generated UI bindings.
+37. (Phase 6) The Activated output was not tested in the emulator: it needs a real A press. It
+   uses the same code path as Focused, which is tested.
+38. (Phase 6) Canvas pin edits made in the Events window are saved straight to the `.canvas` file
+   and are not undoable there; canvas undo exists only in canvas mode.

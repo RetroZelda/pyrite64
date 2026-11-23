@@ -3,6 +3,7 @@
 * @license MIT
 */
 #include "eventBuilder.h"
+#include "../project/canvas/canvas.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -166,6 +167,38 @@ void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
     for(const auto &pin : script.pins.in) ctx.eventIndex.declaredInputPins.insert(pin);
   }
   ctx.eventIndex.addSourceUses(Project::Events::scanSourceDir(fs::path{project.getPath()} / "src" / "user"));
+
+  // UI canvases (PLAN 9): checked like an object's bindings, and counted in the index
+  for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::CANVAS)) {
+    if(!entry.canvas)continue;
+    const auto &canvas = *entry.canvas;
+    const auto pins = Project::Events::canvasPins(canvas);
+    for(const bool input : {true, false}) {
+      for(const auto &[pin, names] : input ? canvas.bindings.in : canvas.bindings.out) {
+        const std::string where = "canvas " + canvas.name + "." + pin;
+        if(pins.indexOf(input, pin) < 0) {
+          ctx.eventMessages.push_back({Message::Level::Warning, where + ": the canvas has no " +
+            std::string(input ? "input" : "output") + " pin '" + pin + "' any more; its bindings do nothing"});
+          continue;
+        }
+        for(const auto &name : names) {
+          auto problem = Project::Events::nameProblem(name);
+          if(problem.empty()) {
+            const auto scope = Project::Events::parse(name).id.scope;
+            if(scope == Project::Events::Scope::Prefab || scope == Project::Events::Scope::Object) {
+              problem = "'" + name + "': a canvas is not in the object tree, so it can only use ui::, scene::, global:: or a game namespace";
+            }
+          }
+          if(problem.empty()) problem = Project::Events::bindingProblem(ctx.eventIndex, ctx.eventCatalog, name, input);
+          if(!problem.empty()) {
+            ctx.eventMessages.push_back({Message::Level::Error, where + ": " + problem});
+            continue;
+          }
+          ctx.eventIndex.add(name, input ? Project::Events::UseKind::BoundIn : Project::Events::UseKind::BoundOut, where);
+        }
+      }
+    }
+  }
 }
 
 std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const ObjectBindings &input)

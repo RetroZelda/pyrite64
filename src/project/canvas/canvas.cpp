@@ -436,6 +436,7 @@ namespace Project
             for (const auto& e : j["elements"])
                 elements.push_back(CanvasElement::deserialize(e));
         }
+        bindings = j.contains("eventBindings") ? Events::Bindings::fromJson(j["eventBindings"]) : Events::Bindings{}; // Fork: event graph
     }
 
     std::string Canvas::serialize() const
@@ -461,6 +462,7 @@ namespace Project
         for (const auto& e : elements)
             elemsJson.push_back(nlohmann::json::parse(e.serialize()));
         j["elements"] = elemsJson;
+        if (!bindings.empty()) j["eventBindings"] = bindings.toJson(); // Fork: event graph
 
         return j.dump(2);
     }
@@ -486,6 +488,7 @@ namespace Project
         if (j.contains("elements") && j["elements"].is_array())
             for (const auto& e : j["elements"])
                 elements.push_back(CanvasElement::deserialize(e));
+        bindings = j.contains("eventBindings") ? Events::Bindings::fromJson(j["eventBindings"]) : Events::Bindings{};
     }
 
     void Canvas::save(const std::string& filePath) const

@@ -95,8 +95,12 @@ namespace
 
       if(cmd == "graph") {
         printf("graph: %s, creates %s:: events\n", kind == G::Kind::Scene ? "scene" : "prefab", model.ns.c_str());
-        for(const auto &node : model.nodes) {
-          printf("node %s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : "",
+        std::vector<const G::Node*> printed{};
+        for(const auto &node : model.nodes) printed.push_back(&node);
+        for(const auto &node : model.canvases) if(node.bound()) printed.push_back(&node);
+        for(const auto *nodePtr : printed) {
+          const auto &node = *nodePtr;
+          printf("node %s%s%s\n", node.name.c_str(), node.instance ? (" (instance of " + node.prefab + ")").c_str() : (node.canvas ? " (UI canvas)" : ""),
                  node.builtin ? " (built-in)" : "");
           for(const auto &cat : node.categories) {
             for(const auto &pin : cat.pins) {
@@ -127,19 +131,19 @@ namespace
         G::PinRef from{}, to{};
         if(!args.from.empty()) {
           from = G::parsePin(project, *root, model, args.from, false);
-          if(!from.node) throw std::runtime_error("no output pin '" + args.from + "'");
+          if(!from.valid()) throw std::runtime_error("no output pin '" + args.from + "'");
         }
         if(!args.to.empty()) {
           to = G::parsePin(project, *root, model, args.to, true);
-          if(!to.node) throw std::runtime_error("no input pin '" + args.to + "'");
+          if(!to.valid()) throw std::runtime_error("no input pin '" + args.to + "'");
         }
         if(cmd == "wire") {
-          if(from.node && to.node) {
+          if(from.valid() && to.valid()) {
             auto name = G::connect(project, *root, model, from, to);
             printf("wired with %s\n", name.c_str());
             res = !name.empty();
-          } else if(!args.event.empty() && (from.node || to.node)) {
-            res = G::bind(project, *root, model, from.node ? from : to, args.event);
+          } else if(!args.event.empty() && (from.valid() || to.valid())) {
+            res = G::bind(project, *root, model, from.valid() ? from : to, args.event);
             printf("%s %s\n", res ? "bound to" : "already bound to", args.event.c_str());
             res = true;
           } else {
@@ -147,14 +151,14 @@ namespace
           }
         } else {
           for(const auto &wire : G::wires(model, {}, true, true)) {
-            const bool fromOk = from.node ? (wire.from.type == G::End::Type::Pin && wire.from.pin == from) : wire.from.type != G::End::Type::Pin;
-            const bool toOk = to.node ? (wire.to.type == G::End::Type::Pin && wire.to.pin == to) : wire.to.type != G::End::Type::Pin;
+            const bool fromOk = from.valid() ? (wire.from.type == G::End::Type::Pin && wire.from.pin == from) : wire.from.type != G::End::Type::Pin;
+            const bool toOk = to.valid() ? (wire.to.type == G::End::Type::Pin && wire.to.pin == to) : wire.to.type != G::End::Type::Pin;
             if(!fromOk || !toOk || (!args.event.empty() && wire.name != args.event))continue;
             res |= G::disconnect(project, *root, model, wire);
             printf("removed the wire of %s\n", wire.name.c_str());
           }
-          if(!res && !args.event.empty() && (from.node || to.node)) {
-            res = G::unbind(project, *root, model, from.node ? from : to, args.event);
+          if(!res && !args.event.empty() && (from.valid() || to.valid())) {
+            res = G::unbind(project, *root, model, from.valid() ? from : to, args.event);
             if(res) printf("unbound %s\n", args.event.c_str());
           }
           if(!res) throw std::runtime_error("no such wire");

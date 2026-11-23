@@ -2,6 +2,8 @@
 #include "script/userScript.h"
 #include "scene/sceneManager.h"
 #include "debug/debugDraw.h"
+#include "ui/UI.h"
+#include "vi/swapChain.h"
 #include "./testLog.h"
 
 #include <vector>
@@ -9,6 +11,8 @@
 // Runtime test of the event bus (phase 1 of docs/todo/event-graph/PLAN.md).
 // Each test runs in a freshly loaded scene for a number of frames, then checks what the
 // listeners recorded. Results are printed through debugf and drawn on screen.
+
+namespace P64::UI::Generated { void uiInitializeBindings(); }
 
 constinit uint32_t P64::User::EventTest::currFrame = 0;
 constinit uint32_t P64::User::EventTest::activeTest = 0;
@@ -472,6 +476,27 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return expectExactly(e);
   }
 
+  // scene 9: the driver shows TestHud (Show pin) on frame 2 and plays its Flash clip (PlayClip
+  // pin) on frame 4. The canvas's first focusable element gets focus once it shows, the clip's
+  // Fire output marker fires halfway and its end fires ClipFinished: all three reach Watch.
+  bool checkCanvas()
+  {
+    std::vector<Expect> e{};
+    addSceneChange(e, 8, 9);
+    e.push_back({Rec::SceneLoaded,        1, 9, 0});
+    e.push_back({Rec::CurrentSceneLoaded, 1, 9, 0});
+    e.push_back({Rec::HudFocused, ANY, 0}); // element 0
+    e.push_back({Rec::HudMid,     ANY, 0});
+    e.push_back({Rec::HudDone,    ANY, 0}); // clip 0
+    if(!expectExactly(e)) return false;
+    // shown on frame 2: focus follows within a frame or two; the clip starts on frame 4
+    // records 0-3: the scene change, 4-5: loaded; then focus, marker, clip end
+    const bool ok = expectTrue(records[6].frame >= 2 && records[6].frame <= 4, "focus soon after Show")
+        && expectTrue(records[7].frame > 4 && records[8].frame > records[7].frame, "marker, then clip end, after Flash");
+    if(!ok) printRecords();
+    return ok;
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -486,6 +511,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Prefab scope and nesting",      6, 13, checkPrefabs},
     {"Same events after To Prefab and Unpack", 7, 5, checkNesting},
     {"Wired by the graph",            8, 6, checkGraph},
+    {"UI canvas pins",                9, 30, checkCanvas},
   };
 
   void runStep()
@@ -564,10 +590,22 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   void onScenePreLoad()
   {
     currFrame = 0;
+    P64::UI::init(); // phase 6: the UI canvases, driven like a game does
+  }
+
+  void onScenePostLoad()
+  {
+    P64::UI::Generated::uiInitializeBindings();
+  }
+
+  void onScenePostUnload()
+  {
+    P64::UI::destroy();
   }
 
   void onSceneUpdate()
   {
+    P64::UI::update(VI::SwapChain::getDeltaTime());
     if(done) return;
     ++currFrame;
     runStep();
@@ -599,6 +637,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
 
   void onSceneDraw2D()
   {
+    P64::UI::draw_2D();
     Debug::printStart();
 
     int16_t posY = 16;

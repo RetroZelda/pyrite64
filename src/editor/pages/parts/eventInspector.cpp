@@ -15,6 +15,8 @@
 
 #include "../../../context.h"
 #include "../../undoRedo.h"
+#include "../../canvasHistory.h"
+#include "../../../project/canvas/canvas.h"
 #include "../../../project/project.h"
 #include "../../../project/scene/object.h"
 #include "../../../project/component/components.h"
@@ -29,6 +31,15 @@ namespace
   using Project::Events::Exposed;
 
   constexpr ImVec4 COLOR_PROBLEM{1.0f, 0.45f, 0.4f, 1.0f};
+
+  // where edits are recorded: the scene's undo history, or a canvas's while drawing one
+  void (*markFn)(const char*) = nullptr;
+  const char* defaultNamespace = "scene::";
+  void mark(const char* what)
+  {
+    if(markFn) markFn(what);
+    else Editor::UndoRedo::getHistory().markChanged(what);
+  }
 
   // names offered by the picker: engine catalog plus every name used in the open scene
   std::vector<std::string> knownNames{};
@@ -211,7 +222,7 @@ namespace
 
         if(sec.readOnly)ImGui::BeginDisabled();
         if(ImGui::Button(muted ? ICON_MDI_EYE_OFF "##mute" : ICON_MDI_EYE "##mute")) {
-          Editor::UndoRedo::getHistory().markChanged(muted ? "Unmute Event Binding" : "Mute Event Binding");
+          mark(muted ? "Unmute Event Binding" : "Mute Event Binding");
           auto &target = ensureOverride(instance, sec.target.path, sec.comp, pin, input);
           if(muted) std::erase(target.mute, name);
           else target.mute.push_back(name);
@@ -232,7 +243,7 @@ namespace
       for(size_t i = 0; i < ovr->add.size(); ++i) {
         bool remove = false;
         if(drawBindingRow(ovr->add[i], sec.readOnly, remove)) {
-          Editor::UndoRedo::getHistory().markChanged(remove ? "Remove Event Binding" : "Edit Event Binding");
+          mark(remove ? "Remove Event Binding" : "Edit Event Binding");
           changed = true;
         }
         if(remove) {
@@ -275,8 +286,8 @@ namespace
       if(!sec.readOnly) {
         ImGui::SameLine();
         if(ImGui::SmallButton(ICON_MDI_PLUS "##add")) {
-          Editor::UndoRedo::getHistory().markChanged("Add Event Binding");
-          std::string fresh = Project::Events::namespaceOf(pin).empty() ? std::string{"scene::"} : std::string{};
+          mark("Add Event Binding");
+          std::string fresh = Project::Events::namespaceOf(pin).empty() ? std::string{defaultNamespace} : std::string{};
           if(overrides) ensureOverride(*sec.target.instance, sec.target.path, sec.comp, pin, input).add.push_back(fresh);
           else map[pin].push_back(fresh);
           changed = true;
@@ -290,7 +301,7 @@ namespace
         ImGui::SameLine();
         if(!exposed)ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.45f);
         if(ImGui::SmallButton(ICON_MDI_EXPORT "##expose")) {
-          Editor::UndoRedo::getHistory().markChanged(exposed ? "Hide Event Pin" : "Expose Event Pin");
+          mark(exposed ? "Hide Event Pin" : "Expose Event Pin");
           setExposed(root, sec.target.exposePath, sec.comp, pin, input, !exposed);
           changed = true;
         }
@@ -309,7 +320,7 @@ namespace
           for(size_t i = 0; i < names.size(); ++i) {
             bool remove = false;
             if(drawBindingRow(names[i], sec.readOnly, remove)) {
-              Editor::UndoRedo::getHistory().markChanged(remove ? "Remove Event Binding" : "Edit Event Binding");
+              mark(remove ? "Remove Event Binding" : "Edit Event Binding");
               changed = true;
             }
             if(remove) {
@@ -431,7 +442,7 @@ void Editor::EventInspector::drawLinks(Project::Object &instance, bool readOnly,
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - buttons);
     if(!problem.empty())ImGui::PushStyleColor(ImGuiCol_Text, COLOR_PROBLEM);
     if(ImGui::InputTextWithHint("##to", hint.c_str(), &to)) {
-      Editor::UndoRedo::getHistory().markChanged("Repoint Parent Link");
+      mark("Repoint Parent Link");
       setLink(link, to);
     }
     if(!problem.empty())ImGui::PopStyleColor();
@@ -442,13 +453,13 @@ void Editor::EventInspector::drawLinks(Project::Object &instance, bool readOnly,
 
     ImGui::SameLine();
     if(drawPicker(to)) {
-      Editor::UndoRedo::getHistory().markChanged("Repoint Parent Link");
+      mark("Repoint Parent Link");
       setLink(link, to);
       finished = true;
     }
     ImGui::SameLine();
     if(ImGui::Button(ICON_MDI_CLOSE "##reset") && ovr) {
-      Editor::UndoRedo::getHistory().markChanged("Reset Parent Link");
+      mark("Reset Parent Link");
       setLink(link, {});
       finished = true;
     }
@@ -465,4 +476,19 @@ void Editor::EventInspector::drawLinks(Project::Object &instance, bool readOnly,
       return o.isLink() && (o.to.empty() || o.to == Project::Events::shiftPrefabNumber(o.link, -1));
     });
   }
+}
+
+void Editor::EventInspector::drawCanvas(Project::Canvas &canvas)
+{
+  const auto pins = Project::Events::canvasPins(canvas);
+  markFn = [](const char* what) { Editor::CanvasHistory::markChanged(what); };
+  defaultNamespace = "ui::";
+  ImGui::PushID("canvasPins");
+  if(ImGui::CollapsingHeader(ICON_MDI_TRANSIT_CONNECTION_VARIANT "  Event Pins", ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::TextDisabled(ICON_MDI_INFORMATION_OUTLINE " A canvas can use ui::, scene::, global:: and game namespaces");
+    drawSection({canvas.bindings, pins, 0, false, Target{}});
+  }
+  ImGui::PopID();
+  markFn = nullptr;
+  defaultNamespace = "scene::";
 }

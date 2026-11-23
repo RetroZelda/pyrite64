@@ -105,6 +105,14 @@ namespace P64
         template<UISceneType Scene>
         void seekAnimation(typename UISceneTraits<Scene>::Anim clip, float seconds);
 
+        // Fork: event graph. Queues one of the canvas's own events from anywhere (the event
+        // bus, game code): it is delivered with the next update's events, like one sent from
+        // the model callback. Dropped when the queue (32 per scene) is full.
+        template<UISceneType Scene>
+        void post(uint16_t type, uint32_t value = 0);
+        template<UISceneType Scene, typename E, typename = std::enable_if_t<std::is_enum_v<E>>>
+        void post(E type, uint32_t value = 0) { post<Scene>((uint16_t)type, value); }
+
         // Returns a pointer to a scene's live Data (nullptr if not bound). Generated
         // per-repeater item-clip control functions use this to reach items[i].__pb (Phase 5e).
         template<UISceneType Scene>
@@ -117,6 +125,10 @@ namespace P64
         // top of lower ones (ties broken by scene enum index). Default 0 keeps the
         // historical enum-index ordering. Layering is established by gameplay code here.
         void setSceneState(UISceneType scene, bool enabled, int layer = 0);
+
+        // Fork: event graph. Enables or disables a UI scene and keeps its layer (the canvas's
+        // Show and Hide pins).
+        void setSceneEnabled(UISceneType scene, bool enabled);
 
         void init();
         void destroy();
