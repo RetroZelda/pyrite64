@@ -19,6 +19,7 @@ namespace P64::ObjectFlags
   constexpr uint16_t SELF_HIDDEN        = 1 << 6; // if true, object drawing is disabled
   constexpr uint16_t PARENTS_HIDDEN     = 1 << 7; // true if all ancestors are hidden, used to determine final hidden state
   // Fork: event graph. Bits 8 and up belong to the fork.
+  constexpr uint16_t PREFAB_ROOT        = 1 << 8; // root of a prefab instance (set by the build, kept on spawn): the prefab:: scope
   constexpr uint16_t EVENT_SCOPE        = 1 << 9; // event listeners are keyed to this object (its object:: or prefab:: scope)
   constexpr uint16_t WANTS_CONTACTS     = 1 << 10; // collision enter/exit is tracked for this object (bound collider pins or script callbacks)
 

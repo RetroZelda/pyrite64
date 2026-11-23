@@ -416,6 +416,45 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return ok;
   }
 
+  bool checkPrefabs()
+  {
+    std::vector<Expect> e{};
+    addSceneChange(e, 5, 6);
+    e.push_back({Rec::SceneLoaded,        1, 6, 0});
+    e.push_back({Rec::CurrentSceneLoaded, 1, 6, 0});
+    // prefab::Spawned in each kit placed in the scene, the nested ones included
+    e.push_back({Rec::KitSpawned, 1, 10});
+    e.push_back({Rec::KitSpawned, 1, 20});
+    e.push_back({Rec::KitSpawned, 1, 31});
+    e.push_back({Rec::KitSpawned, 1, 41});
+    e.push_back({Rec::KitSpawned, 1, 63}); // W1 (60) / Enc (+2) / Kit (+1)
+    e.push_back({Rec::KitDoorOpened, 2, 10}); // each plate opens only its own kit's door
+    e.push_back({Rec::KitDoorOpened, 3, 20});
+    e.push_back({Rec::KitDoorOpened, 4, 31}); // the kit nested in E1, through an override on E1
+    e.push_back({Rec::TallyHeard,    4, 30}); // prefab_1:: fires into the encounter around the kit
+    e.push_back({Rec::SirenHeard,    5, 31}); // E1's alarm reaches only the kit inside E1
+    e.push_back({Rec::SirenHeard,    6, 20}); // K2's repointed link: prefab_1::Alarm means scene::GlobalAlarm
+    e.push_back({Rec::KitSpawned,    9, 50}); // a kit spawned from code
+    e.push_back({Rec::KitDoorOpened,10, 50}); // reached with postTo()
+    e.push_back({Rec::SirenFar,     11, 63}); // prefab_2:: reaches the wing around the encounter; the
+                                              // other kits have no grandparent and stay silent
+    return expectExactly(e);
+  }
+
+  // scene 7 must give the same records as it is, wrapped into a prefab and unpacked again
+  bool checkNesting()
+  {
+    std::vector<Expect> e{};
+    addSceneChange(e, 6, 7);
+    e.push_back({Rec::SceneLoaded,        1, 7, 0});
+    e.push_back({Rec::CurrentSceneLoaded, 1, 7, 0});
+    e.push_back({Rec::KitSpawned,    1, 71});
+    e.push_back({Rec::KitDoorOpened, 2, 71}); // scene::Press7, posted by code
+    e.push_back({Rec::TallyHeard,    2, 0});  // scene::Kit7Opened, heard outside the group
+    e.push_back({Rec::SirenHeard,    3, 71}); // the horn's alarm, through the kit's repointed link
+    return expectExactly(e);
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -427,6 +466,8 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Pins, bindings and send()",     3, 6,  checkDoor},
     {"Collider enter/exit, object pins", 4, 26, checkContacts},
     {"Built-in event objects",        5, 9,  checkLogic},
+    {"Prefab scope and nesting",      6, 13, checkPrefabs},
+    {"Same events after To Prefab and Unpack", 7, 5, checkNesting},
   };
 
   void runStep()

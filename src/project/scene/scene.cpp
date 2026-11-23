@@ -13,6 +13,7 @@
 #include "../../utils/hash.h"
 #include "../../utils/jsonBuilder.h"
 #include "../../utils/logger.h"
+#include "../events/eventNesting.h" // Fork: event graph
 
 #define __LIBDRAGON_N64SYS_H 1
 #define PhysicalAddr(a) (uint64_t)(a)
@@ -324,6 +325,13 @@ uint64_t Project::Scene::createPrefabFromObject(uint32_t uuid, const std::string
     obj->rot.resolve(obj->propOverrides),
     obj->scale.resolve(obj->propOverrides));
 
+  // Fork: event graph. scene:: events only this subtree uses become the new prefab's own.
+  {
+    Events::Nesting::Report report{};
+    Events::Nesting::beforeWrap(*ctx.project, root, *obj, report);
+    for(const auto &line : report) Utils::Logger::log("To Prefab: " + line);
+  }
+
   auto prefabJson = prefab.serialize(*obj);
 
   std::string name = obj->name;
@@ -361,6 +369,9 @@ uint64_t Project::Scene::createPrefabFromObject(uint32_t uuid, const std::string
   obj->children.clear();
   obj->components.clear();
   obj->propOverrides.clear();
+  obj->events = {};         // Fork: event graph, the bindings now come from the definition
+  obj->eventOverrides.clear();
+  obj->eventExposed.clear();
   obj->uuidPrefab.value = prefab.uuid.value;
   obj->addPropOverride(obj->pos);
   obj->addPropOverride(obj->rot);
@@ -395,13 +406,17 @@ void Project::Scene::unpackPrefabInstance(uint32_t uuid)
   };
   cloneComponents(*inst, def);
 
+  // Fork: event graph. Each materialized node with its definition path, for the event fix-ups.
+  std::vector<Events::Nesting::UnpackedNode> unpacked{{&def, inst.get(), {}}};
+
   // Materialize the prefab's child tree with composed world transforms. Scene objects
   // are world-positioned, so each node bakes its world transform. Nested prefab
   // instances stay thin (keep uuidPrefab + their prefab-authored overrides).
-  std::function<void(Object&, std::shared_ptr<Object>, glm::vec3, glm::quat, glm::vec3)> build =
+  std::function<void(Object&, std::shared_ptr<Object>, glm::vec3, glm::quat, glm::vec3, std::vector<uint32_t>)> build =
     [&](Object &defNode, const std::shared_ptr<Object> &parent,
-        glm::vec3 pPos, glm::quat pRot, glm::vec3 pScale)
+        glm::vec3 pPos, glm::quat pRot, glm::vec3 pScale, std::vector<uint32_t> defPath)
   {
+    defPath.push_back(defNode.uuid);
     auto child = std::make_shared<Object>(*parent);
     child->name = defNode.name;
     child->uuid = Utils::Hash::randomU64();
@@ -430,16 +445,24 @@ void Project::Scene::unpackPrefabInstance(uint32_t uuid)
     }
 
     addObject(*parent, child);
+    unpacked.push_back({&defNode, child.get(), defPath});
 
     // A plain node's children, or for a nested instance the objects added to it in the prefab
     // (its own definition stays thin). They become world-placed scene objects under it.
     for(const auto &gc : defNode.children) {
-      build(*gc, child, cwPos, cwRot, cwScale);
+      build(*gc, child, cwPos, cwRot, cwScale, defPath);
     }
   };
 
   for(const auto &defChild : def.children) {
-    build(*defChild, inst, wPos, wRot, wScale);
+    build(*defChild, inst, wPos, wRot, wScale, {});
+  }
+
+  // Fork: event graph. The definition's bindings, in the scene's terms.
+  {
+    Events::Nesting::Report report{};
+    Events::Nesting::afterUnpack(*ctx.project, root, *inst, unpacked, report);
+    for(const auto &line : report) Utils::Logger::log("Unpack: " + line);
   }
 
   inst->uuidPrefab.value = 0;

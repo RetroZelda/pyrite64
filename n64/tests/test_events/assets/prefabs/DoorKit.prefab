@@ -1,0 +1,182 @@
+{
+  "version": 2,
+  "uuid": 735700010,
+  "obj": {
+    "children": [
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 6001,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426369
+            },
+            "events": {
+              "out": {
+                "Pressed": [
+                  "prefab::Plate.Pressed"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Plate",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6002,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 6003,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426370
+            },
+            "events": {
+              "in": {
+                "Open": [
+                  "prefab::Plate.Pressed"
+                ],
+                "Spawned": [
+                  "prefab::Spawned"
+                ]
+              },
+              "out": {
+                "Opened": [
+                  "prefab_1::KitDoorOpened"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Door",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6004,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 6005,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426371
+            },
+            "events": {
+              "in": {
+                "Heard": [
+                  "prefab_1::Alarm"
+                ],
+                "HeardFar": [
+                  "prefab_2::Lockdown"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Siren",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6006,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "DoorKit",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "selectable": true,
+    "uuid": 6007,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

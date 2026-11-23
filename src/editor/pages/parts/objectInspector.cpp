@@ -551,6 +551,33 @@ void Editor::ObjectInspector::draw() {
   // definition edit author via a fresh component layer (Dispatch).
   bool compViaPath = nested.isNested && !nested.directDefEdit;
 
+  // Fork: event graph (PLAN 6.2). Binding edits of locked prefab content become overrides on the
+  // instance that also stores the node's property overrides. In prefab edit mode the edited
+  // file's bindings are edited directly and their pins can be exposed. Instance nodes can
+  // repoint their parent links.
+  Editor::EventInspector::Target eventOverrides{}; // for locked content
+  Editor::EventInspector::Target eventDirect{};    // for content edited where it is written
+  Project::Object *eventLinks = nullptr;
+  bool eventLinksInScene = false;
+  if(isPrefabInst && !nested.readOnly) {
+    if(!nested.isNested) {
+      if(!ctx.isPrefabEditing(obj->uuid)) eventOverrides.instance = obj.get();
+      eventLinks = obj.get();
+      eventLinksInScene = true;
+    } else if(nested.directDefEdit) {
+      eventDirect.exposeRoot = srcObj;
+      eventDirect.exposePath = ctx.selSubPath;
+      if(nested.node->isPrefabInstance()) {
+        eventOverrides = eventDirect;
+        eventOverrides.instance = nested.node;
+        eventLinks = nested.node;
+      }
+    } else if(nested.authNode) {
+      eventOverrides.instance = nested.authNode;
+      eventOverrides.path = nested.relPath;
+    }
+  }
+
 
   {
     if (ImTable::start("General", tableObj)) {
@@ -728,11 +755,17 @@ void Editor::ObjectInspector::draw() {
     }
   }
 
-  // Fork: event graph, the pins every object has (Enable, Destroy, Ready, ...). Prefab content is
-  // read-only here until prefab instance overrides of bindings exist.
-  if(ImGui::CollapsingHeader(ICON_MDI_TRANSIT_CONNECTION_VARIANT "  Object Events")) {
-    Editor::EventInspector::drawObject(*compSrc, ImTable::readOnly || compSrc != obj.get());
+  // Fork: event graph, the pins every object has (Enable, Destroy, Ready, ...)
+  const bool objectEventsUsed = !compSrc->events.empty() || (eventOverrides.instance && std::any_of(
+    eventOverrides.instance->eventOverrides.begin(), eventOverrides.instance->eventOverrides.end(),
+    [&](const auto &o) { return !o.isLink() && o.comp == 0 && o.path == eventOverrides.path; }));
+  if(ImGui::CollapsingHeader(ICON_MDI_TRANSIT_CONNECTION_VARIANT "  Object Events", objectEventsUsed ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
+    const bool direct = !isPrefabInst || (!nested.isNested && ctx.isPrefabEditing(obj->uuid))
+      || (nested.isNested && nested.directDefEdit && !nested.node->isPrefabInstance());
+    if(eventOverrides.instance) Editor::EventInspector::drawObject(*compSrc, ImTable::readOnly, eventOverrides);
+    else Editor::EventInspector::drawObject(*compSrc, ImTable::readOnly || !direct, eventDirect);
   }
+  if(eventLinks) Editor::EventInspector::drawLinks(*eventLinks, ImTable::readOnly, eventLinksInScene);
 
   uint64_t compDelUUID = 0;
   Project::Component::Entry *compCopy = nullptr;
@@ -854,8 +887,9 @@ void Editor::ObjectInspector::draw() {
       }
 
       def.funcDraw(*obj, comp);
-      // Fork: event graph, the component's pins and their bindings (prefab content is read-only here)
-      Editor::EventInspector::drawComponent(*obj, comp, locked || ImTable::readOnly);
+      // Fork: event graph, the component's pins and their bindings; overrides for locked content
+      if(locked && eventOverrides.instance) Editor::EventInspector::drawComponent(*obj, comp, ImTable::readOnly, eventOverrides);
+      else Editor::EventInspector::drawComponent(*obj, comp, locked || ImTable::readOnly, isInstance ? Editor::EventInspector::Target{} : eventDirect);
     }
     ImGui::PopID();
     // Let the next insertion marker know if the previous component is folded

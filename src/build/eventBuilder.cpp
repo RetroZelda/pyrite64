@@ -4,12 +4,15 @@
 */
 #include "eventBuilder.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <format>
 #include <stdexcept>
 
 #include "projectBuilder.h"
 #include "../project/project.h"
+#include "../project/scene/object.h"
+#include "../project/component/components.h"
 #include "../project/events/eventPins.h"
 #include "../project/events/eventRules.h"
 #include "../utils/fs.h"
@@ -24,43 +27,90 @@ namespace
   constexpr uint8_t COMP_OBJECT = 0xFF;    // the object's own pins
   constexpr uint32_t MAX_RECORD_WORDS = 255;
 
-  void addRecords(Build::SceneCtx &ctx, std::vector<Build::Events::Record> &res,
-                  const Project::Events::Bindings &bindings, const Project::Events::PinList &pins,
-                  uint8_t comp, const std::string &where)
+  // one binding of one pin, before it is resolved
+  struct Entry
   {
-    for(const bool input : {true, false})
+    uint8_t comp;          // index in the object's record, or COMP_OBJECT
+    uint64_t compUuid;     // 0 for the object's own pins
+    const Project::Events::PinList* pins;
+    bool input;
+    std::string pin;
+    std::string name;
+    size_t level;          // the graph that wrote it
+    std::string where;
+  };
+
+  // every graph from the scene (or the spawned prefab's root) in to the object being written
+  std::vector<Project::Events::ScopeLevel> scopeLevels(const Build::SceneCtx &ctx)
+  {
+    std::vector<Project::Events::ScopeLevel> levels{};
+    const int current = (int)ctx.eventPath.size() - 1;
+    for(const auto &c : ctx.eventContexts)
     {
-      for(const auto &[pin, names] : input ? bindings.in : bindings.out)
+      Project::Events::ScopeLevel lvl{};
+      lvl.isScene = c.isScene;
+      lvl.spawnedRoot = c.spawnedRoot;
+      uint32_t skip = 0;
+      for(int i = c.rootIndex + 1; i <= current; ++i) {
+        if(i >= 0 && ctx.eventPath[(size_t)i].prefabRoot) ++skip;
+      }
+      lvl.skip = (uint8_t)std::min<uint32_t>(skip, 255);
+      if(c.instance) {
+        for(const auto &ovr : c.instance->eventOverrides) {
+          if(ovr.isLink()) lvl.links.push_back({ovr.link, ovr.to});
+        }
+      }
+      levels.push_back(lvl);
+    }
+    return levels;
+  }
+
+  // instance overrides that target the object being written: add and mute bindings
+  void applyOverrides(Build::SceneCtx &ctx, std::vector<Entry> &entries,
+                      const std::vector<Project::Events::PinList> &compPins,
+                      const std::vector<std::pair<Project::Component::Entry*, size_t>> &comps,
+                      const Project::Events::PinList &objectPins, const std::string &objWhere)
+  {
+    const int current = (int)ctx.eventPath.size() - 1;
+    for(size_t f = 1; f < ctx.eventContexts.size(); ++f)
+    {
+      const auto &frame = ctx.eventContexts[f];
+      if(!frame.instance || frame.rootIndex > current)continue;
+
+      std::vector<uint32_t> relPath{};
+      for(int i = frame.rootIndex + 1; i <= current; ++i) relPath.push_back(ctx.eventPath[(size_t)i].uuid);
+
+      for(const auto &ovr : frame.instance->eventOverrides)
       {
-        const int pinIdx = pins.indexOf(input, pin);
-        if(pinIdx < 0) {
-          ctx.eventMessages.push_back({Message::Level::Warning, where + ": has no " +
-            std::string(input ? "input" : "output") + " pin '" + pin + "' any more; its bindings are kept but do nothing"});
-          continue;
+        if(ovr.isLink() || ovr.path != relPath)continue;
+
+        // the target pin: a component of this object, or the object's own pins
+        uint8_t comp = COMP_OBJECT;
+        const Project::Events::PinList* pins = &objectPins;
+        if(ovr.comp != 0) {
+          bool found = false;
+          for(size_t i = 0; i < comps.size(); ++i) {
+            if(comps[i].first->uuid != ovr.comp)continue;
+            comp = static_cast<uint8_t>(i + 1);
+            pins = &compPins[i];
+            found = true;
+            break;
+          }
+          if(!found) {
+            ctx.eventMessages.push_back({Message::Level::Warning, objWhere + ": an override on instance '" +
+              frame.instance->name + "' targets a component that no longer exists; it is ignored"});
+            continue;
+          }
         }
 
-        for(const auto &name : names)
-        {
-          auto problem = Project::Events::nameProblem(name);
-          if(!problem.empty()) throw std::runtime_error(where + "." + pin + ": " + problem);
-
-          const auto parsed = Project::Events::parse(name);
-          if(parsed.id.scope == Project::Events::Scope::Prefab) {
-            throw std::runtime_error(where + "." + pin + ": '" + name + "': prefab:: events are not supported yet");
-          }
-
-          problem = Project::Events::bindingProblem(ctx.eventIndex, ctx.eventCatalog, name, input);
-          if(!problem.empty()) throw std::runtime_error(where + "." + pin + ": " + problem);
-
-          ctx.eventIndex.add(name, input ? Project::Events::UseKind::BoundIn : Project::Events::UseKind::BoundOut,
-                             where + "." + pin);
-          res.push_back({
-            .hash = parsed.id.hash,
-            .comp = comp,
-            .pin = static_cast<uint8_t>(pinIdx),
-            .kind = Project::Events::recordKind(input, parsed.id.scope),
-            .up = parsed.id.up,
+        for(const auto &muted : ovr.mute) {
+          std::erase_if(entries, [&](const Entry &e) {
+            return e.comp == comp && e.input == ovr.input && e.pin == ovr.pin && e.name == muted;
           });
+        }
+        for(const auto &added : ovr.add) {
+          entries.push_back({comp, ovr.comp, pins, ovr.input, ovr.pin, added, f - 1,
+                             objWhere + " (override on instance '" + frame.instance->name + "')"});
         }
       }
     }
@@ -118,24 +168,86 @@ void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
   ctx.eventIndex.addSourceUses(Project::Events::scanSourceDir(fs::path{project.getPath()} / "src" / "user"));
 }
 
-std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const Project::Object &obj,
-  const std::vector<Project::Component::Entry*> &compList, const Project::Events::Bindings &objectBindings)
+std::vector<Build::Events::Record> Build::Events::collect(SceneCtx &ctx, const ObjectBindings &input)
 {
   std::vector<Record> res{};
-  if(!ctx.project)return res;
+  if(!ctx.project || ctx.eventContexts.empty())return res;
 
-  const std::string objWhere = ctx.eventWhere + " / " + obj.name;
-  for(size_t i = 0; i < compList.size(); ++i)
+  const auto &obj = input.obj;
+  // the whole path, so a message names the instance too ("K1 / Door", not just "Door")
+  std::string objWhere = ctx.eventWhere;
+  for(const auto &step : ctx.eventPath) objWhere += " / " + (step.name ? *step.name : std::string{"?"});
+  if(ctx.eventPath.empty() || ctx.eventPath.back().uuid != obj.uuid) objWhere += " / " + obj.name;
+
+  // 1. every binding, with the graph that wrote it
+  std::vector<Project::Events::PinList> compPins{};
+  std::vector<Entry> entries{};
+  for(size_t i = 0; i < input.comps.size(); ++i)
   {
-    const auto &comp = *compList[i];
-    if(comp.events.empty())continue;
-    auto pins = Project::Events::pinsOf(*ctx.project, comp);
-    // the EventLinks record is written in front of the components, so component i is i + 1
-    addRecords(ctx, res, comp.events, pins, static_cast<uint8_t>(i + 1),
-               objWhere + " / " + Project::Events::displayName(*ctx.project, comp));
+    auto [comp, level] = input.comps[i];
+    compPins.push_back(Project::Events::pinsOf(*ctx.project, *comp));
   }
-  if(!objectBindings.empty()) {
-    addRecords(ctx, res, objectBindings, Project::Events::objectPins(), COMP_OBJECT, objWhere);
+  for(size_t i = 0; i < input.comps.size(); ++i)
+  {
+    auto [comp, level] = input.comps[i];
+    const auto where = objWhere + " / " + Project::Events::displayName(*ctx.project, *comp);
+    for(const bool in : {true, false}) {
+      for(const auto &[pin, names] : in ? comp->events.in : comp->events.out) {
+        for(const auto &name : names) {
+          // the EventLinks record is written in front of the components, so component i is i + 1
+          entries.push_back({static_cast<uint8_t>(i + 1), comp->uuid, &compPins[i], in, pin, name, level, where});
+        }
+      }
+    }
+  }
+  const auto &objectPins = Project::Events::objectPins();
+  for(const auto &[bindings, level] : input.objectPins) {
+    for(const bool in : {true, false}) {
+      for(const auto &[pin, names] : in ? bindings->in : bindings->out) {
+        for(const auto &name : names) entries.push_back({COMP_OBJECT, 0, &objectPins, in, pin, name, level, objWhere});
+      }
+    }
+  }
+
+  // 2. what the instances around this object change
+  applyOverrides(ctx, entries, compPins, input.comps, objectPins, objWhere);
+  if(entries.empty())return res;
+
+  // 3. resolve each binding through the prefabs around it
+  const auto levels = scopeLevels(ctx);
+  for(const auto &e : entries)
+  {
+    const int pinIdx = e.pins->indexOf(e.input, e.pin);
+    if(pinIdx < 0) {
+      ctx.eventMessages.push_back({Message::Level::Warning, e.where + ": has no " +
+        std::string(e.input ? "input" : "output") + " pin '" + e.pin + "' any more; its bindings are kept but do nothing"});
+      continue;
+    }
+
+    auto problem = Project::Events::nameProblem(e.name);
+    if(!problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + problem);
+
+    const auto resolved = Project::Events::resolveName(e.name, levels, std::min(e.level, levels.size() - 1));
+    if(!resolved.problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + resolved.problem);
+    if(!resolved.warning.empty()) {
+      ctx.eventMessages.push_back({Message::Level::Warning, e.where + "." + e.pin + ": " + resolved.warning});
+      continue;
+    }
+
+    problem = Project::Events::bindingProblem(ctx.eventIndex, ctx.eventCatalog, e.name, e.input);
+    if(!problem.empty()) throw std::runtime_error(e.where + "." + e.pin + ": " + problem);
+
+    // the name it ends up as: a link repointed to scene::X listens to scene::X
+    ctx.eventIndex.add(resolved.name.empty() ? e.name : resolved.name,
+                       e.input ? Project::Events::UseKind::BoundIn : Project::Events::UseKind::BoundOut,
+                       e.where + "." + e.pin);
+    res.push_back({
+      .hash = resolved.hash,
+      .comp = e.comp,
+      .pin = static_cast<uint8_t>(pinIdx),
+      .kind = Project::Events::recordKind(e.input, resolved.scope),
+      .up = resolved.up,
+    });
   }
   return res;
 }

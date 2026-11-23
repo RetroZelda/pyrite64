@@ -192,6 +192,7 @@ void P64::Scene::update(float deltaTime)
   //debugf("cam %p: %d | %f\n", camMain, cameras.size(), (double)camMain->pos.z);
 
   runPendingComponentReady();
+  Events::Internal::onFrameReady(); // Fork: event graph, prefab::Spawned after the instances' onReady
   
   ticksGlobalUpdate = get_user_ticks();
   GlobalScript::callHooks(GlobalScript::HookType::SCENE_UPDATE);
@@ -208,7 +209,8 @@ void P64::Scene::update(float deltaTime)
         obj.id = data.objectId + i;
         if(i == 0) {
           // The root is placed directly at the spawn transform, parented if requested.
-          obj.flags = ObjectFlags::ACTIVE | (obj.flags & ObjectFlags::HAS_CHILDREN);
+          // Fork: event graph, a spawned root is always a prefab instance root
+          obj.flags = ObjectFlags::ACTIVE | (obj.flags & ObjectFlags::HAS_CHILDREN) | ObjectFlags::PREFAB_ROOT;
           obj.group = data.parentId;
           obj.pos = data.pos;
           obj.scale = data.scale * obj.scale; // the prefab's own root scale (e.g. its model size)
@@ -629,6 +631,7 @@ void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)
 
   if (enabledChanged) {
     sendEvent(obj.id, 0, obj.isEnabled() ? EVENT_TYPE_ENABLE : EVENT_TYPE_DISABLE, 0);
+    Events::Internal::onObjectStateChanged(obj); // Fork: event graph, prefab::Enabled / Disabled
   }
 
   iterObjectChildren(obj.id, [&](Object* child) {

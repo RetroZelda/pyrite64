@@ -420,3 +420,142 @@ std::vector<Project::Events::Message> Project::Events::Index::check(const Catalo
 
   return res;
 }
+
+// ---- prefab scope ----
+
+std::string Project::Events::shiftPrefabNumber(const std::string &name, int delta)
+{
+  auto parsed = parse(name);
+  if(parsed.error != P64::Events::NameError::None || parsed.id.scope != Scope::Prefab) return name;
+  int number = (int)parsed.id.up + delta;
+  if(number < 0) number = 0;
+  auto rest = name.substr(name.find("::"));
+  return number == 0 ? "prefab" + rest : "prefab_" + std::to_string(number) + rest;
+}
+
+// ---- moving content across a prefab boundary ----
+
+bool Project::Events::isPrefabName(const std::string &name)
+{
+  auto parsed = parse(name);
+  return parsed.error == P64::Events::NameError::None && parsed.id.scope == Scope::Prefab;
+}
+
+std::string Project::Events::nameAfterWrap(const std::string &name, const std::set<std::string> &local)
+{
+  if(namespaceOf(name) != "scene" || !local.contains(name)) return name;
+  return "prefab" + name.substr(name.find("::"));
+}
+
+std::string Project::Events::nameAfterUnpack(const std::string &name, const UnpackRules &rules)
+{
+  auto parsed = parse(name);
+  if(parsed.error != P64::Events::NameError::None || parsed.id.scope != Scope::Prefab) return name;
+
+  if(parsed.id.up == 0) {
+    // the prefab's own event: it becomes an event of the scene
+    auto it = rules.local.find(canonicalName(name));
+    return it != rules.local.end() ? it->second : "scene" + name.substr(name.find("::"));
+  }
+
+  // a parent link of the instance: repointed, or the same name one number lower
+  std::string next = shiftPrefabNumber(name, -1);
+  for(const auto &[from, to] : rules.links) {
+    if(from == name) { next = to; break; }
+  }
+  // the scene's own graph has no prefab scope: such a name reached nothing before either
+  return isPrefabName(next) ? std::string{} : next;
+}
+
+std::string Project::Events::freeSceneName(const std::string &localName, const std::string &instanceName,
+                                           const std::function<bool(const std::string&)> &taken, bool prefixed)
+{
+  const auto sep = localName.find("::");
+  const std::string rest = sep == std::string::npos ? localName : localName.substr(sep + 2);
+  if(!prefixed && !taken("scene::" + rest)) return "scene::" + rest;
+
+  std::string inst{};
+  for(char c : instanceName) {
+    if(std::isalnum(static_cast<unsigned char>(c)) || c == '_') inst += c;
+  }
+  if(inst.empty()) inst = "Instance";
+
+  std::string candidate{};
+  for(int n = 1; n < 10000; ++n) {
+    candidate = "scene::" + inst + (n == 1 ? std::string{} : "_" + std::to_string(n)) + "." + rest;
+    if(!taken(candidate)) break;
+  }
+  return candidate;
+}
+
+std::string Project::Events::lifecyclePin(const std::string &localName)
+{
+  if(!isPrefabName(localName) || parse(localName).id.up != 0) return {};
+  const auto name = canonicalName(localName);
+  if(name == "prefab::Spawned") return "Ready";
+  if(name == "prefab::Enabled") return "Enabled";
+  if(name == "prefab::Disabled") return "Disabled";
+  if(name == "prefab::Destroying") return "Destroyed";
+  return {};
+}
+
+Project::Events::ResolvedName Project::Events::resolveName(const std::string &name, const std::vector<ScopeLevel> &levels, size_t level)
+{
+  ResolvedName res{};
+  std::string current = name;
+  size_t c = level;
+
+  for(int guard = 0; guard < 64; ++guard)
+  {
+    auto parsed = parse(current);
+    if(parsed.error != P64::Events::NameError::None) {
+      res.problem = nameProblem(current);
+      return res;
+    }
+    if(parsed.id.scope != Scope::Prefab) {
+      res.name = current;
+      res.hash = parsed.id.hash;
+      res.scope = parsed.id.scope;
+      return res;
+    }
+
+    const auto &lvl = levels[c];
+    if(lvl.isScene) {
+      if(c == level) res.problem = "'" + name + "': prefab:: names are not allowed in a scene's own graph";
+      else res.warning = "'" + name + "' points above the outermost prefab here, so it reaches nothing";
+      res.name = current;
+      res.hash = parsed.id.hash;
+      res.scope = Scope::Prefab;
+      res.up = 0xFF;
+      return res;
+    }
+
+    const uint8_t u = parsed.id.up;
+    if(u == 0) {
+      res.name = current;
+      res.hash = parsed.id.hash;
+      res.scope = Scope::Prefab;
+      res.up = lvl.skip;
+      return res;
+    }
+
+    if(c == 0 || lvl.spawnedRoot) {
+      // nothing known above: the runtime keeps climbing from wherever the prefab was spawned
+      res.name = current;
+      res.hash = parsed.id.hash;
+      res.scope = Scope::Prefab;
+      res.up = (uint8_t)std::min<int>(255, lvl.skip + u);
+      return res;
+    }
+
+    // one graph out: a repointed link on the instance node, or the same name one number lower
+    std::string next = shiftPrefabNumber(current, -1);
+    for(const auto &[from, to] : lvl.links) {
+      if(from == current) { next = to; break; }
+    }
+    current = next;
+    --c;
+  }
+  res.problem = "'" + name + "': repointed links form a loop";
+  return res;
+}

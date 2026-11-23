@@ -10,7 +10,7 @@
 #include "../utils/toolchain.h"
 #include "../project/events/eventRules.h"
 
-namespace Project { class Project; class Scene; struct AssetManagerEntry; }
+namespace Project { class Project; class Scene; class Object; struct AssetManagerEntry; }
 
 namespace Build
 {
@@ -53,6 +53,18 @@ namespace Build
     Project::Events::Index eventIndex{};
     std::vector<Project::Events::Message> eventMessages{};
     std::string eventWhere{}; // "scene 3" or "prefab Door.prefab", for messages
+
+    // Where the object being written sits and which graph wrote its bindings (PLAN 3.4).
+    struct EventPathEntry { uint32_t uuid; bool prefabRoot; const std::string *name; };
+    struct EventContext
+    {
+      int rootIndex;              // index in eventPath of this graph's root (its instance root), -1: the scene
+      Project::Object *instance;  // the instance node of this graph (holds the outer graph's overrides)
+      bool isScene;
+      bool spawnedRoot;           // the root of a prefab built for spawning
+    };
+    std::vector<EventPathEntry> eventPath{};
+    std::vector<EventContext> eventContexts{};
 
     void addAsset(const Project::AssetManagerEntry &entry);
   };

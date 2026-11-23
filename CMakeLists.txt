@@ -215,6 +215,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
         src/project/events/eventPins.cpp
+        src/project/events/eventNesting.cpp
         src/editor/pages/parts/eventInspector.cpp
         src/utils/binaryFile.h
         src/build/sceneContext.h

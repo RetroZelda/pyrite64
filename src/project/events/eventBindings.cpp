@@ -92,3 +92,107 @@ void Project::Events::Bindings::prune()
     }
   }
 }
+
+namespace
+{
+  nlohmann::json pathToJson(const std::vector<uint32_t> &path)
+  {
+    auto arr = nlohmann::json::array();
+    for(auto uuid : path) arr.push_back(uuid);
+    return arr;
+  }
+
+  std::vector<uint32_t> pathFromJson(const nlohmann::json &doc)
+  {
+    std::vector<uint32_t> res{};
+    if(doc.is_array()) for(const auto &v : doc) if(v.is_number_unsigned() || v.is_number_integer()) res.push_back(v.get<uint32_t>());
+    return res;
+  }
+
+  std::vector<std::string> namesFromJson(const nlohmann::json &doc)
+  {
+    std::vector<std::string> res{};
+    if(doc.is_array()) for(const auto &v : doc) if(v.is_string() && !v.get<std::string>().empty()) res.push_back(v.get<std::string>());
+    return res;
+  }
+}
+
+nlohmann::json Project::Events::overridesToJson(const std::vector<Override> &list)
+{
+  auto arr = nlohmann::json::array();
+  for(const auto &ovr : list)
+  {
+    if(ovr.empty())continue;
+    nlohmann::json o = nlohmann::json::object();
+    if(ovr.isLink()) {
+      o["link"] = ovr.link;
+      o["to"] = ovr.to;
+    } else {
+      o["path"] = pathToJson(ovr.path);
+      o["comp"] = ovr.comp;
+      o["pin"] = ovr.pin;
+      o["dir"] = ovr.input ? "in" : "out";
+      if(!ovr.add.empty()) o["add"] = ovr.add;
+      if(!ovr.mute.empty()) o["mute"] = ovr.mute;
+    }
+    if(!ovr.hint.empty()) o["hint"] = ovr.hint;
+    arr.push_back(o);
+  }
+  return arr;
+}
+
+std::vector<Project::Events::Override> Project::Events::overridesFromJson(const nlohmann::json &doc)
+{
+  std::vector<Override> res{};
+  if(!doc.is_array())return res;
+  for(const auto &o : doc)
+  {
+    if(!o.is_object())continue;
+    Override ovr{};
+    if(o.contains("link") && o["link"].is_string()) {
+      ovr.link = o["link"];
+      if(o.contains("to") && o["to"].is_string()) ovr.to = o["to"];
+    } else {
+      if(o.contains("path")) ovr.path = pathFromJson(o["path"]);
+      if(o.contains("comp") && o["comp"].is_number()) ovr.comp = o["comp"].get<uint64_t>();
+      if(o.contains("pin") && o["pin"].is_string()) ovr.pin = o["pin"];
+      ovr.input = !(o.contains("dir") && o["dir"] == "out");
+      if(o.contains("add")) ovr.add = namesFromJson(o["add"]);
+      if(o.contains("mute")) ovr.mute = namesFromJson(o["mute"]);
+    }
+    if(!ovr.empty()) res.push_back(ovr);
+  }
+  return res;
+}
+
+nlohmann::json Project::Events::exposedToJson(const std::vector<Exposed> &list)
+{
+  auto arr = nlohmann::json::array();
+  for(const auto &e : list) {
+    nlohmann::json o = nlohmann::json::object();
+    o["path"] = pathToJson(e.path);
+    o["comp"] = e.comp;
+    o["pin"] = e.pin;
+    o["dir"] = e.input ? "in" : "out";
+    if(!e.alias.empty()) o["alias"] = e.alias;
+    arr.push_back(o);
+  }
+  return arr;
+}
+
+std::vector<Project::Events::Exposed> Project::Events::exposedFromJson(const nlohmann::json &doc)
+{
+  std::vector<Exposed> res{};
+  if(!doc.is_array())return res;
+  for(const auto &o : doc) {
+    if(!o.is_object() || !o.contains("pin") || !o["pin"].is_string())continue;
+    Exposed e{};
+    if(o.contains("path")) e.path = pathFromJson(o["path"]);
+    if(o.contains("comp") && o["comp"].is_number()) e.comp = o["comp"].get<uint64_t>();
+    e.pin = o["pin"];
+    e.input = !(o.contains("dir") && o["dir"] == "out");
+    if(o.contains("alias") && o["alias"].is_string()) e.alias = o["alias"];
+    res.push_back(e);
+  }
+  return res;
+}

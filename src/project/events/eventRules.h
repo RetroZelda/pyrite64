@@ -8,6 +8,7 @@
 #pragma once
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -127,6 +128,76 @@ namespace Project::Events
 
     [[nodiscard]] const SystemDecl* findSystem(const std::string &system) const;
   };
+
+  // ---- prefab scope (PLAN 3.4)
+
+  /** One graph on the way from an object out to the scene, as the build sees it. */
+  struct ScopeLevel
+  {
+    bool isScene{false};        // the scene's own graph: prefab:: names are not allowed here
+    bool spawnedRoot{false};    // the root of a prefab built for spawning: nothing known above it
+    uint8_t skip{0};            // prefab instance roots from the object up to this graph's root, the root not counted
+    std::vector<std::pair<std::string, std::string>> links{}; // repointed links on this graph's instance node
+  };
+
+  struct ResolvedName
+  {
+    std::string problem{};    // a binding that can never work: the build fails
+    std::string warning{};    // a binding that reaches nothing: it stays silent
+    std::string name{};       // the name it ends up as, after following repointed links
+    uint32_t hash{};
+    Scope scope{Scope::Global};
+    uint8_t up{};             // runtime: the (up + 1)-th prefab instance root from the object, the object counted
+  };
+
+  /**
+   * Resolves a binding written in graph 'level' (levels[0] is the outermost) for one object:
+   * follows numbered prefab names and repointed links outward until the graph they mean.
+   */
+  ResolvedName resolveName(const std::string &name, const std::vector<ScopeLevel> &levels, size_t level);
+
+  /** prefab_N::X with N changed by 'delta' (prefab:: is N = 0); other names are returned unchanged. */
+  std::string shiftPrefabNumber(const std::string &name, int delta);
+
+  // ---- moving content across a prefab boundary in a scene (PLAN 3.4, "To Prefab" and "Unpack")
+
+  /** 'name' is a prefab:: or prefab_N:: name. */
+  bool isPrefabName(const std::string &name);
+
+  /**
+   * "To Prefab": the name that moved content writes in the new prefab's graph. A scene:: name in
+   * 'local' (used by nothing outside the moved objects) becomes the prefab:: name, so copies of
+   * the new prefab stay apart; every other name keeps its meaning and is returned unchanged.
+   */
+  std::string nameAfterWrap(const std::string &name, const std::set<std::string> &local);
+
+  struct UnpackRules
+  {
+    std::vector<std::pair<std::string, std::string>> links{}; // the instance's repointed links
+    std::map<std::string, std::string> local{};               // the prefab's own prefab:: names -> scene names
+  };
+
+  /**
+   * "Unpack": the name that the prefab's content writes once it is part of the scene's graph.
+   * Numbered names follow the instance's links one graph out. Empty when the name reaches nothing
+   * in the scene (it pointed above the outermost prefab), so the binding can be dropped.
+   */
+  std::string nameAfterUnpack(const std::string &name, const UnpackRules &rules);
+
+  /**
+   * A scene name for a prefab:: event of an unpacked instance: scene::X, or scene::Inst.X,
+   * scene::Inst_2.X, ... while 'taken' says the name is already used for something else.
+   * 'prefixed' skips the plain scene::X.
+   */
+  std::string freeSceneName(const std::string &localName, const std::string &instanceName,
+                            const std::function<bool(const std::string&)> &taken, bool prefixed = false);
+
+  /**
+   * The object output pin that stands in for a prefab life-cycle event once its instance is
+   * unpacked: Ready for prefab::Spawned, Enabled, Disabled, and Destroyed for prefab::Destroying.
+   * Empty for any other name.
+   */
+  std::string lifecyclePin(const std::string &localName);
 
   /**
    * Checks one binding of an object pin at build time, beyond the name rules: global:: names must

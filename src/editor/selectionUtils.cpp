@@ -388,6 +388,8 @@ namespace Editor::SelectionUtils
     auto auth = pickAuthNode(obj, steps);
     out.directDefEdit = auth.directDefEdit;
     out.readOnly = auth.readOnly;
+    out.authNode = auth.authNode;
+    out.relPath = auth.relPath;
 
     if(!out.directDefEdit) {
       out.authLayer.emplace(auth.authNode->propOverrides);

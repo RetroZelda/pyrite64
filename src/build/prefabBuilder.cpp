@@ -35,6 +35,8 @@ bool Build::buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx)
     sceneCtx.fileObj = {};
     sceneCtx.nextRuntimeId = 1; // the root is 0, expanded children continue from here
     sceneCtx.eventWhere = "prefab " + asset.name; // Fork: event graph
+    sceneCtx.eventPath.clear();
+    sceneCtx.eventContexts = {{0, nullptr, false, true}}; // the root, index 0 of the path
     sceneCtx.fileObj.write<uint32_t>(0); // object count, patched below
     uint32_t count = 0;
     try {

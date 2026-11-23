@@ -55,6 +55,8 @@ namespace
     }
     builder.doc["components"] = comps;
     if(!obj.events.empty())builder.doc["events"] = obj.events.toJson(); // Fork: event graph, the object's own pins
+    if(!obj.eventOverrides.empty())builder.doc["eventOverrides"] = Project::Events::overridesToJson(obj.eventOverrides);
+    if(!obj.eventExposed.empty())builder.doc["eventExposed"] = Project::Events::exposedToJson(obj.eventExposed);
 
     nlohmann::json children = nlohmann::json::array();
     for (const auto &child : obj.children) {
@@ -197,6 +199,8 @@ void Project::Object::deserialize(Scene *scene, nlohmann::json &doc)
   }
 
   events = doc.contains("events") ? Events::Bindings::fromJson(doc["events"]) : Events::Bindings{}; // Fork: event graph
+  eventOverrides = doc.contains("eventOverrides") ? Events::overridesFromJson(doc["eventOverrides"]) : std::vector<Events::Override>{};
+  eventExposed = doc.contains("eventExposed") ? Events::exposedFromJson(doc["eventExposed"]) : std::vector<Events::Exposed>{};
 
   if(doc.contains("components")) {
     auto &cmArray = doc["components"];

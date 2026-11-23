@@ -11,6 +11,10 @@
     "global::Engine.PakInserted": { "doc": "A Rumble, Controller or Transfer Pak was inserted.", "value": "port | (pak type << 8)" },
     "global::Engine.PakRemoved": { "doc": "A pak was removed.", "value": "port | (pak type << 8)" },
     "scene::Loaded": { "doc": "First frame of the current scene, after every onReady.", "value": "scene id" },
-    "scene::Unloading": { "doc": "Before the current scene is deleted. Delivered immediately.", "value": "scene id" }
+    "scene::Unloading": { "doc": "Before the current scene is deleted. Delivered immediately.", "value": "scene id" },
+    "prefab::Spawned": { "doc": "Heard inside each prefab instance on its first frame, after every onReady of its objects.", "value": "instance root id" },
+    "prefab::Destroying": { "doc": "Heard inside a prefab instance when removal of its root was requested.", "value": "instance root id" },
+    "prefab::Enabled": { "doc": "Heard inside a prefab instance when its root became active.", "value": "instance root id" },
+    "prefab::Disabled": { "doc": "Heard inside a prefab instance when its root became inactive.", "value": "instance root id" }
   }
 }

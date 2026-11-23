@@ -29,6 +29,14 @@ namespace Build::Events
     uint8_t up;
   };
 
+  /** One object's bindings, each with the graph (index into SceneCtx::eventContexts) that wrote it. */
+  struct ObjectBindings
+  {
+    const Project::Object &obj;
+    std::vector<std::pair<Project::Component::Entry*, size_t>> comps{}; // in the order they are written
+    std::vector<std::pair<const Project::Events::Bindings*, size_t>> objectPins{};
+  };
+
   /** Loads the catalog, global script systems and the source scan. Call after the script build. */
   void begin(Project::Project &project, SceneCtx &ctx);
 
@@ -37,9 +45,7 @@ namespace Build::Events
    * are written; the EventLinks record goes in front of them, so component i gets index i + 1.
    * Throws on a binding that can never work (bad name, unknown system pin, wrong direction).
    */
-  std::vector<Record> collect(SceneCtx &ctx, const Project::Object &obj,
-                              const std::vector<Project::Component::Entry*> &compList,
-                              const Project::Events::Bindings &objectBindings);
+  std::vector<Record> collect(SceneCtx &ctx, const ObjectBindings &input);
 
   /** Writes an EventLinks component record (id 26) into ctx.fileObj. */
   void writeLinks(SceneCtx &ctx, const Project::Object &obj, const std::vector<Record> &records);

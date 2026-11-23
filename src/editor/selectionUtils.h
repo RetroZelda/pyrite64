@@ -86,6 +86,8 @@ namespace Editor::SelectionUtils
     bool isNested = false;
     bool directDefEdit = false;
     bool readOnly = false;               // see AuthTarget::readOnly
+    Project::Object* authNode = nullptr; // see AuthTarget: where overrides of the node are stored
+    std::vector<uint32_t> relPath{};     // from authNode down to the node
     std::optional<PropScope::PrefabLayer> authLayer;
     std::vector<std::unique_ptr<PropScope::Path>> nestedPaths;
     std::optional<ImTable::ForceLockScope> nestedLock;

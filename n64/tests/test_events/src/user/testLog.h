@@ -2,6 +2,9 @@
 // Shared state of the event bus runtime test: what was heard, in which frame.
 #include "script/userScript.h"
 #include "events/bus.h"
+#include "scene/objectFlags.h"
+#include "scene/sceneManager.h"
+#include "scene/scene.h"
 
 #include <vector>
 
@@ -40,6 +43,9 @@ namespace P64::User::EventTest
     ChainRelayed, ChainDelayed, // Zone.Enter -> Relay -> Frame Delay
     BlipSpawned,             // a prefab spawned by the Spawner ran init()
     Logic,                   // a built-in object's output; 'obj' holds the LOGIC_* tag
+    // phase 4, value: x position of the prefab instance the recorder sits in
+    KitSpawned, KitDoorOpened, SirenHeard, TallyHeard,
+    SirenFar, // the siren heard its grandparent through prefab_2::
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -48,7 +54,8 @@ namespace P64::User::EventTest
     "FromUpdate", "Loop", "Carried", "Stale", "Irq", "TriggerSpawned", "Open", "Close",
     "Knock", "Light", "SysDoorOpened", "ZoneEnter", "ZoneExit", "ZoneOccupied", "ZoneEmptied",
     "ZoneEnterCb", "ZoneExitCb", "LampReady", "LampDisabled", "LampEnabled", "DoomedDestroyed",
-    "ChainRelayed", "ChainDelayed", "BlipSpawned", "Logic",
+    "ChainRelayed", "ChainDelayed", "BlipSpawned", "Logic", "KitSpawned", "KitDoorOpened",
+    "SirenHeard", "TallyHeard", "SirenFar",
   };
 
   struct Record
@@ -74,6 +81,8 @@ namespace P64::User::EventTest
     T_DOOR,   // phase 2: pins, bindings, object scope, global input pins, send(), fire() in init()
     T_CONTACTS, // phase 3: collider enter/exit pins and callbacks, object pins, Relay and Frame Delay
     T_LOGIC,    // phase 3: every built-in event object, driven with send()
+    T_PREFABS,  // phase 4: prefab scope per instance, nesting, numbered names, overrides, links, spawning
+    T_NESTING,  // phase 4: scene 7, the same records before and after To Prefab and Unpack (nestingChecks.sh)
     T_COUNT
   };
 
@@ -83,6 +92,15 @@ namespace P64::User::EventTest
 
   inline void add(Rec type, const Events::Event& ev, uint16_t obj = 0) {
     records.push_back({type, currFrame, ev.value, ev.sender, ev.instigator, obj});
+  }
+
+  // x position of the prefab instance 'obj' belongs to (the first PREFAB_ROOT up from it)
+  inline uint32_t rootX(Object &obj) {
+    auto &scene = SceneManager::getCurrent();
+    for(Object* o = &obj; o; o = o->group ? scene.getObjectById(o->group) : nullptr) {
+      if(o->flags & ObjectFlags::PREFAB_ROOT) return (uint32_t)(o->pos.x + 0.5f);
+    }
+    return 0;
   }
 
   inline void add(Rec type, uint32_t value, uint16_t sender) {

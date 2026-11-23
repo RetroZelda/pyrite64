@@ -1,0 +1,109 @@
+{
+  "version": 2,
+  "uuid": 735700030,
+  "obj": {
+    "children": [
+      {
+        "children": [],
+        "components": [],
+        "enabled": true,
+        "name": "Enc",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {
+          "13911321452997764027": "1:2.0,0.0,0.0"
+        },
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 7003,
+        "uuidPrefab": 735700020,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 7001,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426372
+            },
+            "events": {
+              "out": {
+                "Raised": [
+                  "prefab::Lockdown"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Horn",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 7002,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "Wing",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "selectable": true,
+    "uuid": 7004,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

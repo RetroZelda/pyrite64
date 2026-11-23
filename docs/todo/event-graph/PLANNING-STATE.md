@@ -82,7 +82,7 @@ nodes that generate C++.
 - [x] Phase 2: script pins, bindings, direct sends, inspector section (commit fc57e44; game
   rename commit 2941954 in kentucky-castle)
 - [x] Phase 3: engine pins, collider enter/exit, object pins, engine scripts, built-in objects
-- [ ] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
+- [x] Phase 4: prefab scope, numbered namespaces, exposed pins, overrides, nesting fix-ups
 - [ ] Phase 5: Event Graph window
 - [ ] Phase 6: UI canvases
 - [ ] Phase 7: tools (debug page, event browser), example project
@@ -92,8 +92,11 @@ nodes that generate C++.
 
 ## Notes for whoever resumes
 
-- Do not start implementing. The owner asked for a plan only.
-- Do not commit unless the owner asks. Never add co-author or AI attribution lines.
+- The owner approved the plan and asked for the whole of it to be built and tested autonomously,
+  committing each phase without co-author or AI attribution lines. Open questions take the
+  recommended option and go into "Decisions made autonomously" for the final report.
+- Never commit the owner's own change to `kentucky-castle/project.p64proj`. The guide draft in
+  `kentucky-castle/docs/EventGraph/` stays uncommitted until the end.
 - The existing engine event system and what it lacks are summarised at the top of FINDINGS.md.
 
 ## Owner's answers (2026-11-23)
@@ -235,6 +238,35 @@ after phase 9, with editor screenshots and short videos.
 - ares works for unattended runs (`--setting Audio/Mute=true --setting Input/Defocus=Allow`,
   wait for `[event test] DONE` on stdout), but it opens a window on the owner's display.
 
+### Phase 4: prefab scope (done 2026-11-23)
+
+**Built:** scope resolution through `PREFAB_ROOT` objects with numbered parent names, prefab
+life-cycle events (`prefab::Spawned`, `Destroying`, `Enabled`, `Disabled`, in the engine
+catalog), `postTo` and `listenIn`, per-instance `eventOverrides` (add, mute, repointed links)
+applied by the build, the build's scope levels for nested prefabs, the "To Prefab" and "Unpack"
+fix-ups (`src/project/events/eventNesting.*`), headless `--cmd to-prefab` and `--cmd unpack`,
+the inspector's override editing, parent links and expose toggles, and `--scene`/`--object`
+to open the editor with a selection.
+
+**Verified:**
+
+- `pyrite64_tests`: 1,759 assertions pass (prefab scope, link resolution, wrap and unpack rules).
+- `test_events.z64` in ares: 12 of 12. Test 10 covers four door kits and one spawned kit that do
+  not affect each other, a kit nested in an encounter hearing it through `prefab_1::`, a kit in
+  an encounter in a wing hearing the wing through `prefab_2::` (the others stay silent),
+  per-instance overrides, a repointed link and `postTo`. Test 11 is scene 7 for the round trip.
+- `nestingChecks.sh`: 11 of 11. Scene 7's Group is wrapped with To Prefab, built and run, then
+  unpacked, built and run: the door hears the same alarm every time, and the names are rewritten
+  as expected (the alarm only the group uses becomes `prefab::`, names shared with code or a
+  watcher outside stay `scene::`, and unpacking restores them).
+- Unpacking K1, K2, E1 and W1 of scene 6 headless gives a project that builds, with clashing
+  names renamed (`scene::K2.Plate.Pressed`, `scene::W1.Lockdown`) and life-cycle events moved to
+  the root's pins.
+- `buildChecks.sh` still 5 of 5. Kentucky Castle (scratch copy) builds and boots into gameplay.
+- The inspector was checked by screenshots only: the screen was locked, so clicks could not reach
+  the editor. Parent Links on K2 and the nested plate's overrides render as designed; the mute,
+  add and expose buttons were not clicked.
+
 ## Decisions made autonomously
 
 Questions that came up while the owner was away, answered with the recommended option. List them
@@ -273,3 +305,30 @@ all in the final report.
 12. (Phase 3) Pins added to engine components: Light TurnOn/TurnOff, Camera Activate, Audio (2D)
    Play/Stop/Finished, Particle Play/Stop, Model (Animated) PlayMain/PlayBlend/MainFinished.
    Culling, Rigid-Body and Character-Body pins stay "later" as planned.
+13. (Phase 4) Only "To Prefab" and "Unpack" move content between graphs in this editor. Moving or
+   adding nodes while editing a prefab stays inside the edited file, and objects added to a
+   nested instance are still written in the edited prefab's graph, so those need no fix-up.
+14. (Phase 4) To Prefab: a `scene::` name counts as used only inside the subtree when no other
+   object of the scene, no prefab definition, no game code (`_event` literals) and no engine
+   event uses it; only those become `prefab::`. Parent links that reached nothing in the scene
+   are left alone and start working inside the new prefab, following the plan's "links that
+   reached a real scope are repointed".
+15. (Phase 4) Unpack: the prefab's own events become `scene::Name`, or `scene::Instance.Name`
+   (then `Instance_2`, ...) when the scene, a prefab, the code or the engine already uses the
+   name. A name that only one default link reaches connects to nothing and is left alone.
+16. (Phase 4) Unpack: `prefab::Spawned`, `Enabled`, `Disabled` and `Destroying` become
+   `scene::Instance.Spawned` etc., fired by the root object's Ready, Enabled, Disabled and
+   Destroyed pins, which fire at the same moments with the same value (the root's id).
+17. (Phase 4) Unpack: a binding with a numbered name that reached nothing (above the outermost
+   prefab) is removed and logged, because a scene's own graph rejects `prefab::` names.
+18. (Phase 4) Overrides made in the inspector are always stored as `eventOverrides` on the
+   instance, also for the instance root's own pins; the editor never writes the instance-level
+   `events` of an instance node (the build still reads them).
+19. (Phase 4) Build messages name the object's whole path (`scene 6 / K1 / Door / ...`), and the
+   project-wide checks count a repointed link under the name it ends up as, so a link to
+   `scene::Alarm7` counts as listening to it.
+20. (Phase 4) New command-line options: `--cmd to-prefab` and `--cmd unpack` with `--scene` and
+   `--object` (and `--dir` for the new prefab's folder), and, in the editor, `--scene`/`--object`
+   to open a scene with an object selected (`K1/Plate` continues into the prefab).
+21. (Phase 4) "Object Events" opens by itself when the object has bindings or overrides, and
+   "Parent Links" when a link is repointed.

@@ -43,6 +43,8 @@
 #include <cctype>
 
 #include "editor/undoRedo.h"
+#include "editor/selectionUtils.h"
+#include "project/project.h"
 #include "editor/actions.h"
 #include "editor/script/scriptHost.h"
 
@@ -55,6 +57,46 @@ namespace T3DM
 }
 
 void cli(argparse::ArgumentParser &prog);
+
+// Fork: opens the scene given with --scene and selects the object given with --object. The path's
+// names continue into a prefab instance's definition ("K1/Plate"), which selects a nested node.
+void selectFromCommandLine()
+{
+  if(!ctx.project || CLI::getStartScene() <= 0)return;
+  ctx.project->getScenes().loadScene(CLI::getStartScene());
+  auto *scene = ctx.project->getScenes().getLoadedScene();
+  const auto &path = CLI::getStartObject();
+  if(!scene || path.empty())return;
+
+  std::vector<std::string> names{};
+  for(size_t start = 0; start <= path.size();) {
+    size_t end = path.find('/', start);
+    if(end == std::string::npos) end = path.size();
+    names.push_back(path.substr(start, end - start));
+    start = end + 1;
+  }
+
+  Project::Object *node = &scene->getRootObject();
+  Project::Object *instance = nullptr;
+  std::vector<uint32_t> subPath{};
+  for(const auto &name : names) {
+    Project::Object *next = nullptr;
+    auto search = [&](Project::Object *parent) {
+      for(auto &child : parent->children) if(!next && child->name == name) next = child.get();
+    };
+    search(node);
+    if(!next && node->isPrefabInstance()) search(Editor::SelectionUtils::prefabDefOf(node));
+    if(!next) {
+      Utils::Logger::log("--object: no '" + name + "' in '" + path + "'", Utils::Logger::LEVEL_WARN);
+      return;
+    }
+    if(instance) subPath.push_back(next->uuid);
+    else if(next->isPrefabInstance()) instance = next;
+    node = next;
+  }
+  if(instance && !subPath.empty()) ctx.setNestedSelection(instance->uuid, subPath);
+  else ctx.setObjectSelection(node->uuid);
+}
 
 bool hasUnsavedChanges()
 {
@@ -292,6 +334,8 @@ int main(int argc, char** argv)
     {
       if(!Editor::Actions::call(Editor::Actions::Type::PROJECT_OPEN, CLI::getProjectPath())) {
         Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open project from command line!");
+      } else {
+        selectFromCommandLine(); // Fork: --scene and --object
       }
     }
 

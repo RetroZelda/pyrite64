@@ -63,6 +63,8 @@ namespace Project
       std::vector<std::shared_ptr<Object>> children{};
       std::vector<Component::Entry> components{};
       Events::Bindings events{}; // Fork: event graph, bindings of the object's own pins (Enable, Ready, ...)
+      std::vector<Events::Override> eventOverrides{}; // Fork: event graph, on a prefab instance node
+      std::vector<Events::Exposed> eventExposed{};    // Fork: event graph, on a prefab's root object
 
       explicit Object(Object& parent) : parent{&parent} {}
       Object() = default;

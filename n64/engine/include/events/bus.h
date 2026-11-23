@@ -117,6 +117,12 @@ namespace P64::Events
   /** Events the engine fires (PLAN 4.5). */
   namespace Builtin
   {
+    // prefab::* : heard inside the prefab instance they concern
+    inline constexpr EventId PrefabSpawned          = "prefab::Spawned"_event;                       // the instance and its objects are ready
+    inline constexpr EventId PrefabDestroying       = "prefab::Destroying"_event;                    // removal of the instance root was requested
+    inline constexpr EventId PrefabEnabled          = "prefab::Enabled"_event;                       // the instance root became active
+    inline constexpr EventId PrefabDisabled         = "prefab::Disabled"_event;                      // the instance root became inactive
+
     // global::Engine.* : the engine is the system that declares these
     inline constexpr EventId GameInit               = "global::Engine.GameInit"_event;               // after the game-init hook, immediate
     inline constexpr EventId SceneLoading           = "global::Engine.SceneLoading"_event;           // before a scene is created, immediate, value: scene id
@@ -150,6 +156,9 @@ namespace P64::Events
     void onSceneDestroyed();
     void onObjectDestroyed(Object& obj);
     void onObjectRemoving(Object& obj); // remove() was called: fires Destroyed
+    void onObjectStateChanged(Object& obj); // the object's combined enabled state changed
+    void onPrefabRootLoaded(Object& obj);   // a PREFAB_ROOT object was created
+    void onFrameReady();                    // after the frame's onReady calls
 
     // used by the EventLinks component
     uint16_t resolveInstance(Object& obj, Scope scope, uint8_t up);

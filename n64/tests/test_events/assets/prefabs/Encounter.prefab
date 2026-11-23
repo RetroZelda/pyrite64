@@ -1,0 +1,155 @@
+{
+  "version": 2,
+  "uuid": 735700020,
+  "obj": {
+    "children": [
+      {
+        "children": [],
+        "components": [],
+        "enabled": true,
+        "name": "Kit",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {
+          "13911321452997764027": "1:1.0,0.0,0.0"
+        },
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6008,
+        "uuidPrefab": 735700010,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 6009,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426372
+            },
+            "events": {
+              "out": {
+                "Raised": [
+                  "prefab::Alarm"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Alarm",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6010,
+        "uuidPrefab": 0,
+        "visMask": 1
+      },
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 6011,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426373
+            },
+            "events": {
+              "in": {
+                "Heard": [
+                  "prefab::KitDoorOpened"
+                ]
+              }
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "Tally",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 6012,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
+    "components": [],
+    "enabled": true,
+    "name": "Encounter",
+    "pos": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "propOverrides": {},
+    "proportionalScale": false,
+    "rot": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "selectable": true,
+    "uuid": 6013,
+    "uuidPrefab": 0,
+    "visMask": 1
+  }
+}

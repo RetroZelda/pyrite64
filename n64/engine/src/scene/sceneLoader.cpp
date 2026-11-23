@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <malloc.h>
 #include "scene/scene.h"
+#include "events/bus.h"
+#include "scene/objectFlags.h"
 #include "lib/math.h"
 #include "scene/componentTable.h"
 
@@ -188,6 +190,8 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
   if(obj->id < idLookup.size()) {
     idLookup[obj->id] = obj;
   }
+  // Fork: event graph, prefab::Spawned is posted once the instance is ready (see onFrameReady)
+  if(obj->flags & ObjectFlags::PREFAB_ROOT) Events::Internal::onPrefabRootLoaded(*obj);
 
   return obj;
 }

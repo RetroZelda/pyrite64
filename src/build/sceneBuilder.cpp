@@ -58,6 +58,18 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
   if(obj.enabled)objFlags |= P64::ObjectFlags::ACTIVE;
   if(!srcObj->children.empty() || !obj.children.empty())objFlags |= P64::ObjectFlags::HAS_CHILDREN;
 
+  // Fork: event graph. Instance roots carry PREFAB_ROOT (the prefab:: scope). The definition's
+  // content was written in the prefab's own graph; the instance node's additions and overrides in
+  // the graph that contains it.
+  const bool prefabRootNode = isInstance || isPrefabRoot;
+  if(prefabRootNode)objFlags |= P64::ObjectFlags::PREFAB_ROOT;
+  ctx.eventPath.push_back({obj.uuid, prefabRootNode, &obj.name});
+  const size_t outerLevel = ctx.eventContexts.empty() ? 0 : ctx.eventContexts.size() - 1;
+  if(isInstance) {
+    ctx.eventContexts.push_back({(int)ctx.eventPath.size() - 1, &obj, false, false});
+  }
+  const size_t defLevel = ctx.eventContexts.empty() ? 0 : ctx.eventContexts.size() - 1;
+
   ctx.fileObj.write<uint16_t>(objFlags); // @TODO type
   ctx.fileObj.write<uint16_t>(runtimeId);
   ctx.fileObj.write<uint16_t>(parentRuntimeId);
@@ -126,10 +138,12 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
 
 
   std::vector<Project::Component::Entry*> compList{};
+  std::unordered_map<const Project::Component::Entry*, size_t> compLevel{}; // Fork: event graph
   for (auto &comp : srcObj->components) {
     PropScope::Path compPath(comp.uuid);
     if (!comp.enabled.resolve(obj)) continue;
     compList.push_back(&comp);
+    compLevel[&comp] = defLevel;
   }
 
   if(srcObj != &obj) {
@@ -137,6 +151,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
       PropScope::Path compPath(comp.uuid);
       if (!comp.enabled.resolve(obj)) continue;
       compList.push_back(&comp);
+      compLevel[&comp] = outerLevel;
     }
   }
 
@@ -175,7 +190,11 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
 
   // Fork: event graph. The object's bindings become an EventLinks record, written first so a
   // component can fire its outputs from init().
-  auto eventRecords = Build::Events::collect(ctx, obj, compList, srcObj->events);
+  Build::Events::ObjectBindings eventInput{obj};
+  for(auto *comp : compList) eventInput.comps.push_back({comp, compLevel[comp]});
+  eventInput.objectPins.push_back({&srcObj->events, defLevel});
+  if(srcObj != &obj) eventInput.objectPins.push_back({&obj.events, outerLevel});
+  auto eventRecords = Build::Events::collect(ctx, eventInput);
   if(!eventRecords.empty()) {
     Build::Events::writeLinks(ctx, obj, eventRecords);
   }
@@ -194,6 +213,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
                                              : child->runtimeId;
     count += writeObject(ctx, *child, savePrefabItself, childRuntimeId, runtimeId, childExpanding, world);
   }
+  if(isInstance) ctx.eventContexts.pop_back(); // Fork: event graph, back in the outer graph
 
   // For a prefab instance, also write children added directly to the instance in the
   // scene. These are real, world-positioned scene objects, not part of the prefab.
@@ -208,6 +228,7 @@ uint32_t Build::writeObject(Build::SceneCtx &ctx, Project::Object &obj, bool sav
                            expanding ? world : WorldTransform{});
     }
   }
+  ctx.eventPath.pop_back(); // Fork: event graph
   return count;
 }
 
@@ -219,6 +240,8 @@ void Build::buildScene(Project::Project &project, const Project::SceneEntry &sce
   std::unique_ptr<Project::Scene> sc{new Project::Scene(scene.id, project.getPath())};
   ctx.scene = sc.get();
   ctx.eventWhere = "scene " + std::to_string(scene.id) + " (" + scene.name + ")"; // Fork: event graph
+  ctx.eventPath.clear();
+  ctx.eventContexts = {{-1, nullptr, true, false}};
 
   // Object ids only exist at runtime; assign them now so writeObject and component
   // builds (which resolve object UUID -> runtime id) see a consistent id space.

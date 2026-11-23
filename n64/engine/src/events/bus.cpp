@@ -5,6 +5,7 @@
 // Fork: the event bus, N64 side: the one bus instance, drains, interrupt mailbox, hardware
 // events and debug output. The rules live in busCore.cpp.
 #include <cstdio>
+#include <vector>
 #include <libdragon.h>
 
 #include "events/bus.h"
@@ -39,7 +40,23 @@ namespace
     {Builtin::PakRemoved.hash,             "global::Engine.PakRemoved"},
     {Builtin::CurrentSceneLoaded.hash,     "scene::Loaded"},
     {Builtin::CurrentSceneUnloading.hash,  "scene::Unloading"},
+    {Builtin::PrefabSpawned.hash,          "prefab::Spawned"},
+    {Builtin::PrefabDestroying.hash,       "prefab::Destroying"},
+    {Builtin::PrefabEnabled.hash,          "prefab::Enabled"},
+    {Builtin::PrefabDisabled.hash,         "prefab::Disabled"},
   };
+
+  // prefab roots created since the last onFrameReady() (at scene load, or by the previous frame's
+  // spawns): their onReady ran right before onFrameReady(), so they get prefab::Spawned then
+  std::vector<uint16_t> newPrefabRoots{};
+
+  // posts a prefab:: event in the instance of 'root' only if something there listens: a level
+  // with hundreds of instances must not flood the queue
+  void postToInstance(EventId id, P64::Object &root)
+  {
+    if(bus.listenerCount(id.hash, root.id) == 0) return;
+    bus.post(id.hash, Scope::Prefab, root.id, root.id, root.id);
+  }
 
   constinit const NameEntry* projectNames = nullptr;
   constinit uint32_t projectNameCount = 0;
@@ -377,12 +394,23 @@ void P64::Events::Internal::postImmediate(EventId id, uint32_t value)
   bus.deliverNow(id.hash, id.scope, 0, value, 0);
 }
 
-uint16_t P64::Events::Internal::resolveInstance(Object& obj, Scope scope, [[maybe_unused]] uint8_t up)
+uint16_t P64::Events::Internal::resolveInstance(Object& obj, Scope scope, uint8_t up)
 {
   switch(scope)
   {
     case Scope::Object: return obj.id;
-    case Scope::Prefab: return 0; // phase 4: the prefab instance 'up' levels above obj
+    case Scope::Prefab:
+    {
+      // the (up + 1)-th prefab instance root on the way from obj to the scene root (obj counts)
+      auto &scene = SceneManager::getCurrent();
+      uint32_t found = 0;
+      for(Object* o = &obj; o; o = o->group ? scene.getObjectById(o->group) : nullptr) {
+        if(!(o->flags & ObjectFlags::PREFAB_ROOT)) continue;
+        if(found == up) return o->id;
+        ++found;
+      }
+      return 0; // not inside that many prefabs: the binding stays silent
+    }
     default: return 0;
   }
 }
@@ -416,6 +444,29 @@ void P64::Events::Internal::onObjectRemoving(Object& obj)
   if(obj.getComponent<Comp::EventLinks>()) {
     fire(obj, nullptr, static_cast<uint8_t>(Pins::ObjectOut::Destroyed), obj.id);
   }
+  if(obj.flags & ObjectFlags::PREFAB_ROOT) postToInstance(Builtin::PrefabDestroying, obj);
+}
+
+void P64::Events::Internal::onObjectStateChanged(Object& obj)
+{
+  if(obj.flags & ObjectFlags::PREFAB_ROOT) {
+    postToInstance(obj.isEnabled() ? Builtin::PrefabEnabled : Builtin::PrefabDisabled, obj);
+  }
+}
+
+void P64::Events::Internal::onPrefabRootLoaded(Object& obj)
+{
+  newPrefabRoots.push_back(obj.id);
+}
+
+void P64::Events::Internal::onFrameReady()
+{
+  if(newPrefabRoots.empty()) return;
+  auto &scene = SceneManager::getCurrent();
+  for(uint16_t id : newPrefabRoots) {
+    if(auto *root = scene.getObjectById(id)) postToInstance(Builtin::PrefabSpawned, *root);
+  }
+  newPrefabRoots.clear();
 }
 
 void P64::Events::Internal::onObjectDestroyed(Object& obj)
@@ -432,4 +483,5 @@ void P64::Events::Internal::onSceneDestroyed()
   bus.dropQueuedSceneEvents();
   bus.unsubscribeAllInstances();
   Contacts::reset();
+  newPrefabRoots.clear();
 }
