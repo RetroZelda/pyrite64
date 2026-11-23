@@ -36,6 +36,7 @@
 #include "scene/componentTable.h"
 #include "scene/components/surface.h"
 #include "script/globalScript.h"
+#include "events/bus.h"
 #include "scene/object.h"
 
 #include "scene/components/code.h"
@@ -253,6 +254,7 @@ void P64::Scene::update(float deltaTime)
   //debugf("State Change Time: %llu us\n", TICKS_TO_US(t));
 
   runPendingEvents();
+  Events::Internal::drain(Events::Internal::DrainPoint::FrameStart); // Fork: event bus, drain 1
 
   // ======== Run the Physics and fixed Update Callbacks in a fixed Deltatime Loop ======== //
   uint16_t physicsTickRate = conf.physicsTickRate > 0 ? conf.physicsTickRate : 50;
@@ -282,6 +284,7 @@ void P64::Scene::update(float deltaTime)
     Coll::collisionSceneGetInstance()->step();
     accumulator_ticks -= fixedDeltaTimeTicks;
   }
+  Events::Internal::drain(Events::Internal::DrainPoint::AfterPhysics); // Fork: event bus, drain 2
 
   // Extrapolate rigid body transforms for visual smoothness
   if(conf.interpolatePhysicsTransforms){
@@ -329,6 +332,7 @@ void P64::Scene::update(float deltaTime)
   }
 
   ticksActorUpdate = get_ticks() - ticksActorUpdate;
+  Events::Internal::drain(Events::Internal::DrainPoint::AfterUpdate); // Fork: event bus, drain 3
 
   for(auto &obj : pendingObjDelete)
   {

@@ -17,6 +17,7 @@
 #include "libdragon/utils.h"
 #include "renderer/drawLayer.h"
 #include "script/globalScript.h"
+#include "events/bus.h"
 
 P64::GlobalState P64::state{};
 
@@ -60,6 +61,7 @@ int main()
   tpx_init({});
 
   joypad_init();
+  P64::Events::Internal::init(); // Fork: event bus (reset handler, controller baseline)
 
   P64::AssetManager::init();
   P64::AudioManager::init();
@@ -94,6 +96,7 @@ int main()
   P64::VI::SwapChain::init();
 
   P64::GlobalScript::callHooks(P64::GlobalScript::HookType::GAME_INIT);
+  P64::Events::Internal::postImmediate(P64::Events::Builtin::GameInit); // Fork: event bus
 
   P64::Log::info("Reset: %d\n", sys_reset_type());
   P64::SceneManager::load(

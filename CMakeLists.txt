@@ -407,10 +407,14 @@ if(PYRITE64_BUILD_TESTS)
         tests/codeParser.cpp
         tests/codeParserFork.cpp
         tests/layer.cpp
+        tests/eventBus.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
+        n64/engine/src/events/busCore.cpp
     )
-    target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include)
+    # n64/engine: the event bus core is engine code written to also compile on the host
+    target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include
+        n64/engine/include n64/engine/src)
     add_test(NAME pyrite64_tests COMMAND pyrite64_tests)
 endif()
 
