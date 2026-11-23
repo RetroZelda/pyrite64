@@ -4,8 +4,9 @@ Read this file first when resuming the planning work. It records what was asked,
 and what is next. The plan itself is [PLAN.md](PLAN.md). Raw investigation notes are in
 [FINDINGS.md](FINDINGS.md).
 
-- **Status:** PHASES 1 TO 9 DONE, TESTED AND COMMITTED (2026-11-23). Left: the guide in
-  `kentucky-castle/docs/EventGraph/README.md` and the final report. Earlier status: plan approved
+- **Status:** ALL DONE (2026-11-23). Phases 1 to 9 built, tested and committed; the guide is
+  committed in kentucky-castle (`docs/EventGraph/README.md`, c56482a); the final report went to the
+  owner and to the status board. Earlier status: plan approved
   2026-11-23 (PLAN.md draft 7).
 - **Started:** 2026-11-23
 - **Branches:** `feature/event-graph` in `pyrite64` (from `stream/full-frontal`) and in
@@ -91,7 +92,8 @@ nodes that generate C++.
 - [x] Phase 8: Kentucky Castle adoption (engine `send()` by id: pyrite64 dcca6d9; the game:
   kentucky-castle f7c41fe, together with its phase 9 part)
 - [x] Phase 9: retire the old messages (pyrite64 2f768b0; the game's part in f7c41fe)
-- [ ] Final: finish the guide in kentucky-castle/docs/EventGraph/README.md, final report, delete the cron job
+- [x] Final: the guide in kentucky-castle/docs/EventGraph/README.md (c56482a), fixes found while
+  taking its screenshots (pyrite64 a8bd622), final report, cron job deleted
 
 ## Notes for whoever resumes
 
@@ -529,3 +531,18 @@ all in the final report.
    scripts through `onEvent`, and that path is not deprecated.
 57. (Phase 9) The new-script templates no longer contain `onEvent`; otherwise every new script would
    start with the warning.
+58. (Final) Fixes found while taking the guide's screenshots (pyrite64 a8bd622): the Events window's
+   automatic layout now counts the wired pins of collapsed sections (the Global node landed on the
+   tall Player node); `--ui-script` queues its pointer position again after the ImGui backend reads
+   the OS pointer (scripted clicks went astray while the screen locker held the pointer) and has a
+   `wheel` step; the overlay's Events page fits the 320-pixel screen and uses the monospace font.
+59. (Final) The debug page was seen running for the first time through a temporary change, never
+   committed, that opened the overlay on the Events page at boot of a copy of the example project.
+60. (Final) The guide's screenshots come from a copy of Kentucky Castle (never the real project:
+   opening it in a newer editor rewrites `project.p64proj`). The wiring animation was captured frame
+   by frame through `--ui-script`, with a cursor drawn in afterwards (window captures leave it out).
+61. (Final) Unattended emulator runs stopped `ares` but not the emulator process `ares-simd`; up to
+   nine of them ran for hours and loaded the machine. They were stopped, and the helper scripts and
+   the guide now stop both.
+62. (Final) The guide was committed in kentucky-castle once everything was done and tested, as the
+   owner asked; it links to `AIScripting.md`, `EnemySpawning.md` and `LevelSystem.md`, which link back.
