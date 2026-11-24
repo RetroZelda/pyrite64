@@ -418,9 +418,12 @@ void P64::Events::send(uint16_t targetId, PinName input, uint32_t value, uint16_
 {
   if(targetId == 0) return;
 
-  // the target was spawned this frame and does not exist yet (or earlier sends still wait for it,
-  // and this one must not overtake them)
-  if(SceneManager::getCurrent().isObjectPending(targetId) || isHeldFor(targetId))
+  // The target was spawned this frame and does not exist yet (or earlier sends still wait for it,
+  // and this one must not overtake them). While a spawned prefab's objects run their init() they
+  // already exist but still count as pending: those are queued as usual.
+  auto &scene = SceneManager::getCurrent();
+  const bool notCreatedYet = scene.isObjectPending(targetId) && !scene.getObjectById(targetId);
+  if(notCreatedYet || isHeldFor(targetId))
   {
     if(heldCount >= MAX_HELD) {
       if(allowWarning()) {

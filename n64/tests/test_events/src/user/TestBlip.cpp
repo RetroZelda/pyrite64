@@ -16,6 +16,13 @@ namespace P64::Script::C3F405162738495A
   void init(Object& obj, Data *data)
   {
     add(Rec::BlipSpawned, obj.id, obj.id);
+
+    // Like a level's volumes greeting their children while the level prefab is created: many sends
+    // to an object of the same spawn, which exists already. They are queued at once, none is held
+    // back or lost (BLIP_GREETINGS is more than P64_EVENT_HELD_SIZE).
+    const uint16_t child = static_cast<uint16_t>(obj.id + 1);
+    for(uint32_t i = 0; i < BLIP_GREETINGS; ++i) Events::send(child, "Greet"_pin, i, obj.id);
+    Events::send(child, "Report"_pin, 0, obj.id);
   }
 
   // sent by id in the frame the Spawner queued this prefab, before the object existed

@@ -277,7 +277,9 @@ namespace P64
 
       /**
        * Fork: event bus. True for the id of an object (root or child) of a prefab that addObject()
-       * queued this frame: it does not exist yet, and will from the start of the next frame.
+       * queued and whose spawn is not finished: usually it does not exist yet and will from the
+       * start of the next frame. While the spawned objects run their init() they exist already and
+       * this is still true, so check getObjectById() as well.
        */
       bool isObjectPending(uint16_t objId) const;
 

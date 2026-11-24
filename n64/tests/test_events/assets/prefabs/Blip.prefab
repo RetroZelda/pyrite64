@@ -2,7 +2,47 @@
   "version": 2,
   "uuid": 735700001,
   "obj": {
-    "children": [],
+    "children": [
+      {
+        "children": [],
+        "components": [
+          {
+            "id": 0,
+            "name": "Code",
+            "uuid": 5018,
+            "enabled": true,
+            "data": {
+              "args": {},
+              "script": 14240860050882426389
+            }
+          }
+        ],
+        "enabled": true,
+        "name": "BlipChild",
+        "pos": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "propOverrides": {},
+        "proportionalScale": false,
+        "rot": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "selectable": true,
+        "uuid": 5019,
+        "uuidPrefab": 0,
+        "visMask": 1
+      }
+    ],
     "components": [
       {
         "id": 0,

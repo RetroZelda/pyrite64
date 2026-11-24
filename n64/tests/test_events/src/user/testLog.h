@@ -52,6 +52,7 @@ namespace P64::User::EventTest
     CondEval,                // the driver called Conditions::evaluate(); value: the answer
     KitNotTrue, KitNotFalse, // the Not inside a CondKit instance; value: x of the instance
     BlipPoked, BlipNudged,   // send() by id to the Blip prefab in the frame the Spawner queued it
+    BlipGreeted,             // the Blip's child reports how many of its root's init() sends arrived
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -64,7 +65,7 @@ namespace P64::User::EventTest
     "SirenHeard", "TallyHeard", "SirenFar",
     "HudFocused", "HudMid", "HudDone",
     "Cond", "CondEval", "KitNotTrue", "KitNotFalse",
-    "BlipPoked", "BlipNudged",
+    "BlipPoked", "BlipNudged", "BlipGreeted",
   };
 
   struct Record
@@ -103,6 +104,8 @@ namespace P64::User::EventTest
   extern std::vector<Record> records;
 
   // conditions: the "game state" the test conditions answer from, set by the driver of scene 10
+  constexpr uint32_t BLIP_GREETINGS = 40; // sends from the Blip root's init() to its child
+
   extern bool condSlots[8];
   extern uint32_t kitValue; // a CondKit's condition is true while this is the x of its instance
 

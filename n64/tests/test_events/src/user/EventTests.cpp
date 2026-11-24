@@ -442,6 +442,12 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
       "a send to a prefab queued this frame arrives next frame");
     ok &= expectTrue(nudges == 1 && nudged && nudged->frame == 3 && nudged->value == 8, "and so does a second one");
     ok &= expectTrue(blip && poked && nudged && blip < poked && poked < nudged, "after init(), in the order sent");
+
+    // the root's init() sent 40 greetings to its child, an object of the same spawn that exists
+    // already: all arrive in the frame of the spawn, none waits or is dropped
+    const Record* greeted = findRec(Rec::BlipGreeted);
+    ok &= expectTrue(greeted && greeted->frame == 3 && greeted->value == BLIP_GREETINGS,
+      "sends between the objects of one spawn all arrive in the spawn's frame");
     if(!ok) printRecords();
     return ok;
   }
