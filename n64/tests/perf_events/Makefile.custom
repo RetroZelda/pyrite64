@@ -1,0 +1,6 @@
+# Put you custom makefile rules here.
+# The main "Makefile" is auto-generated and can not be edited.
+
+# The stress build raises the bus limits from the environment, see README.md:
+#   PERF_ENGINE_FLAGS="-DP64_EVENT_QUEUE_SIZE=16384 ..." pyrite64 --cli --cmd build .../project.p64proj
+ENGINE_CXXFLAGS += $(PERF_ENGINE_FLAGS)

@@ -189,6 +189,8 @@ P64::Object* P64::Scene::loadObject(uint8_t* &objFile, std::function<void(Object
   objects.push_back(obj);
   if(obj->id < idLookup.size()) {
     idLookup[obj->id] = obj;
+  } else {
+    idTable.insert(obj->id, obj); // Fork: see getObjectById()
   }
   // Fork: event graph, prefab::Spawned is posted once the instance is ready (see onFrameReady)
   if(obj->flags & ObjectFlags::PREFAB_ROOT) Events::Internal::onPrefabRootLoaded(*obj);

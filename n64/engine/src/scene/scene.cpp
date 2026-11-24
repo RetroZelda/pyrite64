@@ -341,6 +341,8 @@ void P64::Scene::update(float deltaTime)
   {
     if(obj->id < idLookup.size()) {
       idLookup[obj->id] = nullptr;
+    } else {
+      idTable.erase(obj->id, obj); // Fork: see getObjectById()
     }
     std::erase_if(savedTransforms_, [&](const SavedTransform &st) { return st.body->ownerObject() == obj; });
     std::erase(objects, obj);
@@ -600,13 +602,10 @@ P64::Object* P64::Scene::getObjectById(uint16_t objId) const
     return idLookup[objId];
   }
 
-  // otherwise fallback to a linear scan
-  for(auto obj : objects) {
-    if (objId == obj->id) {
-      return obj;
-    }
-  }
-  return nullptr;
+  // Fork: every other id is in a hash table. This was a scan of all objects, one cache miss each:
+  // 60 us for the last of 237 objects against 0.2 us for an id in the table above
+  // (n64/tests/perf_events). Every object of a spawned prefab has such an id.
+  return idTable.find(objId);
 }
 
 void P64::Scene::updateChildObjectStates(const Object* parent, Object& obj)

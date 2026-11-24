@@ -420,6 +420,7 @@ if(PYRITE64_BUILD_TESTS)
         tests/eventBus.cpp
         tests/eventEditor.cpp
         tests/conditions.cpp
+        tests/idTable.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp

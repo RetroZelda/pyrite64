@@ -24,6 +24,10 @@
 * Fix: an instance override of a script argument that the prefab file never stored is now found by the build (it built the default before)
 * The build's "fires 'X', but nothing listens to it" note appears once per event, with a count of the other outputs that fire it
 
+### Performance
+* `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id
+* `n64/tests/perf_events`: a benchmark of the event bus and the conditions, with its results in the README (about 4 µs an event, 6 µs a condition check, in the ares emulator)
+
 ## v0.10.0
 
 ### Editor

@@ -12,6 +12,7 @@
 #include "event.h"
 #include "lighting.h"
 #include "object.h"
+#include "scene/idTable.h"
 #include "collision/collisionScene.h"
 #include "lib/types.h"
 #include "renderer/drawLayer.h"
@@ -117,6 +118,8 @@ namespace P64
       // create a direct lookup table for the first few IDs
       // most scene probably don't exceed that much anyway
       std::array<Object*, 128> idLookup{};
+      // Fork: every other id (all objects of spawned prefabs), found without scanning the objects
+      IdTable<Object> idTable{};
 
       uint32_t accumulator_ticks{0};
       std::vector<Object*> pendingObjDelete{};
