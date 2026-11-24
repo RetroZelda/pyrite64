@@ -21,6 +21,31 @@ and what is next. The plan itself is [PLAN.md](PLAN.md). Raw investigation notes
   when I return - so leave all that in a final report." Commit each phase on `feature/event-graph`
   with no co-author lines. Log every autonomous choice under "Decisions made autonomously" below.
 
+## Playtest (2026-11-23 and 24)
+
+Kentucky Castle was played in ares with real controller input (keys sent to the emulator, the
+owner's screen unlocked), on a scratch copy with telemetry and the event trace. Details, log line
+numbers and screenshots are in the session's PLAYTEST_REPORT.md.
+
+- **Every item passed:** level transition by walking (and by warp), spawning paused during a
+  transition, encounter begin / reset / complete with the camera framing, minions joining and the
+  attack-slot traffic, corpses despawning, player death reaching the volume, visibility volumes
+  (1, 0, 1, 0), status-effect volumes (apply, remove on exit and on expiry, slower inside), camera
+  lock, climb mode, target focus, HUD show.
+- **A regression was found and fixed:** a `send()` to an object `addObject()` returned in the same
+  update was delivered before the object existed and dropped (a cast projectile never got
+  ProjectileInit). Fixed in c9d033f; the first version of the fix dropped level-load greetings
+  past 32 (f7ce16f fixes that). Both have test cases in test 9 that fail without them.
+- **The benchmark that followed** (`n64/tests/perf_events`) found the object lookup above id 128
+  scanning every object; fixed with a hash table (a253093).
+- **The final engine was played again:** greetings, a full encounter, target focus, projectile
+  casts and the Player Health Condition all pass, with no bus warning.
+- **Oddities in game code, not changed** (older than the event work): knockback pushes the player out
+  of an encounter volume and resets it; the encounter camera stays on when an active encounter is
+  hidden; a locked target that despawns sends no target event; the player turns toward the stick
+  during a fade; idle minions request a target every frame; Z still locks the camera while dead; the
+  ladder can be climbed from behind.
+
 ## The brief (owner's request, restated)
 
 An "event graph": a view similar to the node-graph editor, but a graph of events instead of logic

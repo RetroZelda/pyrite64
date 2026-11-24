@@ -121,5 +121,6 @@ recommend. Change any of them on request.
   Health Conditions and an And node fired exactly at the crossings.
 - The Fire Event node was looked at in the node-graph editor (it shows its Event and Value fields)
   and run in scene 10.
-- Not verified: the Player Health Condition with damage from real combat (the damage path calls the
-  same `fire()` as the tested paths).
+- Verified in play (2026-11-24, real input, final engine): a minion hit fired
+  `player::HealthChanged` (185) and the condition's NewlyTrue once; further hits did not; healing
+  back past 190 fired NewlyFalse once.
