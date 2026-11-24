@@ -71,9 +71,10 @@ PERF_ENGINE_FLAGS="-DP64_EVENT_QUEUE_SIZE=16384 -DP64_EVENT_DRAIN_BUDGET=65536 -
 | condition checks firing two bound outputs | 770 | 1,540 |
 | checks of conditions and And nodes together | 670 | 1,300 |
 
-With the limits raised, one drain delivered 16,384 events in 86 ms with nothing dropped, and 3,600
-events in 18.6 ms (5.2 µs each: the larger tables cost a little more per event). The cost per event
-is the same whether the events come in many small drains or one large one.
+With the limits raised, one drain delivered every one of the 16,384 events the queue then holds, in
+86 ms (the test posts 172 more than fit, and those are dropped, as intended). A single drain of
+3,600 events took 18.6 ms, 5.2 µs each, about as much as the same events in drains of 100 (4.7 µs
+each in that build). Both are a little more per event than with the default sizes.
 
 **Numbers move between builds.** The same ROM gives the same numbers on every run, but a changed
 scene or script moves things in memory, and the N64's data cache is small and direct-mapped. Across
