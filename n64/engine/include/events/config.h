@@ -38,6 +38,12 @@
   #define P64_EVENT_DRAIN_BUDGET 256
 #endif
 
+// send() calls that can wait at once for objects addObject() queued this frame (they exist from
+// the start of the next frame).
+#ifndef P64_EVENT_HELD_SIZE
+  #define P64_EVENT_HELD_SIZE 32
+#endif
+
 // 1 prints every delivery through debugf.
 #ifndef P64_EVENT_TRACE
   #define P64_EVENT_TRACE 0

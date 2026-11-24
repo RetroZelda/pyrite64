@@ -11,7 +11,7 @@
 * UI canvas pins (Show, Hide, PlayClip, StopClip, Event in; Focused, Blurred, Activated, ClipFinished, Marker out) and the "Fire output" timeline marker
 * Command line: `--cmd graph`, `wire`, `unwire`, `events`, `rename-event`, `to-prefab`, `unpack`; `--ui-script` plays input into the editor
 * Debug overlay page "Events"; example project `n64/examples/events`
-* `Events::send(targetId, "Input"_pin, value, sender)`: a direct send by object id, looked up on delivery
+* `Events::send(targetId, "Input"_pin, value, sender)`: a direct send by object id, looked up on delivery. A send to an id that `addObject()` returned this frame waits for the object and arrives at the start of the next frame, after its `init()`
 * The old addressed messages are deprecated: `Scene::sendEvent` has `[[deprecated]]` (engine code, the Message Bridge and the node-graph "Send Event" node use `Scene::sendEventInternal`, which behaves the same), the build warns about scripts that define `onEvent` (not engine or UI element scripts), new-script templates no longer contain `onEvent`, and the engine Makefile has `-Wno-error=deprecated-declarations`
 
 ### Conditions

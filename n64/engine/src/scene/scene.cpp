@@ -584,6 +584,14 @@ void P64::Scene::removeObject(Object &obj)
   pendingObjDelete.push_back(&obj);
 }
 
+bool P64::Scene::isObjectPending(uint16_t objId) const
+{
+  for(const auto &add : objectsToAdd) {
+    if(objId >= add.objectId && objId < add.objectId + add.count) return true;
+  }
+  return false;
+}
+
 P64::Object* P64::Scene::getObjectById(uint16_t objId) const
 {
   // the first IDs get a direct lookup, under the assumption most

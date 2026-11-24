@@ -86,8 +86,11 @@ namespace P64::Events
 
   /**
    * The same by object id, for code that keeps ids (ObjectRef::id) rather than objects. The id is
-   * looked up when the event is delivered, so the target may be created or initialised later in
-   * the same frame; nothing happens if it is gone by then.
+   * looked up when the event is delivered; nothing happens if the object is gone by then.
+   * An id that Scene::addObject() returned this frame works too, also for the prefab's children:
+   * the object exists from the start of the next frame, so the send waits and is delivered in that
+   * frame's first drain, after the object's init() and before its first update. Sends to one
+   * object arrive in the order they were made.
    */
   void send(uint16_t targetId, PinName input, uint32_t value = 0, uint16_t sender = 0);
 

@@ -275,6 +275,12 @@ namespace P64
 
       Object* getObjectById(uint16_t objId) const;
 
+      /**
+       * Fork: event bus. True for the id of an object (root or child) of a prefab that addObject()
+       * queued this frame: it does not exist yet, and will from the start of the next frame.
+       */
+      bool isObjectPending(uint16_t objId) const;
+
       uint32_t getObjectCount() const { return objects.size(); }
 
       /**

@@ -134,7 +134,14 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
 
   void onLogic(const Events::Event& ev, void* user)
   {
-    add(Rec::Logic, ev, static_cast<uint16_t>(reinterpret_cast<uintptr_t>(user)));
+    const auto tag = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(user));
+    add(Rec::Logic, ev, tag);
+    // Spawner.Spawned (tag 19) carries the id of a prefab that only exists next frame: sends to it
+    // must wait for it and arrive in order, like a projectile's init message after addObject()
+    if(tag == 19 && activeTest == T_LOGIC) {
+      Events::send(static_cast<uint16_t>(ev.value), "Poke"_pin, 7, 2);
+      Events::send(static_cast<uint16_t>(ev.value), "Nudge"_pin, 8, 2);
+    }
   }
 
   void onCond(const Events::Event& ev, void* user)
@@ -424,6 +431,17 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     uint32_t spawnedId = 0;
     for(const auto &r : records) if(r.type == Rec::Logic && r.obj == 19) spawnedId = r.value;
     ok &= expectTrue(blip && blip->frame == 3 && blip->value == spawnedId && spawnedId >= 0x100, "the spawned prefab exists next frame with the reported id");
+
+    // two sends made in frame 2, before the prefab existed: delivered in frame 3, after its init(),
+    // in the order they were made, each once
+    const Record* poked = findRec(Rec::BlipPoked);
+    const Record* nudged = findRec(Rec::BlipNudged);
+    uint32_t pokes = 0, nudges = 0;
+    for(const auto &r : records) { pokes += r.type == Rec::BlipPoked; nudges += r.type == Rec::BlipNudged; }
+    ok &= expectTrue(pokes == 1 && poked && poked->frame == 3 && poked->value == 7 && poked->sender == 2 && poked->obj == spawnedId,
+      "a send to a prefab queued this frame arrives next frame");
+    ok &= expectTrue(nudges == 1 && nudged && nudged->frame == 3 && nudged->value == 8, "and so does a second one");
+    ok &= expectTrue(blip && poked && nudged && blip < poked && poked < nudged, "after init(), in the order sent");
     if(!ok) printRecords();
     return ok;
   }

@@ -241,6 +241,45 @@ namespace
 
   constinit uint32_t droppedWrongScope = 0;
 
+  // send() to an object that addObject() queued this frame. The object is created at the start of
+  // the next frame, so the send waits here and is queued once its target exists.
+  struct HeldSend
+  {
+    uint32_t hash{};
+    uint32_t value{};
+    uint16_t target{};
+    uint16_t sender{};
+    uint16_t instigator{};
+  };
+  constexpr uint32_t MAX_HELD = P64_EVENT_HELD_SIZE;
+  constinit HeldSend held[MAX_HELD]{};
+  constinit uint32_t heldCount = 0;
+
+  bool isHeldFor(uint16_t target)
+  {
+    for(uint32_t i = 0; i < heldCount; ++i) if(held[i].target == target) return true;
+    return false;
+  }
+
+  // queues the sends whose target exists by now, in the order they were made
+  void flushHeld()
+  {
+    if(heldCount == 0) return;
+    auto &scene = P64::SceneManager::getCurrent();
+    uint32_t kept = 0;
+    for(uint32_t i = 0; i < heldCount; ++i)
+    {
+      const HeldSend h = held[i];
+      if(scene.getObjectById(h.target)) {
+        bus.post(h.hash, Scope::Direct, h.target, h.value, h.sender, h.instigator);
+      } else if(scene.isObjectPending(h.target)) {
+        held[kept++] = h; // still being spawned
+      }
+      // otherwise the object came and went, or was never created: like any send to a missing id
+    }
+    heldCount = kept;
+  }
+
   // send(): every script input on the target object with this pin name
   uint32_t onDirect(const Core::QueuedEvent& event, [[maybe_unused]] void* user)
   {
@@ -378,6 +417,22 @@ void P64::Events::send(Object& target, PinName input, uint32_t value, uint16_t s
 void P64::Events::send(uint16_t targetId, PinName input, uint32_t value, uint16_t sender)
 {
   if(targetId == 0) return;
+
+  // the target was spawned this frame and does not exist yet (or earlier sends still wait for it,
+  // and this one must not overtake them)
+  if(SceneManager::getCurrent().isObjectPending(targetId) || isHeldFor(targetId))
+  {
+    if(heldCount >= MAX_HELD) {
+      if(allowWarning()) {
+        char buffer[16];
+        Log::warn("[events] %u sends wait for objects that are being spawned, dropped %s (P64_EVENT_HELD_SIZE)",
+          (unsigned)MAX_HELD, describe(input.hash, buffer, sizeof(buffer)));
+      }
+      return;
+    }
+    held[heldCount++] = {input.hash, value, targetId, sender, bus.currentInstigator()};
+    return;
+  }
   bus.post(input.hash, Scope::Direct, targetId, value, sender);
 }
 
@@ -460,6 +515,7 @@ void P64::Events::Internal::drain(DrainPoint point)
     }
   }
 
+  flushHeld(); // sends that waited for a spawned object: by the frame's first drain it exists
   bus.drain(BusCore::DRAIN_BUDGET);
 }
 
@@ -559,6 +615,7 @@ void P64::Events::Internal::onSceneDestroyed()
   Contacts::reset();
   Conditions::Internal::onSceneDestroyed();
   newPrefabRoots.clear();
+  heldCount = 0;
 }
 
 void P64::Events::Internal::addDebugMenu()

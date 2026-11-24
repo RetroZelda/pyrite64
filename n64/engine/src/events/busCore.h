@@ -111,6 +111,8 @@ namespace P64::Events::Core
       [[nodiscard]] uint32_t queuedCount() const { return queueCount; }
       [[nodiscard]] uint32_t listenerCount(uint32_t hash, uint16_t instance) const;
       [[nodiscard]] bool isDelivering() const { return depth > 0; }
+      /** The instigator of the event being delivered, 0 outside a delivery. */
+      [[nodiscard]] uint16_t currentInstigator() const { return depth > 0 ? ctx.instigator : 0; }
       [[nodiscard]] Stats getStats() const;
 
       void setWarnHandler(WarnFn fn, void* user) { warnFn = fn; warnUser = user; }

@@ -51,6 +51,7 @@ namespace P64::User::EventTest
     Cond,                    // an output of a condition in scene 10; 'obj' holds the COND_* tag
     CondEval,                // the driver called Conditions::evaluate(); value: the answer
     KitNotTrue, KitNotFalse, // the Not inside a CondKit instance; value: x of the instance
+    BlipPoked, BlipNudged,   // send() by id to the Blip prefab in the frame the Spawner queued it
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -63,6 +64,7 @@ namespace P64::User::EventTest
     "SirenHeard", "TallyHeard", "SirenFar",
     "HudFocused", "HudMid", "HudDone",
     "Cond", "CondEval", "KitNotTrue", "KitNotFalse",
+    "BlipPoked", "BlipNudged",
   };
 
   struct Record

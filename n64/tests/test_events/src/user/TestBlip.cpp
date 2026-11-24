@@ -11,8 +11,16 @@ namespace P64::Script::C3F405162738495A
     uint32_t pad;
   );
 
+  P64_EVENTS_IN(Poke, Nudge);
+
   void init(Object& obj, Data *data)
   {
     add(Rec::BlipSpawned, obj.id, obj.id);
+  }
+
+  // sent by id in the frame the Spawner queued this prefab, before the object existed
+  void onInput(Object& obj, Data *data, In input, const Events::Event& ev)
+  {
+    add(input == In::Poke ? Rec::BlipPoked : Rec::BlipNudged, ev, obj.id);
   }
 }
