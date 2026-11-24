@@ -51,7 +51,7 @@ jobs:
         run: bash scripts/ci_version.sh >> "$GITHUB_ENV"
 
       - name: Setup MSYS2 (UCRT64)
-        uses: msys2/setup-msys2@v2.30.0
+        uses: msys2/setup-msys2@v2.34.0
         with:
           msystem: UCRT64
           update: true
@@ -131,7 +131,7 @@ jobs:
 
     steps:
       - name: Download test artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: pyrite64-tests-linux
 
@@ -144,7 +144,8 @@ jobs:
     needs: setup
     # Apple Silicon runner; CMAKE_OSX_ARCHITECTURES builds a universal
     # (arm64 + x86_64) binary so it runs on both Apple Silicon and Intel Macs.
-    runs-on: macos-14
+    # macos-14 was retired by GitHub on 2026-11-02; macos-15 matches upstream.
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
@@ -169,16 +170,16 @@ jobs:
         run: |
           cmake --build --preset macos-release
 
-      - name: Upload build artifact
+      # The editor needs data/ and n64/ beside the binary, and zip keeps the
+      # executable bit that a bare file loses on its way through an artifact.
+      - name: Package
+        run: zip -r pyrite64-macos.zip pyrite64 data/ n64/ LICENSE
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: pyrite64-macos_${{ env.P64_VERSION }}
-          include-hidden-files: true
-          path: |
-            pyrite64
-            data
-            n64
-            LICENSE
+          path: pyrite64-macos.zip
 
   release:
     needs: [setup, build-windows, build-linux, test-linux, build-macos]
@@ -188,29 +189,29 @@ jobs:
 
     steps:
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: pyrite64-windows_${{ needs.setup.outputs.p64_version }}
 
       - name: Download Linux artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: pyrite64-linux_${{ needs.setup.outputs.p64_version }}
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: pyrite64-macos_${{ needs.setup.outputs.p64_version }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.setup.outputs.version_tag }}
           name: Pyrite64 ${{ needs.setup.outputs.version_tag }}
           files: |
             pyrite64-windows.zip
             Pyrite64-x86_64.AppImage
-            pyrite64
+            pyrite64-macos.zip
 
   notify:
     needs: [setup, build-windows, build-linux, test-linux, build-macos, release]
