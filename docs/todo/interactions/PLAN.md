@@ -79,7 +79,7 @@ engine's, the concrete gameplay the game's).
 | AI Kind | bitmask: Alarm, Door, Switch, Throwable, Item, Custom 1, Custom 2, Custom 3 | none | what AI lists search for (section 8) |
 | Approach | Face Object, Snap Point, Object Facing | Face Object | where the actor lines up (section 5.1) |
 | Move | Slide, Walk, Teleport, None | Slide | how it gets there (section 5.1) |
-| Max Angle | degrees, 0 = any | 70 | the player only: how far its facing may be from the facing it would take. Stops use from behind |
+| Max Angle | degrees, 0 = any | 70 | the player only: how far its facing may be from the way to the object (Object Facing: from the object's own facing). Stops use from behind |
 | Priority | 0 to 255 | 0 | when several are in range, the higher wins |
 | When Blocked | Hide, Show and deny | Hide | the gate says no: hide the prompt, or show it and fire Denied on A |
 | Hold | None, Seconds, Until Finish | None | how long the actor stays busy after use (dialog, a lever animation) |

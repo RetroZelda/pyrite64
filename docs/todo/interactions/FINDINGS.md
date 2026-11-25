@@ -348,3 +348,13 @@ P = `pyrite64`.
 - **V5.** A standing guard (`GA_STAND`, `GA_FACE_TARGET`, idle spline) is made kinematic with
   collision masks **0, 0** and `fixedUpdate` returns before any rotation (`Enemy.cpp:2748-2781`):
   `ActFaceTarget` never turns, and a standing guard is invisible to triggers.
+- **V6 (found while building, phase 3).** On an object whose script comes before its Collider, the
+  script's `init` and first `onEnable` run before the collider's `initDelete`, which then writes the
+  baked masks: a mask a script sets in its first `onEnable` is lost. The Player's runtime
+  `| COLLISION_FLAG_CLIMB_TRIGGER` never took effect; climbing worked only because the bit was baked
+  into the prefab. Bits a script needs go into the prefab's collider, or are set again in `onReady`.
+- **V7.** A script id is the 16 characters after `Script::`, the leading `C` included
+  (`assetManager.cpp` reads 16 characters and parses them as hex). A namespace with 17 characters
+  links against the wrong name.
+- **V8.** The editor reads a field default as a literal: `uint8_t usableBy = UsableBy::PLAYER;` fails
+  the build ("Invalid argument value"); write the number.

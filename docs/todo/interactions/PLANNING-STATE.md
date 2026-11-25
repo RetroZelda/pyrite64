@@ -60,9 +60,9 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 - [x] Put the open questions to the owner: two rounds, all answered (below and PLAN.md section 14)
 - [x] Fold the answers into PLAN.md (drafts 2 and 3)
 - [x] Owner approves the plan (2026-11-24)
-- [ ] Phase 1: editor, condition inputs on any script, the snap arrow (pyrite64)
-- [ ] Phase 2: debug scene, enemy test level, scene transitions
-- [ ] Phase 3: interaction core, the player's use, example prefabs, interaction test level
+- [x] Phase 1: editor, condition inputs on any script, the snap arrow (pyrite64 b6cfc98)
+- [x] Phase 2: debug scene, enemy test level, scene transitions (kentucky-castle 44c407c)
+- [x] Phase 3: interaction core, the player's use, example prefabs, interaction test level (kentucky-castle 76dc38f)
 - [ ] Phase 4: climbing on interactions
 - [ ] Phase 5: carry and throw
 - [ ] Phase 6: AI use, alarm panels, thrower
@@ -118,9 +118,41 @@ Made from the evidence; each can change on request.
 
 ## Decisions while building
 
-(none yet)
+1. (Phase 2) The debug scene uses the main game's Player (scale 0.5). Scene 3's Player is at 0.25,
+   the only scene that differs, so `level_enemy_test` plays at the game's scale, not scene 3's.
+2. (Phase 2) "Warp: Load Scene" names its scenes with the `"name"_scene` literal in
+   `src/user/global/constants/Scenes.h` (Main and Debug), not the generated `SCENE_NAMES`, which is
+   positional and would break with gaps in scene ids.
+3. (Phase 2) A scene transition to the current scene becomes a level transition; one to a scene id that
+   does not load gives up after 60 frames and fades back in.
+5. (Phase 3) **Max Angle** is measured from the way to the object (Face Object, Snap Point), or from
+   the object's own facing (Object Facing), not from the snap point's arrow: walking up to an NPC
+   from the side shows TALK; a wall still refuses a player behind it.
+6. (Phase 3) A snap point moves the player across, not up or down: the target keeps the player's own
+   height and the floor decides it.
+7. (Phase 3) Using an interaction fires Unfocused (the prompt goes away while it is in use) and
+   Focused again afterwards if it is still the best one.
+8. (Phase 3) The Door example slides (no transform hierarchy exists for a hinge); Open Offset is in
+   world units along the door's own axes.
+9. (Phase 3) Sign, Talk Point and Button each carry a Log (and the Talk Point a 2-second Delay that
+   fires Finish, standing in for dialog), so the test level shows in the log what fires. The Talk
+   Point uses Move = Walk, the others Slide.
+10. (Phase 3) The test level has a spawn point in front of each example, for "Warp: Spawn (current)";
+    automated input cannot steer reliably while the camera turns with the player.
+11. (Phase 3) Layer 3 is named "Interaction" in `project.p64proj`; only that line was committed, the
+    owner's own change to the file stays uncommitted.
+12. (Phase 3) "Debug Text|Interactions" also shows the player's position and facing.
+4. (Phase 2) Playtest tooling (session scratchpad, rebuilt as needed): `kcbuild.sh` syncs the repo
+   into a scratch copy and builds it there (the real project is never built or opened); `pt.py` drives
+   ares with XTEST keys on a private settings copy (VirtualPad1 mapped, the N64 Gamepad layer cleared,
+   audio muted), sends keys only while ares has focus and the screen is unlocked, waits on game log
+   lines and grabs screenshots. The overlay's cursor keeps its place across scenes.
 
 ## Phase log
 
 | Phase | Commit | What |
 |---|---|---|
+| plan | pyrite64 b9689c1 | PLAN, FINDINGS, PLANNING-STATE |
+| 3 | kentucky-castle 76dc38f | Interactions system, Interaction / Snap / Interactor Condition / Door scripts, the player's INTERACT state, HUD verb, five prefabs, `level_interaction_test`; in ares: PRESS (Slide) toggles the door through a scene event, READ, TALK (Walk, held until a Delay fires Finish), door from both sides, a staff-only door denied by its condition, Teleport and None (scratch patch), the exit pad to Main |
+| 2 | kentucky-castle 44c407c | debug scene 10, `level_enemy_test`, `transitionToScene`, Target Scene, "Warp: Load Scene"; in ares: Main → Debug → Main by warp, and a scratch-only volume in the debug scene → Main at Hyrule Field |
+| 1 | pyrite64 b6cfc98 | `P64_CONDITION_INPUTS` in any script; `P64_EDITOR_ARROW`; 7 host tests (129 cases pass); `conditionChecks.sh` 22/22, `graphChecks.sh` 7/7; arrow seen in the editor on a scratch copy of test_events |
