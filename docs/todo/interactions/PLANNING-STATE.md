@@ -5,14 +5,15 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 (`../conditionals/`).
 
 - **Status:** ALL DONE (2026-11-24). Every phase is built, tested in ares and committed; the guide is
-  `kentucky-castle/docs/Interactions/README.md` with screenshots and videos. Waiting for the owner's
-  review. Nothing is pushed.
+  `kentucky-castle/docs/Interactions/README.md` with screenshots and videos. Follow-up done: climb and
+  drop are one interaction (decisions 34 to 38). Pushed to origin `feature/interactions` in both repos
+  at the owner's request (2026-11-24); waiting for the owner's review.
 - **Working mode (owner, 2026-11-24):** "it looks good, you can start! you can commit each phase, and
   then I want a guide on how to use it step by step with images and video where necessary". Commit
   each phase on `feature/interactions` with no co-author or AI attribution lines. Open points take
   the recommended option and are logged under "Decisions while building".
 - **Branches:** `feature/interactions` in `pyrite64` (from `stream/full-frontal` 2f2af3f) and in
-  `kentucky-castle` (from `main` d697148). Nothing is committed or pushed until the owner asks.
+  `kentucky-castle` (from `main` d697148). Pushed to origin when the owner asked (2026-11-24).
 - **Status board:** planning was request `cgkap9`; the build is request `hhq3j6`
   (http://mini-debian:8765/r/hhq3j6).
 - Never commit the owner's own change to `kentucky-castle/project.p64proj`.
@@ -69,6 +70,8 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 - [x] Phase 5: carry and throw (kentucky-castle 744ee29)
 - [x] Phase 6: AI use, alarm panels, thrower (kentucky-castle 2f83b87)
 - [x] Phase 7: the guide with images and video (kentucky-castle 43104c5)
+- [x] Follow-up: climb and drop on one Climb Wall, chosen by conditions (kentucky-castle 072c02b)
+- [x] Push `feature/interactions` in both repos to origin (owner asked)
 
 ## The owner's answers, word for word (2026-11-24)
 
@@ -198,11 +201,35 @@ Made from the evidence; each can change on request.
     `spawn_alarm` starts out of the alarm guard's sight so walking toward it shows the run to the panel.
 33. (Phase 7) Smoke test of the final build: the enemy test level plays as before.
 
+Follow-up, owner (2026-11-24), word for word: "lets make sure the ladder climb and drop are the same
+interaction volume and use conditionals to determine if it should start to climb or if it should drop".
+Then: "once this is done can you push to origin".
+
+34. (Follow-up) A general mechanism, not a climb special case: a second condition input
+    **AlternateWhen** on the Interaction script. All true = the alternate form (Alternate Verb on the
+    prompt, **UsedAlternate** fired instead of Used); nothing wired = PrimaryVerb / AlternateVerb
+    decide as before, so the Door is unchanged. Pins are appended (InPin 7, OutPin 10) so placed
+    bindings keep their numbers.
+35. (Follow-up) Verb **DROP** appended (12). The Climb Wall: Verb CLIMB, Alternate Verb DROP, and a
+    child **IsClimbing** (Interactor Condition, Climbing) wired into AlternateWhen inside the prefab,
+    so every Climb Wall has it and levels need no change.
+36. (Follow-up) The form is settled in `begin()` and stored in the entry before the actor becomes the
+    user. Asked after, "Climbing" is already true and the climb start logged as a DROP (seen in ares,
+    fixed). `use()` fires from the stored form.
+37. (Follow-up) The drop is not a new use: the climber is still the user, so the Player calls
+    `useAlternate` (UsedAlternate) and then leaves the climb, which ends the use (Finished). A on the
+    wall drops only while the wall is in its alternate form; a wall whose AlternateWhen says no keeps
+    the player on it (stick and the top still work).
+38. (Follow-up) Interactor Condition gains **Using it** (the asking interaction's user is this actor;
+    `currentInteraction()` added next to `currentActor()`), **Climbing** and **Not climbing**.
+    Appended to its enum so existing conditions keep their test.
+
 ## Phase log
 
 | Phase | Commit | What |
 |---|---|---|
 | plan | pyrite64 b9689c1 | PLAN, FINDINGS, PLANNING-STATE |
+| follow-up | kentucky-castle 072c02b | climb and drop as one interaction (AlternateWhen, UsedAlternate, DROP, Interactor Is Using it / Climbing / Not climbing, ClimbWall wiring), guide section with the Events-window image and a climb-and-drop clip; in ares: the test block and Kokiri's ladder show CLIMB then DROP, log `uses 349 (CLIMB)` then `uses 349 (DROP)` |
 | 7 | kentucky-castle 43104c5 | the guide (step by step, reference, technical overview), 5 editor images, 12 clips (GIF + MP4) |
 | 6 | kentucky-castle 2f83b87 | guard commands and actions, ActFaceTarget fix, roles, Alarm Panel, `guard_alarm`, `guard_thrower`, AI area; in ares: the alarm guard ran to the panel and pressed it (Alarm raised), the thrower threw both crates and fetched them again (every throw hit), a scratch list opened the AI-only door, a standing guard turned to face the player |
 | 5 | kentucky-castle 744ee29 | carry: pick up, place, release, rest; the player's throw and set down; Throwable; Crate; in ares: PICK UP, carry, throw (lands, rests, offered again), set down with B, pick up again |
