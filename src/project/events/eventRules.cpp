@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "json.hpp"
+#include "../../../n64/engine/include/events/pins.h"
 
 namespace fs = std::filesystem;
 
@@ -159,6 +160,84 @@ void Project::Events::Catalog::loadFile(const fs::path &file, bool engineFile, s
       events[name] = ev;
     }
   }
+
+  // Fork: animation events (docs/todo/anim-events/PLAN.md, section 3.1)
+  if(doc.contains("animationEvents")) {
+    const auto &section = doc["animationEvents"];
+    if(!section.is_object()) {
+      errors.push_back(file.string() + ": 'animationEvents' must be an object: model path -> its events");
+      return;
+    }
+    for(const auto &[model, value] : section.items()) {
+      const std::string where = file.string() + ": animation events of '" + model + "'";
+      if(auto it = animationEvents.find(model); it != animationEvents.end()) {
+        errors.push_back(where + ": the model is listed twice (also in " + it->second.file + ")");
+        continue;
+      }
+      if(!value.is_object() || !value.contains("events") || !value["events"].is_array()) {
+        errors.push_back(where + ": needs an \"events\" array");
+        continue;
+      }
+      AnimEventList list{};
+      list.file = file.string();
+      if(value.contains("doc") && value["doc"].is_string()) list.doc = value["doc"];
+      for(const auto &item : value["events"]) {
+        if(!item.is_object() || !item.contains("name") || !item["name"].is_string()) {
+          errors.push_back(where + ": every event needs a \"name\"");
+          continue;
+        }
+        AnimEvent ev{};
+        ev.name = item["name"];
+        if(auto problem = animEventNameProblem(ev.name); !problem.empty()) {
+          errors.push_back(where + ": " + problem);
+          continue;
+        }
+        const bool ownPin = std::any_of(std::begin(P64::Events::Pins::ANIM_OUT), std::end(P64::Events::Pins::ANIM_OUT),
+                                        [&](const char* pin) { return ev.name == pin; });
+        if(ownPin) {
+          errors.push_back(where + ": '" + ev.name + "' is a pin Model (Animated) already has");
+          continue;
+        }
+        const bool duplicate = std::any_of(list.events.begin(), list.events.end(), [&](const AnimEvent &e) { return e.name == ev.name; });
+        if(duplicate) {
+          errors.push_back(where + ": '" + ev.name + "' is listed twice");
+          continue;
+        }
+        if(item.contains("doc") && item["doc"].is_string()) ev.doc = item["doc"];
+        if(item.contains("value") && item["value"].is_string()) ev.value = item["value"];
+        list.events.push_back(ev);
+      }
+      if(list.events.size() > P64::Events::Pins::ANIM_EVENTS_MAX) {
+        errors.push_back(where + ": " + std::to_string(list.events.size()) + " events, at most " +
+          std::to_string(P64::Events::Pins::ANIM_EVENTS_MAX) + " fit on one model; the rest are left out");
+        list.events.resize(P64::Events::Pins::ANIM_EVENTS_MAX);
+      }
+      animationEvents[model] = list;
+    }
+  }
+}
+
+std::string Project::Events::animEventNameProblem(const std::string &name)
+{
+  if(name.empty()) return "an animation event needs a name";
+  size_t partStart = 0;
+  for(size_t i = 0; i <= name.size(); ++i) {
+    if(i == name.size() || name[i] == '.') {
+      if(i == partStart) return "'" + name + "' has an empty part; use letters, digits and _, with dots between the parts";
+      partStart = i + 1;
+      continue;
+    }
+    const char c = name[i];
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+    if(!ok) return "'" + name + "' is not a valid animation event name; use letters, digits and _, with dots between the parts";
+  }
+  return {};
+}
+
+const Project::Events::AnimEventList* Project::Events::Catalog::findAnimEvents(const std::string &modelPath) const
+{
+  auto it = animationEvents.find(modelPath);
+  return it == animationEvents.end() ? nullptr : &it->second;
 }
 
 void Project::Events::Catalog::loadDir(const fs::path &dir, bool engineFiles, std::vector<std::string> &errors)

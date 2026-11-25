@@ -600,6 +600,7 @@ struct Editor::EventGraphWindow::State
         for(const auto &n : pin.muted) tip += (tip.empty() ? "" : "\n") + n + " (muted on this instance)";
         if(pin.ref.link) tip = "Parent link " + pin.ref.pin + (tip.empty() ? "" : ": " + tip) + "\nDrag a wire to repoint it for this instance";
         if(tip.empty()) tip = pin.ref.input ? "Not bound: drag a wire into it" : "Not bound: drag a wire out of it";
+        if(!pin.doc.empty()) tip = pin.doc + "\n" + tip; // Fork: animation events
         if(row.problem) tip += "\n" + pin.problem;
         if(row.hinted) tip += "\n" + pin.hint;
         row.tooltip = tip;

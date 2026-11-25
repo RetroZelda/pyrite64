@@ -52,6 +52,7 @@ namespace Project::Events::Graph
     bool declared{true};              // false: the script lost the pin, its bindings do nothing
     std::string problem{};            // why a binding cannot work (drawn red)
     std::string hint{};               // a binding that reaches nothing here
+    std::string doc{};                // Fork: animation events, what the pin is (its catalog doc)
     // Fork: conditions (docs/todo/conditionals/PLAN.md)
     std::vector<std::string> locked{}; // events the script itself binds to the pin (P64_CONDITION_TRIGGERS
                                        // on Check): wired like 'names', but not stored in the file

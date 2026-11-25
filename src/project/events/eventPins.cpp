@@ -5,32 +5,19 @@
 #include "eventPins.h"
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
 
 #include "../project.h"
 #include "../component/components.h"
 #include "../canvas/canvas.h"
 #include "../../../n64/engine/include/events/pins.h"
 
-int Project::Events::PinList::indexOf(bool input, const std::string &pin) const
-{
-  const auto &list = input ? in : out;
-  auto it = std::find(list.begin(), list.end(), pin);
-  if(it == list.end())return -1;
-  const int pos = static_cast<int>(it - list.begin());
-  const int conditionStart = input ? conditionIn : conditionOut;
-  if(conditionStart >= 0 && pos >= conditionStart) return P64::Events::Pins::CONDITION_PIN_BASE + (pos - conditionStart);
-  return pos;
-}
+namespace fs = std::filesystem;
 
-bool Project::Events::PinList::isConditionPin(bool input, const std::string &pin) const
+namespace
 {
-  const int index = indexOf(input, pin);
-  return index >= P64::Events::Pins::CONDITION_PIN_BASE;
-}
-
-bool Project::Events::PinList::readsConditions(const std::string &pin) const
-{
-  return std::find(conditionInputs.begin(), conditionInputs.end(), pin) != conditionInputs.end();
+  constexpr int ANIM_MODEL_ID = 10; // P64::Comp::AnimModel::ID
 }
 
 Project::Events::PinList Project::Events::pinsOf(Project &project, const Component::Entry &comp)
@@ -64,7 +51,65 @@ Project::Events::PinList Project::Events::pinsOf(Project &project, const Compone
     for(uint8_t i = 0; i < pins->in.count; ++i) res.in.emplace_back(pins->in.names[i]);
     for(uint8_t i = 0; i < pins->out.count; ++i) res.out.emplace_back(pins->out.names[i]);
   }
+
+  // Fork: animation events, the events the catalog lists for this component's model
+  if(comp.id == ANIM_MODEL_ID) {
+    if(auto *model = project.getAssets().getEntryByUUID(Component::AnimModel::getModelUUID(comp))) {
+      if(auto *list = projectCatalog(project).catalog.findAnimEvents(model->projectPath)) res.addAnimEvents(*list);
+    }
+  }
   return res;
+}
+
+namespace
+{
+  // every *.json of the catalog folders with its file time: a change in any of them reloads
+  using Stamp = std::vector<std::pair<std::string, int64_t>>;
+
+  void addStamps(const fs::path &dir, Stamp &out)
+  {
+    std::error_code ec;
+    if(!fs::is_directory(dir, ec))return;
+    for(const auto &entry : fs::directory_iterator(dir, ec)) {
+      if(!entry.is_regular_file(ec) || entry.path().extension() != ".json")continue;
+      const auto time = fs::last_write_time(entry.path(), ec);
+      out.emplace_back(entry.path().string(), static_cast<int64_t>(time.time_since_epoch().count()));
+    }
+  }
+
+  struct CatalogCache
+  {
+    std::string projectPath{};
+    Stamp stamp{};
+    std::chrono::steady_clock::time_point checked{};
+    bool loaded{false};
+    Project::Events::CachedCatalog data{};
+  };
+}
+
+const Project::Events::CachedCatalog& Project::Events::projectCatalog(Project &project, bool refresh)
+{
+  static CatalogCache cache{};
+  const auto now = std::chrono::steady_clock::now();
+  const bool sameProject = cache.loaded && cache.projectPath == project.getPath();
+  if(sameProject && !refresh && now - cache.checked < std::chrono::milliseconds(500)) return cache.data;
+  cache.checked = now;
+
+  const fs::path engineDir{"data/events"};
+  const fs::path projectDir = fs::path{project.getPath()} / "events";
+  Stamp stamp{};
+  addStamps(engineDir, stamp);
+  addStamps(projectDir, stamp);
+  std::sort(stamp.begin(), stamp.end());
+  if(sameProject && stamp == cache.stamp) return cache.data;
+
+  cache.projectPath = project.getPath();
+  cache.stamp = stamp;
+  cache.loaded = true;
+  cache.data = {};
+  cache.data.catalog.loadDir(engineDir, true, cache.data.errors);
+  cache.data.catalog.loadDir(projectDir, false, cache.data.errors);
+  return cache.data;
 }
 
 std::string Project::Events::displayName(Project &project, const Component::Entry &comp)

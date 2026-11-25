@@ -280,7 +280,10 @@ namespace
         ImGui::PopStyleColor();
         ImGui::SetItemTooltip("This pin is no longer declared; the bindings are kept but do nothing");
       } else {
-        ImGui::SetItemTooltip(input ? "Input: receives the events listed below" : "Output: fires the events listed below");
+        const char* role = input ? "Input: receives the events listed below" : "Output: fires the events listed below";
+        const auto doc = sec.pins.docOf(pin); // Fork: animation events
+        if(doc.empty()) ImGui::SetItemTooltip("%s", role);
+        else ImGui::SetItemTooltip("%s\n%s", doc.c_str(), role);
       }
 
       if(!sec.readOnly) {

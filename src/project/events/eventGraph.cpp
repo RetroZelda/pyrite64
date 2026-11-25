@@ -188,6 +188,7 @@ namespace
         pin.ref.input = input;
         pin.label = name;
         pin.declared = isDeclared;
+        pin.doc = declared.docOf(name);
         if(auto it = map.find(name); it != map.end()) pin.names = it->second;
         finishPin(c, pin, true);
         cat.pins.push_back(pin);
@@ -967,13 +968,17 @@ PinRef Project::Events::Graph::parsePin(Project &project, Object &root, const Mo
     ref.link = true;
     return model.findPin(ref) ? ref : PinRef{};
   }
-  const auto dot = spec.rfind('.');
-  if(dot == std::string::npos) return {};
-  const auto compName = spec.substr(0, dot);
-  ref.pin = spec.substr(dot + 1);
+  // "<category>.<pin>". A pin name may hold dots too (animation events: "Run.STEP_LEFT"), so
+  // every split is tried, the shortest category first.
+  for(auto dot = spec.find('.'); dot != std::string::npos; dot = spec.find('.', dot + 1)) {
+    const auto compName = spec.substr(0, dot);
+    ref.pin = spec.substr(dot + 1);
 
-  // the category: "Object", a component's display name or its uuid
-  if(compName != "Object") {
+    // the category: "Object", a component's display name or its uuid
+    if(compName == "Object") {
+      if(model.findPin(ref)) return ref;
+      continue;
+    }
     const auto *graphNode = model.find(node->uuid);
     if(!graphNode) return {};
     for(const auto &cat : graphNode->categories) {
@@ -984,7 +989,6 @@ PinRef Project::Events::Graph::parsePin(Project &project, Object &root, const Mo
         }
       }
     }
-    return {};
   }
-  return model.findPin(ref) ? ref : PinRef{};
+  return {};
 }

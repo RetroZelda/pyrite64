@@ -146,6 +146,50 @@ namespace
     }
     Utils::FS::saveTextFileIfChanged(project.getPath() + "/src/p64/eventNames.cpp", src);
   }
+
+  // Fork: animation events. The asset a catalog key names: its path relative to the project.
+  const Project::AssetManagerEntry* findAsset(Project::Project &project, const std::string &projectPath)
+  {
+    for(const auto &typed : project.getAssets().getEntries()) {
+      for(const auto &entry : typed) {
+        if(entry.projectPath == projectPath) return &entry;
+      }
+    }
+    return nullptr;
+  }
+
+  // Fork: animation events (docs/todo/anim-events/PLAN.md, section 3.1). For every listed model in
+  // the ROM: its asset index and the hash of each pin name, in pin order. pinsOf() takes the pin
+  // indices from the same list, and game code fires by name, so the two can never disagree.
+  void writeAnimEventTable(Project::Project &project, Build::SceneCtx &ctx)
+  {
+    std::string src = "// NOTE: Auto-Generated File!\n// Fork: animation events, the pins of each model's animation events.\n\n"
+                      "#include \"events/bus.h\"\n#include \"scene/components/animModel.h\"\n\n";
+    std::string lists{};
+    std::string pins{};
+    size_t count = 0;
+    for(const auto &[model, list] : ctx.eventCatalog.animationEvents) {
+      const auto *asset = findAsset(project, model);
+      if(!asset || asset->type != Project::FileType::MODEL_3D || list.events.empty())continue;
+      auto idx = ctx.assetUUIDToIdx.find(asset->getUUID());
+      if(idx == ctx.assetUUIDToIdx.end())continue; // not in the ROM
+      pins += std::format("  // {}\n  constexpr uint32_t PINS_{}[] = {{\n", model, count);
+      for(const auto &ev : list.events) {
+        pins += std::format("    0x{:08X}u, // {}\n", P64::Events::pinHash(ev.name.c_str(), ev.name.size()), ev.name);
+      }
+      pins += "  };\n";
+      lists += std::format("    {{{}, {}, PINS_{}}},\n", idx->second, list.events.size(), count);
+      ++count;
+    }
+    if(count > 0) {
+      src += "namespace\n{\n" + pins + "\n  constexpr P64::Comp::AnimModel::EventList LISTS[] = {\n" + lists + "  };\n}\n\n";
+      src += "void P64::Events::Generated::registerAnimEvents()\n{\n"
+             "  P64::Comp::AnimModel::setEventLists(LISTS, sizeof(LISTS) / sizeof(LISTS[0]));\n}\n";
+    } else {
+      src += "void P64::Events::Generated::registerAnimEvents() {}\n";
+    }
+    Utils::FS::saveTextFileIfChanged(project.getPath() + "/src/p64/animEvents.cpp", src);
+  }
 }
 
 void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
@@ -154,11 +198,22 @@ void Build::Events::begin(Project::Project &project, SceneCtx &ctx)
   ctx.eventIndex = {};
   ctx.eventMessages.clear();
 
-  std::vector<std::string> errors{};
-  ctx.eventCatalog.loadDir("data/events", true, errors);
-  ctx.eventCatalog.loadDir(fs::path{project.getPath()} / "events", false, errors);
-  for(const auto &err : errors) ctx.eventMessages.push_back({Message::Level::Error, "event catalog: " + err});
+  // the editor's copy, read again now: pinsOf() gives the Model (Animated) pins from the same lists
+  const auto &cached = Project::Events::projectCatalog(project, true);
+  ctx.eventCatalog = cached.catalog;
+  for(const auto &err : cached.errors) ctx.eventMessages.push_back({Message::Level::Error, "event catalog: " + err});
   ctx.eventIndex.addCatalog(ctx.eventCatalog);
+
+  // Fork: animation events, a key that names no model does nothing
+  for(const auto &[model, list] : ctx.eventCatalog.animationEvents) {
+    const auto *asset = findAsset(project, model);
+    const std::string where = "event catalog: " + list.file + ": animation events of '" + model + "'";
+    if(!asset) {
+      ctx.eventMessages.push_back({Message::Level::Warning, where + ": no asset has this path, so they do nothing"});
+    } else if(asset->type != Project::FileType::MODEL_3D) {
+      ctx.eventMessages.push_back({Message::Level::Warning, where + ": the asset is not a 3D model, so they do nothing"});
+    }
+  }
 
   for(const auto &script : project.getAssets().getTypeEntries(Project::FileType::CODE_GLOBAL)) {
     for(const auto &sys : script.systemPins) {
@@ -400,5 +455,6 @@ bool Build::Events::finish(Project::Project &project, SceneCtx &ctx)
   }
 
   writeNameTable(project, ctx);
+  writeAnimEventTable(project, ctx);
   return ok;
 }

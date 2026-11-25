@@ -215,6 +215,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
         src/project/events/eventPins.cpp
+        src/project/events/eventPinList.cpp
         src/project/events/eventNesting.cpp
         src/project/events/eventGraph.cpp
         src/project/events/eventUsages.cpp
@@ -426,6 +427,7 @@ if(PYRITE64_BUILD_TESTS)
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
+        src/project/events/eventPinList.cpp
         n64/engine/src/events/busCore.cpp
         n64/engine/src/events/conditionCore.cpp
     )

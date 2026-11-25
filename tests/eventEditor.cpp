@@ -12,6 +12,7 @@
 #include "utils/codeParser.h"
 #include "project/events/eventBindings.h"
 #include "project/events/eventRules.h"
+#include "project/events/eventPins.h"
 #include "events/pins.h"
 
 namespace fs = std::filesystem;
@@ -447,5 +448,103 @@ TEST_SUITE("prefab scope")
     CHECK(resolveName("prefab_1::Alarm", levels, 2).name == "scene::Alarm7");
     CHECK(resolveName("prefab::Plate.Pressed", levels, 2).name == "prefab::Plate.Pressed");
     CHECK(resolveName("scene::Lever", levels, 2).name == "scene::Lever");
+  }
+}
+
+// Fork: animation events (docs/todo/anim-events/PLAN.md)
+TEST_SUITE("animation events")
+{
+  const char* LIST = R"({
+    "animationEvents": {
+      "assets/hero.glb": {
+        "doc": "the hero",
+        "events": [
+          {"name": "Run.STEP_LEFT", "doc": "Run, at 0.65 s", "value": "the clip index"},
+          {"name": "Leap.LAND"},
+          {"name": "Any.LAND", "doc": "LAND of any clip"}
+        ]
+      }
+    }
+  })";
+
+  TEST_CASE("the catalog lists a model's events in file order") {
+    TempDir dir{};
+    dir.write("events/anim.json", LIST);
+    Catalog cat{};
+    std::vector<std::string> errors{};
+    cat.loadDir(dir.path / "events", false, errors);
+    CHECK(errors.empty());
+    const auto *list = cat.findAnimEvents("assets/hero.glb");
+    REQUIRE(list != nullptr);
+    CHECK(list->doc == "the hero");
+    REQUIRE(list->events.size() == 3);
+    CHECK(list->events[0].name == "Run.STEP_LEFT");
+    CHECK(list->events[0].value == "the clip index");
+    CHECK(list->events[2].name == "Any.LAND");
+    CHECK(cat.findAnimEvents("assets/other.glb") == nullptr);
+  }
+
+  TEST_CASE("bad names, duplicates, a model listed twice and too many events are errors") {
+    TempDir dir{};
+    dir.write("events/a.json", R"({"animationEvents": {"assets/a.glb": {"events": [
+      {"name": "Run..STEP"}, {"name": "Run.STEP-1"}, {"name": "Ok"}, {"name": "Ok"}, {"name": "MainFinished"}, {"doc": "no name"}
+    ]}}})");
+    dir.write("events/b.json", R"({"animationEvents": {"assets/a.glb": {"events": []}, "assets/c.glb": {"events": "x"}}})");
+    std::string many = R"({"animationEvents": {"assets/many.glb": {"events": [)";
+    for(int i = 0; i < 70; ++i) many += (i ? "," : "") + std::string{"{\"name\": \"E"} + std::to_string(i) + "\"}";
+    many += "]}}}";
+    dir.write("events/c.json", many);
+
+    Catalog cat{};
+    std::vector<std::string> errors{};
+    cat.loadDir(dir.path / "events", false, errors);
+    auto has = [&](const std::string &part) {
+      return std::any_of(errors.begin(), errors.end(), [&](const std::string &e) { return e.find(part) != std::string::npos; });
+    };
+    CHECK(has("'Run..STEP' has an empty part"));
+    CHECK(has("'Run.STEP-1' is not a valid animation event name"));
+    CHECK(has("'Ok' is listed twice"));
+    CHECK(has("'MainFinished' is a pin Model (Animated) already has"));
+    CHECK(has("every event needs a \"name\""));
+    CHECK(has("the model is listed twice"));
+    CHECK(has("needs an \"events\" array"));
+    CHECK(has("70 events, at most 64"));
+    REQUIRE(cat.findAnimEvents("assets/a.glb") != nullptr);
+    CHECK(cat.findAnimEvents("assets/a.glb")->events.size() == 1); // only "Ok"
+    CHECK(cat.findAnimEvents("assets/many.glb")->events.size() == P64::Events::Pins::ANIM_EVENTS_MAX);
+  }
+
+  TEST_CASE("the pins follow the component's own outputs, from ANIM_EVENT_PIN_BASE") {
+    TempDir dir{};
+    dir.write("events/anim.json", LIST);
+    Catalog cat{};
+    std::vector<std::string> errors{};
+    cat.loadDir(dir.path / "events", false, errors);
+
+    PinList pins{};
+    pins.in = {"PlayMain", "PlayBlend"};
+    pins.out = {"MainFinished"};
+    pins.addAnimEvents(*cat.findAnimEvents("assets/hero.glb"));
+    REQUIRE(pins.out.size() == 4);
+    CHECK(pins.indexOf(false, "MainFinished") == 0);
+    CHECK(pins.indexOf(false, "Run.STEP_LEFT") == P64::Events::Pins::ANIM_EVENT_PIN_BASE);
+    CHECK(pins.indexOf(false, "Any.LAND") == P64::Events::Pins::ANIM_EVENT_PIN_BASE + 2);
+    CHECK(pins.indexOf(true, "Run.STEP_LEFT") == -1);
+    CHECK(pins.indexOf(true, "PlayBlend") == 1);
+    // the same index range as condition pins, but not a condition
+    CHECK_FALSE(pins.isConditionPin(false, "Run.STEP_LEFT"));
+    CHECK(pins.docOf("Run.STEP_LEFT") == "Run, at 0.65 s\nValue: the clip index");
+    CHECK(pins.docOf("Leap.LAND").empty());
+
+    PinList none{};
+    none.out = {"MainFinished"};
+    none.addAnimEvents({});
+    CHECK(none.animEventOut == -1);
+    CHECK(none.out.size() == 1);
+  }
+
+  TEST_CASE("a dotted pin name hashes like the editor and Python's zlib.crc32") {
+    CHECK(P64::Events::pinHash("Run.STEP_LEFT", 13) == 0xDE86E37Du);
+    CHECK(P64::Events::pinHash("Any.LAND", 8) == 0xB69100BEu);
   }
 }

@@ -4,8 +4,11 @@
 */
 // Fork: event graph. The input and output pins a component or an object offers.
 #pragma once
+#include <map>
 #include <string>
 #include <vector>
+
+#include "eventRules.h"
 
 namespace Project { class Project; struct Canvas; struct CanvasElement; }
 namespace Project::Component { struct Entry; }
@@ -25,14 +28,26 @@ namespace Project::Events
     std::vector<std::string> scriptTriggers{};  // events the script binds to Check (P64_CONDITION_TRIGGERS)
     std::vector<std::string> triggers{};        // the same, or none when this component has "Auto Check" off
 
+    // Fork: animation events (docs/todo/anim-events/PLAN.md). A Model (Animated) component's
+    // outputs end with its model's animation events; this is the position they start at (-1: none).
+    int animEventOut{-1};
+    std::map<std::string, std::string> docs{}; // pin -> what it is, for tooltips
+
     [[nodiscard]] bool empty() const { return in.empty() && out.empty(); }
     [[nodiscard]] bool isCondition() const { return conditionOut >= 0; }
 
     /**
      * The pin's index as the runtime knows it, -1 if there is no such pin: the position in the
-     * list, and for a condition pin P64::Events::Pins::CONDITION_PIN_BASE + its position among them.
+     * list, for a condition pin P64::Events::Pins::CONDITION_PIN_BASE + its position among them,
+     * and for an animation event ANIM_EVENT_PIN_BASE + its position in the model's list.
      */
     [[nodiscard]] int indexOf(bool input, const std::string &pin) const;
+
+    /** Fork: animation events. Appends a model's animation events to the outputs, with their docs. */
+    void addAnimEvents(const AnimEventList &list);
+
+    /** The tooltip text of a pin ("" if it has none). */
+    [[nodiscard]] std::string docOf(const std::string &pin) const;
 
     /** 'pin' is one of the pins every condition has (not one the script declares itself). */
     [[nodiscard]] bool isConditionPin(bool input, const std::string &pin) const;
@@ -41,8 +56,25 @@ namespace Project::Events
     [[nodiscard]] bool readsConditions(const std::string &pin) const;
   };
 
-  /** Pins of a component: a Code component's script pins, or an engine component's own. */
+  /**
+   * Pins of a component: a Code component's script pins, or an engine component's own. A Model
+   * (Animated) component also gets the animation events of its model (projectCatalog()).
+   */
   PinList pinsOf(Project &project, const Component::Entry &comp);
+
+  /** Fork: animation events. The project's event catalog and the problems found reading it. */
+  struct CachedCatalog
+  {
+    Catalog catalog{};
+    std::vector<std::string> errors{};
+  };
+
+  /**
+   * The event catalog (data/events and the project's events/ folder), kept between calls and read
+   * again when a file there is added, removed or changed. Without 'refresh' the files are looked
+   * at no more than twice a second; the build passes true.
+   */
+  const CachedCatalog& projectCatalog(Project &project, bool refresh = false);
 
   /** Pins every object has, whatever its components (Enable, Ready, ...). */
   const PinList& objectPins();

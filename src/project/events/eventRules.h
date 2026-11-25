@@ -46,10 +46,33 @@ namespace Project::Events
     bool engine{false}; // fired by the engine itself
   };
 
+  // Fork: animation events (docs/todo/anim-events/PLAN.md). The "animationEvents" section: per
+  // model asset, the output pins its Model (Animated) components get.
+  struct AnimEvent
+  {
+    std::string name{};  // the pin name, "Leap.LAND"
+    std::string doc{};
+    std::string value{}; // what the value is, for the tooltip
+  };
+
+  struct AnimEventList
+  {
+    std::string doc{};
+    std::vector<AnimEvent> events{}; // in pin order
+    std::string file{};              // the catalog file that lists it, for messages
+  };
+
+  /** Empty if 'name' is a valid animation event pin name (letters, digits, _ and dots, no empty part). */
+  std::string animEventNameProblem(const std::string &name);
+
   struct Catalog
   {
     std::map<std::string, std::string> namespaces{}; // game namespace -> description
     std::map<std::string, CatalogEvent> events{};
+    std::map<std::string, AnimEventList> animationEvents{}; // model project path -> its events
+
+    /** The animation events of a model ("assets/x.glb"), or nullptr if it lists none. */
+    [[nodiscard]] const AnimEventList* findAnimEvents(const std::string &modelPath) const;
 
     /** Reads one file. Problems are appended to 'errors'. */
     void loadFile(const std::filesystem::path &file, bool engineFile, std::vector<std::string> &errors);
