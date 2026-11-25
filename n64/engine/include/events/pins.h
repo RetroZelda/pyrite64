@@ -50,6 +50,13 @@ namespace P64::Events::Pins
   enum class AnimIn : uint8_t { PlayMain, PlayBlend };
   enum class AnimOut : uint8_t { MainFinished };
 
+  // Fork: animation events (docs/todo/anim-events/PLAN.md). A Model (Animated) component also has
+  // one output pin per animation event that its model lists in the project's event catalog
+  // ("animationEvents" in events/*.json). Game code fires them with AnimModel::fireEvent(). Their
+  // index is ANIM_EVENT_PIN_BASE + the position in that list, so the outputs above can still grow.
+  inline constexpr uint8_t ANIM_EVENT_PIN_BASE = 0x80;
+  inline constexpr uint8_t ANIM_EVENTS_MAX = 64; // per model
+
   // Camera (3)
   inline constexpr const char* CAMERA_IN[] = {"Activate"};
   enum class CameraIn : uint8_t { Activate };

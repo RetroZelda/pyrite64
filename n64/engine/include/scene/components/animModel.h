@@ -107,6 +107,30 @@ namespace P64::Comp
       }
 
 
+    // Fork: animation events (docs/todo/anim-events/PLAN.md, section 3.1)
+
+    /** The animation events one model lists: the hash of each pin name, in pin order. */
+    struct EventList
+    {
+      uint16_t assetIdx;
+      uint8_t count;
+      const uint32_t* pins;
+    };
+
+    /** Called once at boot by the generated src/p64/animEvents.cpp. */
+    static void setEventLists(const EventList* lists, uint32_t count);
+
+    /**
+     * Fires the animation-event output pin 'pin' of this Model (Animated) component, the one named
+     * like that in the list of the model it currently shows. The engine never decides when: game
+     * code calls this (Kentucky Castle's animation drivers, from the trait events).
+     * @param pin the hash of the full pin name: P64::Events::pinHash("Leap.LAND", 9)
+     * @param value passed on to the listeners
+     * @return false if nothing can hear it: the object has no bindings, or the model does not list
+     *         the name (a model without a list is normal, so this is not a warning)
+     */
+    static bool fireEvent(Object& obj, AnimModel* data, Events::PinName pin, uint32_t value = 0, uint16_t instigator = 0);
+
     static uint32_t getAllocSize([[maybe_unused]] uint16_t* initData);
 
     static void initDelete([[maybe_unused]] Object& obj, AnimModel* data, void* initData);

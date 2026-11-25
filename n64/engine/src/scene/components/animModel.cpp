@@ -7,6 +7,7 @@
 #include "assets/assetManager.h"
 #include "scene/object.h"
 #include "scene/components/animModel.h"
+#include "scene/components/eventLinks.h"
 #include "assets/assetManager.h"
 #include <t3d/t3dmodel.h>
 
@@ -284,6 +285,36 @@ namespace P64::Comp
       Events::fire(obj, data, static_cast<uint8_t>(Events::Pins::AnimOut::MainFinished), static_cast<uint32_t>(data->animIdxMain));
     }
     data->mainWasPlaying = playing ? 1 : 0;
+  }
+
+  // Fork: animation events (docs/todo/anim-events/PLAN.md). The build lists, per model, the hash
+  // of each event pin name in pin order; a pin's index is ANIM_EVENT_PIN_BASE + its position.
+  namespace
+  {
+    const AnimModel::EventList* eventLists = nullptr;
+    uint32_t eventListCount = 0;
+  }
+
+  void AnimModel::setEventLists(const EventList* lists, uint32_t count)
+  {
+    eventLists = lists;
+    eventListCount = count;
+  }
+
+  bool AnimModel::fireEvent(Object& obj, AnimModel* data, Events::PinName pin, uint32_t value, uint16_t instigator)
+  {
+    if(!data || !obj.getComponent<EventLinks>()) return false; // nothing is bound on this object
+    for(uint32_t m = 0; m < eventListCount; ++m) {
+      const auto &list = eventLists[m];
+      if(list.assetIdx != data->assetIdx)continue;
+      for(uint8_t p = 0; p < list.count; ++p) {
+        if(list.pins[p] != pin.hash)continue;
+        Events::fire(obj, data, static_cast<uint8_t>(Events::Pins::ANIM_EVENT_PIN_BASE + p), value, instigator);
+        return true;
+      }
+      return false;
+    }
+    return false;
   }
 
   // Fork: event graph pins, see events/pins.h. The value is the clip index.

@@ -189,5 +189,7 @@ namespace P64::Events
   namespace Generated
   {
     void registerNames();
+    /** Fork: animation events. In src/p64/animEvents.cpp: hands AnimModel the lists of the models. */
+    void registerAnimEvents();
   }
 }

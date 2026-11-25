@@ -96,6 +96,7 @@ int main()
   P64::VI::SwapChain::init();
 
   P64::Events::Generated::registerNames();       // Fork: event bus, names for debug output
+  P64::Events::Generated::registerAnimEvents();  // Fork: animation events, the pins of each model
   P64::GlobalScript::registerEventPins();        // Fork: event graph, global script input pins
   P64::GlobalScript::callHooks(P64::GlobalScript::HookType::GAME_INIT);
   P64::Events::Internal::postImmediate(P64::Events::Builtin::GameInit); // Fork: event bus
