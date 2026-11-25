@@ -109,6 +109,19 @@ namespace
     return res.empty() ? std::string{"Object"} : res;
   }
 
+  // a pin's part of a new name: like sanitize(), but the dots between parts stay ("Run.STEP_LEFT",
+  // "ClipFinished.Intro"); empty parts are dropped
+  std::string sanitizePin(const std::string &text)
+  {
+    std::string res{};
+    for(char c : text) {
+      if(std::isalnum(static_cast<unsigned char>(c)) || c == '_') res += c;
+      else if(c == '.' && !res.empty() && res.back() != '.') res += c;
+    }
+    while(!res.empty() && res.back() == '.') res.pop_back();
+    return res.empty() ? std::string{"Pin"} : res;
+  }
+
   // ---- problems, as the build reports them
 
   struct Rules
@@ -698,7 +711,7 @@ std::string Project::Events::Graph::autoName(const Model &model, const PinRef &o
   const auto *node = out.canvas ? model.findCanvas(out.canvas) : model.find(out.node);
   const auto *pin = model.findPin(out);
   const std::string base = (ns.empty() ? model.ns : ns) + "::" + sanitize(node ? node->name : "Object") + "." +
-                           sanitize(pin ? pin->label : out.pin);
+                           sanitizePin(pin ? pin->label : out.pin);
   std::string candidate = base;
   for(int n = 2; model.allNames.contains(candidate) || model.codeNames.contains(candidate); ++n) {
     candidate = base + "_" + std::to_string(n);
