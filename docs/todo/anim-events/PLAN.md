@@ -4,7 +4,8 @@ Game code can give a **Model (Animated)** component named output pins, one per a
 fire them. The engine learns the names only from a list the project provides, and it never times
 anything itself. Kentucky Castle fills that list from its traits and fires the pins from its
 animation drivers. Builds on the event graph (`../event-graph/`). Status and decisions:
-[PLANNING-STATE.md](PLANNING-STATE.md).
+[PLANNING-STATE.md](PLANNING-STATE.md). Built 2026-11-25; the guide is Kentucky Castle's
+`docs/EventGraph/README.md`, "Animation events".
 
 ## 1. What the owner asked for (2026-11-25)
 

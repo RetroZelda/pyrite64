@@ -3,10 +3,11 @@
 Read this file first when resuming. The design is [PLAN.md](PLAN.md); it builds on the event graph
 (`../event-graph/`).
 
-- **Status:** PLANNED (2026-11-25). Nothing is built. Waiting for the owner's review of the plan.
-- **Branches (planned):** `feature/anim-events` in `pyrite64` (from `stream/full-frontal`) and in
-  `kentucky-castle` (from `main`). Not created yet. Commits carry no co-author or AI attribution
-  lines.
+- **Status:** BUILT (2026-11-25). Phases 1 to 6 and 8 are done and committed. Phase 7 (the
+  footsteps in ares with real input, and the guard and minion pins) waits for the screen to be
+  unlocked or for the owner's playtest. Phase 9 (release order) is the owner's.
+- **Branches:** `feature/anim-events` in `pyrite64` (from `stream/full-frontal`) and in
+  `kentucky-castle` (from `main`). Commits carry no co-author or AI attribution lines.
 
 ## The owner's request, word for word (2026-11-25)
 
@@ -96,13 +97,54 @@ Each is my recommendation. Change any of them on request.
 17. Accepted differences: a component's Play cuts its own previous sound (only the same foot can,
     a run cycle later), and the dirt may be one frame behind the bone.
 
+## Decisions while building
+
+1. (Phase 1) The limit is a fixed constant, `ANIM_EVENTS_MAX` (64) in `pins.h`, not a `P64_` setting:
+   the editor checks it too, and `pins.h` is shared.
+2. (Phase 1) `fireEvent()` also returns false when the object has no bindings.
+3. (Phase 2) The `PinList` methods moved to `eventPinList.cpp` so the host tests link them.
+   `isConditionPin()` goes by position: 0x80 is shared with the condition pins.
+4. (Phase 2) An animation event named like Model (Animated)'s own output (`MainFinished`) is an error.
+5. (Phase 2) The build reads the catalog through the editor's cache (`projectCatalog(project, true)`),
+   so the pins and the runtime table come from one read of the files.
+6. (Phase 3) No `--ui-script` check: the Events window and the command line share the graph model,
+   so `graphChecks.sh` checks the graph text and unwires and rewires a dotted pin. The command line
+   tried only the last dot to split `<category>.<pin>`; it now tries every split.
+7. (Phase 3) New wires keep the dots of a pin name (`prefab::Player.Run.STEP_LEFT`). Canvas pins get
+   the same (`ui::Hud.ClipFinished.Intro`, was `ClipFinishedIntro`); existing bindings do not change.
+8. (Phase 4) The test model is the jam25 example's `player.glb` (Idle, Walk), its face texture made
+   static (the example sets a placeholder from code) and its second texture copied.
+9. (Phase 4) `nestingChecks.sh` ran ares on the owner's own settings file, which ares writes back on
+   exit; it now runs on a copy, with the debug server off. The owner's file was rewritten once,
+   with the same content (checked line by line).
+10. (Phase 5) Without `DefineModel` a header gets an empty `struct Pin {}` and null pin arrays, so
+    the drivers do no pin work and game code that fires such a pin does not compile.
+11. (Phase 5) The constants are `PinName{pinHash("Run.STEP_LEFT", 13)}`: Python never hashes.
+12. (Phase 5) The drivers fire the two pins before the callback (pins are queued, so listeners see
+    no difference; the callback may change the clip).
+13. (Phase 5) When the list is unchanged the compiler only touches the file, so `make` sees it up to
+    date and git sees nothing. `traits.h` depends on it, so `make traits` writes it.
+14. (Phase 5) The `DefineModel` lines have no trailing comment: the TraitEditor keeps unknown lines
+    word for word, but its parser is not checked against comments.
+15. (Phase 6) Follow Bone's Bone is a `uint16_t` skeleton index. It uses the maths of
+    `AnimationDriver::getBonePosition` (`BonePosition.h`), so the dirt sits where it did.
+16. (Phase 6) The two objects were added and wired on a copy with the command line (`wire --prefab
+    Player.prefab`), and only `Player.prefab` was copied back; `project.p64proj` is untouched.
+17. (Phase 7) Every event of the current guard bodies has a role, so "events without a role" cannot
+    be shown with today's traits; the code path is the same `deliver()` as the others.
+
 ## Open questions
 
-None block phase 1.
+None.
 
 ## Phase log
 
 | Phase | Commit | What |
 |---|---|---|
-| plan | (not committed) | `PLAN.md`, this file |
-| plan review | (not committed) | pin constants moved into the trait generation; the footstep test (PLAN 3.4, phase 6) |
+| plan | pyrite64 cd04f6e | `PLAN.md`, this file, with the owner's review (pin constants in the trait generation, the footsteps) |
+| 1 | pyrite64 1252751 | `ANIM_EVENT_PIN_BASE`, `ANIM_EVENTS_MAX`, `AnimModel::fireEvent`, `setEventLists`, `registerAnimEvents` at boot |
+| 2, 3 | pyrite64 18afe7f | catalog section, cache, `pinsOf()`, tooltips, build checks and `animEvents.cpp`, command-line pin parsing, 4 unit tests (133 pass) |
+| 4 | pyrite64 0b5fff4 | scene 11; in ares 16 of 16; `buildChecks.sh` 10 of 10, `graphChecks.sh` 10 of 10, `nestingChecks.sh` 11 of 11, `conditionChecks.sh` 22 of 22 |
+| 3 | pyrite64 (see the log) | new wires keep the dots of pin names |
+| 5, 6 | kentucky-castle (see the log) | `DefineModel`, `--anim-events`, `EventPin`, both drivers, Follow Bone, the footsteps in `Player.prefab`; builds on a copy with no new warning |
+| 8 | both (see the log) | the guide's "Animation events", trait docs, changelog, the Model (Animated) manual page |

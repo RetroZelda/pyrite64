@@ -28,6 +28,15 @@
 * `P64_CONDITION_INPUTS` works in any object script, not only in conditions: an input pin that reads conditions (a game's "Can Use" gate) is drawn as such in the Events window, and the build warns when no condition's Result is behind it. Read it with `Conditions::Inputs{obj, data, In::Pin}`
 * `P64_EDITOR_ARROW()`, `P64_EDITOR_ARROW(r, g, b)` or `(r, g, b, length)`: the viewport draws an arrow along the object's +Z (the way actors face) over a ring at its feet, for every object with that script, so a spot and a facing can be placed by eye
 
+### Animation events (docs/todo/anim-events)
+* A Model (Animated) component gets one output pin per animation event its model lists, after MainFinished. The list is a new `animationEvents` section of the event catalog (`events/*.json`): per model asset path, the pin names (letters, digits, `_` and dots: `Run.STEP_LEFT`) with a doc and value text for the tooltip. At most 64 per model (`ANIM_EVENTS_MAX`), at pin index 0x80 + position (`ANIM_EVENT_PIN_BASE`)
+* Game code fires one with `AnimModel::fireEvent(obj, anim, pin, value, instigator)`, by the hash of the full pin name (`PinName{pinHash("Run.STEP_LEFT", 13)}`); the engine never decides when, and has no idea where the names come from. The build writes `src/p64/animEvents.cpp` (per model asset index, the pin hashes in order) from the same list the editor numbers the pins from
+* Build messages for the list: errors for a bad or repeated name, a model listed twice, more than 64; warnings for a path that is no asset or not a model
+* Pin tooltips in the Events window and the inspector show the catalog's doc and value text
+* New wires keep the dots of a pin name: `prefab::Player.Run.STEP_LEFT`, `ui::Hud.ClipFinished.Intro` (they were dropped before)
+* The command line (`wire`, `unwire`) finds pins whose names have dots
+* Test scene 11 in `n64/tests/test_events`; the check scripts copy the project's `events/` folder, and `nestingChecks.sh` runs ares on a copy of the settings file
+
 ### Performance
 * `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id
 * `n64/tests/perf_events`: a benchmark of the event bus and the conditions, with its results in the README (about 4 µs an event, 6 µs a condition check, in the ares emulator)
