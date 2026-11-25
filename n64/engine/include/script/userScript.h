@@ -96,7 +96,19 @@
 
 /**
  * Marks input pins (declared with P64_EVENTS_IN) as reading conditions: Result outputs are wired
- * into them. Read them in evaluate() with Conditions::Inputs and call Conditions::notify() from
- * onInput. The editor reads this; it compiles to nothing.
+ * into them. Read them with Conditions::Inputs; a condition calls Conditions::notify() from
+ * onInput. Any script may use it, not only conditions (Fork: interactions): a script asks
+ * Conditions::Inputs{obj, data, In::Pin} whenever it needs the answer. The editor reads this; it
+ * compiles to nothing.
  */
 #define P64_CONDITION_INPUTS(...) static_assert(true, "")
+
+/**
+ * Fork: interactions. The editor draws an arrow along the object's facing (+Z, the way actors
+ * face) and a ring at its feet for every object with this script, so a spot and a direction
+ * (where to stand, which way to look) can be placed by eye:
+ *   P64_EDITOR_ARROW();                 // default colour
+ *   P64_EDITOR_ARROW(0.2, 0.9, 0.4);    // red, green, blue from 0 to 1
+ * The editor reads this; it compiles to nothing.
+ */
+#define P64_EDITOR_ARROW(...) static_assert(true, "")

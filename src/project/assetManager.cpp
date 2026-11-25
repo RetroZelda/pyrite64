@@ -269,6 +269,9 @@ namespace
       // Fork: conditions
       entry.condition = Utils::CPP::parseCondition(code, entry.pins);
       for(const auto &err : entry.condition.errors) entry.pins.errors.push_back(err);
+      // Fork: interactions
+      entry.editorHints = Utils::CPP::parseEditorHints(code);
+      for(const auto &err : entry.editorHints.errors) entry.pins.errors.push_back(err);
     } else {
       entry.systemPins = Utils::CPP::parseGlobalEventPins(code, &entry.pins.errors);
     }

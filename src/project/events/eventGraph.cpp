@@ -199,7 +199,13 @@ namespace
   // script itself binds to Check.
   void markConditionPins(Category &cat, const PinList &pins)
   {
-    if(!pins.isCondition())return;
+    // Fork: interactions, a script that is no condition can still read conditions on an input
+    if(!pins.isCondition()) {
+      for(auto &pin : cat.pins) {
+        if(pin.declared && pin.ref.input) pin.reads = pins.readsConditions(pin.ref.pin);
+      }
+      return;
+    }
     for(auto &pin : cat.pins) {
       if(!pin.declared)continue;
       if(pin.ref.input) {

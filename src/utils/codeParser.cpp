@@ -840,6 +840,45 @@ bool Utils::CPP::Condition::readsConditions(const std::string &pin) const
   return std::find(inputs.begin(), inputs.end(), pin) != inputs.end();
 }
 
+Utils::CPP::EditorHints Utils::CPP::parseEditorHints(const std::string &sourceCode)
+{
+  EditorHints res{};
+  const auto calls = findMacroCalls(stripComments(sourceCode), "P64_EDITOR_ARROW");
+  if(calls.empty())return res;
+  res.arrow = true;
+  if(calls.size() > 1) res.errors.push_back("P64_EDITOR_ARROW is used " + std::to_string(calls.size()) + " times; the first one is drawn");
+
+  const auto &args = calls[0];
+  if(args.size() == 1 && args[0].empty())return res;
+  if(args.size() != 3 && args.size() != 4) {
+    res.errors.push_back("P64_EDITOR_ARROW takes no values, three (red, green, blue from 0 to 1) or four (and a length)");
+    return res;
+  }
+  const auto number = [](std::string text, float &out) {
+    if(!text.empty() && (text.back() == 'f' || text.back() == 'F')) text.pop_back();
+    try {
+      size_t used = 0;
+      out = std::stof(text, &used);
+      return used == text.size();
+    } catch(...) {
+      return false;
+    }
+  };
+  float values[4]{res.arrowColor[0], res.arrowColor[1], res.arrowColor[2], res.arrowLength};
+  for(size_t i = 0; i < args.size(); ++i) {
+    float v = 0.0f;
+    const bool colour = i < 3;
+    if(!number(args[i], v) || (colour && (v < 0.0f || v > 1.0f)) || (!colour && v <= 0.0f)) {
+      res.errors.push_back("P64_EDITOR_ARROW: '" + args[i] + "' is not " + (colour ? "a number from 0 to 1" : "a length above 0"));
+      return res;
+    }
+    values[i] = v;
+  }
+  for(int i = 0; i < 3; ++i) res.arrowColor[i] = values[i];
+  res.arrowLength = values[3];
+  return res;
+}
+
 Utils::CPP::Condition Utils::CPP::parseCondition(const std::string &sourceCode, const EventPins &pins)
 {
   Condition res{};
@@ -849,11 +888,26 @@ Utils::CPP::Condition Utils::CPP::parseCondition(const std::string &sourceCode, 
   const auto triggerCalls = findMacroCalls(code, "P64_CONDITION_TRIGGERS");
   const auto inputCalls = findMacroCalls(code, "P64_CONDITION_INPUTS");
 
-  if(!res.isCondition) {
-    for(const auto &[macro, used] : {std::pair{"P64_CONDITION_TRIGGERS", !triggerCalls.empty()},
-                                     std::pair{"P64_CONDITION_INPUTS", !inputCalls.empty()}}) {
-      if(used) res.errors.push_back(std::string(macro) + " only works in a condition script: declare its data with P64_CONDITION_DATA");
+  // Fork: interactions. Any script may read conditions on its input pins (an interaction's CanUse);
+  // only a condition can have triggers.
+  const auto readInputs = [&]() {
+    if(inputCalls.size() > 1) res.errors.push_back("P64_CONDITION_INPUTS is used " + std::to_string(inputCalls.size()) + " times; list every pin in one");
+    if(inputCalls.empty())return;
+    for(const auto &name : inputCalls[0]) {
+      if(name.empty() && inputCalls[0].size() == 1)continue;
+      if(std::find(pins.in.begin(), pins.in.end(), name) == pins.in.end()) {
+        res.errors.push_back("P64_CONDITION_INPUTS: '" + name + "' is not an input pin of this script (P64_EVENTS_IN)");
+        continue;
+      }
+      if(!res.readsConditions(name)) res.inputs.push_back(name);
     }
+  };
+
+  if(!res.isCondition) {
+    if(!triggerCalls.empty()) {
+      res.errors.push_back("P64_CONDITION_TRIGGERS only works in a condition script: declare its data with P64_CONDITION_DATA");
+    }
+    readInputs();
     return res;
   }
 
@@ -881,17 +935,7 @@ Utils::CPP::Condition Utils::CPP::parseCondition(const std::string &sourceCode, 
     }
   }
 
-  if(inputCalls.size() > 1) res.errors.push_back("P64_CONDITION_INPUTS is used " + std::to_string(inputCalls.size()) + " times; list every pin in one");
-  if(!inputCalls.empty()) {
-    for(const auto &name : inputCalls[0]) {
-      if(name.empty() && inputCalls[0].size() == 1)continue;
-      if(std::find(pins.in.begin(), pins.in.end(), name) == pins.in.end()) {
-        res.errors.push_back("P64_CONDITION_INPUTS: '" + name + "' is not an input pin of this script (P64_EVENTS_IN)");
-        continue;
-      }
-      if(!res.readsConditions(name)) res.inputs.push_back(name);
-    }
-  }
+  readInputs();
 
   // the condition pins are added to the script's own, so the names must not be used twice
   for(const auto &[own, reserved, kind] : {

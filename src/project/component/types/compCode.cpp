@@ -12,6 +12,8 @@
 #include "../../../utils/logger.h"
 #include "../../../utils/proc.h"
 #include "../../../utils/string.h"
+#include "../../../utils/meshGen.h"
+#include "../../../editor/pages/parts/viewport3D.h"
 #include <algorithm>
 #include <cctype>
 #include <compare>
@@ -38,6 +40,49 @@ namespace Project::Component::Code
   {
     auto *data = static_cast<const Data*>(entry.data.get());
     return data ? data->scriptUUID : 0;
+  }
+
+  // Fork: interactions. A script that declares P64_EDITOR_ARROW() is drawn as an arrow along the
+  // object's facing (+Z, the way actors face in the game) over a ring at its feet.
+  void draw3D(Object& obj, Entry &entry, Editor::Viewport3D &vp, SDL_GPUCommandBuffer*, SDL_GPURenderPass*)
+  {
+    auto *data = static_cast<const Data*>(entry.data.get());
+    if(!data || !data->scriptUUID || !ctx.project)return;
+    const auto *script = ctx.project->getAssets().getEntryByUUID(data->scriptUUID);
+    if(!script || !script->editorHints.arrow)return;
+    const auto &hints = script->editorHints;
+
+    const glm::vec3 pos = obj.pos.resolve(obj.propOverrides);
+    const glm::quat rot = obj.rot.resolve(obj.propOverrides);
+    const glm::vec3 scale = glm::abs(obj.scale.resolve(obj.propOverrides));
+    const float len = hints.arrowLength * std::max({scale.x, scale.y, scale.z, 0.001f});
+    const float thickness = std::max(len * 0.02f, 0.01f);
+    glm::vec4 color{hints.arrowColor[0], hints.arrowColor[1], hints.arrowColor[2], 1.0f};
+    if(ctx.isObjectSelected(obj.uuid)) color = glm::mix(color, glm::vec4{1.0f}, 0.5f);
+
+    const glm::vec3 forward = rot * glm::vec3{0.0f, 0.0f, 1.0f};
+    const glm::vec3 side = rot * glm::vec3{1.0f, 0.0f, 0.0f};
+    const glm::vec3 up = rot * glm::vec3{0.0f, 1.0f, 0.0f};
+    auto &lines = *vp.getLines();
+
+    // the ring the actor stands in, a shaft at waist height, and the head
+    const float ringRadius = len * 0.3f;
+    constexpr int SEGMENTS = 16;
+    for(int i = 0; i < SEGMENTS; ++i) {
+      const float a0 = glm::two_pi<float>() * (float)i / SEGMENTS;
+      const float a1 = glm::two_pi<float>() * (float)(i + 1) / SEGMENTS;
+      Utils::Mesh::addLine(lines,
+        pos + (side * std::cos(a0) + forward * std::sin(a0)) * ringRadius,
+        pos + (side * std::cos(a1) + forward * std::sin(a1)) * ringRadius, color, thickness);
+    }
+    const glm::vec3 base = pos + up * (len * 0.25f);
+    const glm::vec3 tip = base + forward * len;
+    Utils::Mesh::addLine(lines, pos, base, color, thickness);
+    Utils::Mesh::addLine(lines, base, tip, color, thickness * 1.5f);
+    const glm::vec3 back = tip - forward * (len * 0.3f);
+    Utils::Mesh::addLine(lines, tip, back + side * (len * 0.18f), color, thickness * 1.5f);
+    Utils::Mesh::addLine(lines, tip, back - side * (len * 0.18f), color, thickness * 1.5f);
+    Utils::Mesh::addLine(lines, tip, back + up * (len * 0.18f), color, thickness);
   }
 
   // Fork: conditions

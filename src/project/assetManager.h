@@ -98,6 +98,7 @@ namespace Project
     Utils::CPP::Struct params{};
     Utils::CPP::EventPins pins{};                    // Fork: event graph, object scripts
     Utils::CPP::Condition condition{};               // Fork: conditions, object scripts
+    Utils::CPP::EditorHints editorHints{};           // Fork: interactions, object scripts
     bool engineScript{false};                        // Fork: event graph, shipped with the engine (read-only)
     std::vector<Utils::CPP::SystemPins> systemPins{}; // Fork: event graph, global scripts
 

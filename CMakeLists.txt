@@ -421,6 +421,7 @@ if(PYRITE64_BUILD_TESTS)
         tests/eventEditor.cpp
         tests/conditions.cpp
         tests/idTable.cpp
+        tests/interactions.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp

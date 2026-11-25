@@ -42,13 +42,14 @@ Project::Events::PinList Project::Events::pinsOf(Project &project, const Compone
     if(auto *script = project.getAssets().getEntryByUUID(uuid)) {
       res.in = script->pins.in;
       res.out = script->pins.out;
+      // Fork: interactions, any script's input pins may read conditions
+      res.conditionInputs = script->condition.inputs;
       // Fork: conditions, the pins every condition has come after the script's own
       if(script->condition.isCondition) {
         res.conditionIn = static_cast<int>(res.in.size());
         res.conditionOut = static_cast<int>(res.out.size());
         for(const char* name : P64::Events::Pins::CONDITION_IN) res.in.emplace_back(name);
         for(const char* name : P64::Events::Pins::CONDITION_OUT) res.out.emplace_back(name);
-        res.conditionInputs = script->condition.inputs;
         res.scriptTriggers = script->condition.triggers;
         // "Auto Check" as the component stores it; the build asks again with instance overrides
         const auto autoCheck = Component::Code::getStoredArg(comp, "conditionAutoCheck");

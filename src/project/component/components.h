@@ -203,6 +203,7 @@ namespace Project::Component
       .docSlug = "/manual/editor/components/code",
       .funcInit = Code::init,
       .funcDraw = Code::draw,
+      .funcDrawPost3D = Code::draw3D, // Fork: interactions, P64_EDITOR_ARROW
       .funcSerialize = Code::serialize,
       .funcDeserialize = Code::deserialize,
       .funcBuild = Code::build,

@@ -99,6 +99,18 @@ namespace Utils::CPP
   /** 'pins' are the script's own pins (parseEventPins of the same source). */
   Condition parseCondition(const std::string &sourceCode, const EventPins &pins);
 
+  // Fork: interactions (docs/todo/interactions/PLAN.md). What an object script asks the editor to
+  // draw in the viewport: P64_EDITOR_ARROW(), P64_EDITOR_ARROW(r, g, b) or (r, g, b, length).
+  struct EditorHints
+  {
+    bool arrow{false};
+    float arrowColor[3]{1.0f, 0.6f, 0.1f};
+    float arrowLength{8.0f};               // in world units, times the object's scale
+    std::vector<std::string> errors{};
+  };
+
+  EditorHints parseEditorHints(const std::string &sourceCode);
+
   /**
    * The fields P64_CONDITION_DATA puts in front of a condition script's own (Conditions::Header).
    * "Auto Check" is only offered (has a P64::Name) when the script names triggers.
