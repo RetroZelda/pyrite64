@@ -4,7 +4,9 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 [FINDINGS.md](FINDINGS.md). It builds on the event graph (`../event-graph/`) and the conditions
 (`../conditionals/`).
 
-- **Status:** building (2026-11-24). Plan approved (PLAN.md draft 3). Phase log below.
+- **Status:** ALL DONE (2026-11-24). Every phase is built, tested in ares and committed; the guide is
+  `kentucky-castle/docs/Interactions/README.md` with screenshots and videos. Waiting for the owner's
+  review. Nothing is pushed.
 - **Working mode (owner, 2026-11-24):** "it looks good, you can start! you can commit each phase, and
   then I want a guide on how to use it step by step with images and video where necessary". Commit
   each phase on `feature/interactions` with no co-author or AI attribution lines. Open points take
@@ -66,7 +68,7 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 - [x] Phase 4: climbing on interactions (kentucky-castle 9cff841)
 - [x] Phase 5: carry and throw (kentucky-castle 744ee29)
 - [x] Phase 6: AI use, alarm panels, thrower (kentucky-castle 2f83b87)
-- [ ] Phase 7: the guide with images and video, playtest
+- [x] Phase 7: the guide with images and video (kentucky-castle 43104c5)
 
 ## The owner's answers, word for word (2026-11-24)
 
@@ -187,12 +189,21 @@ Made from the evidence; each can change on request.
 30. (Phase 6) Doors for AI need no list of their own: `InteractionNearest(KIND_DOOR)` and the same
     go-and-use commands; checked with a scratch list (a guard opened the AI-only door). The guide
     has a recipe.
+31. (Phase 7) The guide's clips were recorded from ares (ffmpeg x11grab of the emulator window,
+    cropped to the picture) with no debug text; each is a small GIF in the guide (8 fps, 256 px wide)
+    and a full-size MP4 (640x480) next to it, about 5 MB in all. The editor screenshots come from a
+    scratch-only scene in a copy of the project, looked at through scene cameras placed for it.
+32. (Phase 7) The test level's staff door shows a lamp for a second on Denied (object Show / Hide and a
+    Delay; the model's prim colour does not tint the textured box, so it is the crate texture), and
+    `spawn_alarm` starts out of the alarm guard's sight so walking toward it shows the run to the panel.
+33. (Phase 7) Smoke test of the final build: the enemy test level plays as before.
 
 ## Phase log
 
 | Phase | Commit | What |
 |---|---|---|
 | plan | pyrite64 b9689c1 | PLAN, FINDINGS, PLANNING-STATE |
+| 7 | kentucky-castle 43104c5 | the guide (step by step, reference, technical overview), 5 editor images, 12 clips (GIF + MP4) |
 | 6 | kentucky-castle 2f83b87 | guard commands and actions, ActFaceTarget fix, roles, Alarm Panel, `guard_alarm`, `guard_thrower`, AI area; in ares: the alarm guard ran to the panel and pressed it (Alarm raised), the thrower threw both crates and fetched them again (every throw hit), a scratch list opened the AI-only door, a standing guard turned to face the player |
 | 5 | kentucky-castle 744ee29 | carry: pick up, place, release, rest; the player's throw and set down; Throwable; Crate; in ares: PICK UP, carry, throw (lands, rests, offered again), set down with B, pick up again |
 | 4 | kentucky-castle 9cff841 | Climb Wall, the climb through the A focus, oriented sideways clamp, the three level volumes converted, the climb layer removed; in ares: the test block (clamped at both edges, A drops), Kokiri's ladder and step, Junker Prime's cliff, each to the top |
