@@ -63,9 +63,9 @@ Read this file first when resuming. The design is [PLAN.md](PLAN.md); raw invest
 - [x] Phase 1: editor, condition inputs on any script, the snap arrow (pyrite64 b6cfc98)
 - [x] Phase 2: debug scene, enemy test level, scene transitions (kentucky-castle 44c407c)
 - [x] Phase 3: interaction core, the player's use, example prefabs, interaction test level (kentucky-castle 76dc38f)
-- [ ] Phase 4: climbing on interactions
-- [ ] Phase 5: carry and throw
-- [ ] Phase 6: AI use, alarm panels, thrower
+- [x] Phase 4: climbing on interactions (kentucky-castle 9cff841)
+- [x] Phase 5: carry and throw (kentucky-castle 744ee29)
+- [x] Phase 6: AI use, alarm panels, thrower (kentucky-castle 2f83b87)
 - [ ] Phase 7: the guide with images and video, playtest
 
 ## The owner's answers, word for word (2026-11-24)
@@ -125,6 +125,11 @@ Made from the evidence; each can change on request.
    positional and would break with gaps in scene ids.
 3. (Phase 2) A scene transition to the current scene becomes a level transition; one to a scene id that
    does not load gives up after 60 frames and fades back in.
+4. (Phase 2) Playtest tooling (session scratchpad, rebuilt as needed): `kcbuild.sh` syncs the repo
+   into a scratch copy and builds it there (the real project is never built or opened); `pt.py` drives
+   ares with XTEST keys on a private settings copy (VirtualPad1 mapped, the N64 Gamepad layer cleared,
+   audio muted), sends keys only while ares has focus and the screen is unlocked, waits on game log
+   lines and grabs screenshots. The overlay's cursor keeps its place across scenes.
 5. (Phase 3) **Max Angle** is measured from the way to the object (Face Object, Snap Point), or from
    the object's own facing (Object Facing), not from the snap point's arrow: walking up to an NPC
    from the side shows TALK; a wall still refuses a player behind it.
@@ -142,17 +147,55 @@ Made from the evidence; each can change on request.
 11. (Phase 3) Layer 3 is named "Interaction" in `project.p64proj`; only that line was committed, the
     owner's own change to the file stays uncommitted.
 12. (Phase 3) "Debug Text|Interactions" also shows the player's position and facing.
-4. (Phase 2) Playtest tooling (session scratchpad, rebuilt as needed): `kcbuild.sh` syncs the repo
-   into a scratch copy and builds it there (the real project is never built or opened); `pt.py` drives
-   ares with XTEST keys on a private settings copy (VirtualPad1 mapped, the N64 Gamepad layer cleared,
-   audio muted), sends keys only while ares has focus and the screen is unlocked, waits on game log
-   lines and grabs screenshots. The overlay's cursor keeps its place across scenes.
+13. (Phase 4) The three placed climb volumes became Climb Walls on the faces found by probing the
+    level geometry with rays (horizontal from each old box, then down on both sides for the floor):
+    Kokiri's ladder is climbed facing +Z as before; Kokiri's "wall" is a step between low ground
+    (y 24) and high ground (y 80) and Junker Prime's is a cliff (y 60 to 142), both climbed from the
+    low side. The old boxes straddled the faces, which is what let the ladder be climbed from behind.
+14. (Phase 4) An Object Facing interaction is offered only to an actor in front of its origin (more
+    than 1 unit behind it does not count); a Climb Wall's origin sits on its face.
+15. (Phase 4) Leaving the climb fires the Climb Wall's Finished; there is no Cancelled for a climb.
+16. (Phase 4) Seen, not changed: a player that falls out of the level crashes the game (t3d matrix
+    overflow in the camera after a long fall), as two badly placed test spawn points showed.
+17. (Phase 5) The holder places a carried item every frame (in front of the chest for the player,
+    tweakable), not a bone: there are no carry clips, and a crate at the swinging wrist looked wrong.
+    Carried items keep their model on the root (children do not follow a moving object).
+18. (Phase 5) While carrying, the player has no focus: A throws, B sets down. Placing a carried
+    item into something (a pedestal) is a follow-up.
+19. (Phase 5) A thrown item's damage comes from a Throwable script that sweeps its path against the
+    damage registry like a projectile; the side is the thrower's (the player hits the bad team, a
+    guard the player's). One hit per throw.
+20. (Phase 5) Released (thrown or set down) items are out of the table while they move and come back
+    after resting ("Rest Speed" 6, "Rest Time" 0.3 s). The throw's lob uses the scene's rigid-body
+    gravity (196.2, tweakable "Throw Gravity"); the Crate's body has gravity scalar 1.
+21. (Owner, during phase 5) "when you're done can you make videos showing each of the interactions,
+    without debug text?" Recorded after phase 7, from a build with no debug text.
+22. (Phase 6) The interaction register and the held item live in the guard's data, not in `AI::Vm`.
+    The new roles INTERACT, PICKUP and THROW were added (falling back to ATTACK); no new event role:
+    DAMAGE_START is the press, grab and release frame.
+23. (Phase 6) A guard walks its route to the interaction (arriving within Pad Arrive Radius, 20),
+    then walks the last bit at Walk Speed to within "Arrive" (1.5) or for "Approach Timeout" (2 s),
+    then lines up as the interaction's Move says. For Face Object it stands "Reach" (7) from the object.
+24. (Phase 6) `ActGotoInteraction` restarts when the register names another interaction than the
+    one it went to (setAction alone would treat a finished go as done for the next one).
+25. (Phase 6) `ActUseInteraction` does not check the distance; lists go there first. Documented.
+26. (Phase 6) A guard that is hit drops its carried item and its claims (the plan said ARGH would).
+27. (Phase 6) The Alarm Panel is usable by AI only; the player can be allowed per instance (Usable By).
+    `guard_alarm` keeps the alarm pad way when no panel is in reach.
+28. (Phase 6) `guard_thrower` waits up to 4 s for something to come to rest before it fights in melee.
+29. (Phase 6) The Crate's Throwable deals 10 (a guard's slap deals 15); 1 was too little to see.
+30. (Phase 6) Doors for AI need no list of their own: `InteractionNearest(KIND_DOOR)` and the same
+    go-and-use commands; checked with a scratch list (a guard opened the AI-only door). The guide
+    has a recipe.
 
 ## Phase log
 
 | Phase | Commit | What |
 |---|---|---|
 | plan | pyrite64 b9689c1 | PLAN, FINDINGS, PLANNING-STATE |
+| 6 | kentucky-castle 2f83b87 | guard commands and actions, ActFaceTarget fix, roles, Alarm Panel, `guard_alarm`, `guard_thrower`, AI area; in ares: the alarm guard ran to the panel and pressed it (Alarm raised), the thrower threw both crates and fetched them again (every throw hit), a scratch list opened the AI-only door, a standing guard turned to face the player |
+| 5 | kentucky-castle 744ee29 | carry: pick up, place, release, rest; the player's throw and set down; Throwable; Crate; in ares: PICK UP, carry, throw (lands, rests, offered again), set down with B, pick up again |
+| 4 | kentucky-castle 9cff841 | Climb Wall, the climb through the A focus, oriented sideways clamp, the three level volumes converted, the climb layer removed; in ares: the test block (clamped at both edges, A drops), Kokiri's ladder and step, Junker Prime's cliff, each to the top |
 | 3 | kentucky-castle 76dc38f | Interactions system, Interaction / Snap / Interactor Condition / Door scripts, the player's INTERACT state, HUD verb, five prefabs, `level_interaction_test`; in ares: PRESS (Slide) toggles the door through a scene event, READ, TALK (Walk, held until a Delay fires Finish), door from both sides, a staff-only door denied by its condition, Teleport and None (scratch patch), the exit pad to Main |
 | 2 | kentucky-castle 44c407c | debug scene 10, `level_enemy_test`, `transitionToScene`, Target Scene, "Warp: Load Scene"; in ares: Main → Debug → Main by warp, and a scratch-only volume in the debug scene → Main at Hyrule Field |
 | 1 | pyrite64 b6cfc98 | `P64_CONDITION_INPUTS` in any script; `P64_EDITOR_ARROW`; 7 host tests (129 cases pass); `conditionChecks.sh` 22/22, `graphChecks.sh` 7/7; arrow seen in the editor on a scratch copy of test_events |
