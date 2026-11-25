@@ -3,9 +3,9 @@
 Read this file first when resuming. The design is [PLAN.md](PLAN.md); it builds on the event graph
 (`../event-graph/`).
 
-- **Status:** BUILT (2026-11-25). Phases 1 to 6 and 8 are done and committed. Phase 7 (the
-  footsteps in ares with real input, and the guard and minion pins) waits for the screen to be
-  unlocked or for the owner's playtest. Phase 9 (release order) is the owner's.
+- **Status:** BUILT and playtested (2026-11-25). Phases 1 to 8 are done and committed. The step
+  sounds were not heard (the playtest runs ares muted); the owner listens. Phase 9 (release order)
+  is the owner's.
 - **Branches:** `feature/anim-events` in `pyrite64` (from `stream/full-frontal`) and in
   `kentucky-castle` (from `main`). Commits carry no co-author or AI attribution lines.
 
@@ -148,4 +148,5 @@ None.
 | 3 | pyrite64 4ccf993 | new wires keep the dots of pin names |
 | 5, 6 | kentucky-castle 7b1187f, 6b3d6e5 | `DefineModel`, `--anim-events`, `EventPin`, both drivers, Follow Bone, the footsteps in `Player.prefab`; builds on a copy with no new warning |
 | 8 | pyrite64 ef2a23a, kentucky-castle bcb6054 | the guide's "Animation events", trait docs, changelog, the Model (Animated) manual page |
-| 7 (part) | none (a copy) | ares, no input, a copy booted into TestEnemy with a Log in each enemy prefab: a FireballMinion guard (`RoleAnimDriver`) fired `prefab::FireballMinion.Any.DAMAGE_START` value 2 (Attack) sender 256 to its own Log 21 times in 60 s. The Player's footsteps need real input: waiting for the screen to be unlocked or the owner's playtest |
+| 7 (part) | none (a copy) | ares, no input, a copy booted into TestEnemy with a Log in each enemy prefab: a FireballMinion guard (`RoleAnimDriver`) fired `prefab::FireballMinion.Any.DAMAGE_START` value 2 (Attack) sender 256 to its own Log 21 times in 60 s |
+| 7 | none (a copy) | ares with key input, the start scene (9), a Log wired to six Player pins and a print in `AnimationDriver::_emit`: run, a fall off a ledge, dodge, dash attack. Every driver event gave its pin (`Leap.LAND` 9, `Run.STEP_RIGHT` and `Run.STEP_LEFT` 2, `Dodge.TAKEOFF` and `Dodge.LAND` 8, `Any.DAMAGE_START` 6), none lost or doubled. The video shows the dirt at the stepping foot, left on the ground as he runs on, and under both feet at the dodge takeoff. Steps come only while Run outweighs Walk (`event_threshold` 0.5), as on `main`: the branch only routes the old callback sites through `_emit`. The Minion was not run (the scene's Minions stand still without a chase); it uses the same driver, its Model (Animated) is on its own object as the Player's, and its prefab's model is the trait's `assets/minion_64.glb` |
