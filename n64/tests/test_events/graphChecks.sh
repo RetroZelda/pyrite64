@@ -14,7 +14,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 DIR="$WORK/project"
 mkdir -p "$DIR"
-cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/src" "$DIR/"
+cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/events" "$HERE/src" "$DIR/"
 rm -rf "$DIR/src/p64" "$DIR/assets/p64"
 SCENE="$DIR/data/scenes/8/scene.json"
 
@@ -93,6 +93,31 @@ if diff -q "$HERE/data/scenes/8/scene.json" "$SCENE" > /dev/null; then
 else
   bad "wired again: the committed file"
   diff -u "$HERE/data/scenes/8/scene.json" "$SCENE" | head -30
+fi
+
+# 6. animation events (docs/todo/anim-events/PLAN.md): Model (Animated) pins from the model's list in
+#    events/anim_test.json, with dots in the pin name
+SCENE11="$DIR/data/scenes/11/scene.json"
+editor --cmd graph --scene 11
+if grep -qF "AnimA|Model (Animated).Walk.STEP: scene::AnimA.Step" "$WORK/editor.log"; then
+  ok "the graph text lists the animation event pins"
+else
+  bad "the graph text lists the animation event pins"; cat "$WORK/editor.log"
+fi
+editor --cmd unwire --scene 11 --from 'AnimB|Model (Animated).Walk.STEP' --event scene::AnimB.Step || { cat "$WORK/editor.log"; bad "unwire an animation event pin"; }
+if python3 - "$SCENE11" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+o = {x['name']: x for x in d['graph']['children']}
+sys.exit(0 if 'events' not in o['AnimB']['components'][0] or not o['AnimB']['components'][0]['events'].get('out') else 1)
+PY
+then ok "unwired an animation event pin"; else bad "unwired an animation event pin"; fi
+editor --cmd wire --scene 11 --from 'AnimB|Model (Animated).Walk.STEP' --event scene::AnimB.Step || { cat "$WORK/editor.log"; bad "wire an animation event pin"; }
+if diff -q "$HERE/data/scenes/11/scene.json" "$SCENE11" > /dev/null; then
+  ok "wired the animation event pin again: the committed file"
+else
+  bad "wired the animation event pin again: the committed file"
+  diff -u "$HERE/data/scenes/11/scene.json" "$SCENE11" | head -30
 fi
 
 echo "$pass passed, $fail failed"

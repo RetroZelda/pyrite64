@@ -640,6 +640,36 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return ok;
   }
 
+  // Scene 11, driven by TestDriver11 (docs/todo/anim-events/PLAN.md). AnimA, AnimB and AnimC show
+  // the model events/anim_test.json lists (Walk.STEP, Idle.BLINK, Any.STEP). A binds Walk.STEP,
+  // Any.STEP and MainFinished, B only Walk.STEP, C nothing.
+  bool checkAnimEvents()
+  {
+    constexpr uint16_t A = 3, B = 4;
+    constexpr uint16_t INSTIGATOR = 9;
+    std::vector<Record> got{};
+    for(const auto &r : records) {
+      if(r.type >= Rec::AnimFired && r.type <= Rec::AnimStepB) got.push_back(r);
+    }
+    const std::vector<Expect> expected = {
+      // frame 2, the driver's calls: listed on A, unlisted on A, listed on B, nothing bound on C, Any on A
+      {Rec::AnimFired, 2, 1, 1}, {Rec::AnimFired, 2, 0, 2}, {Rec::AnimFired, 2, 1, 3},
+      {Rec::AnimFired, 2, 0, 4}, {Rec::AnimFired, 2, 1, 5},
+      // each object's own pins only, with the value and instigator the driver passed, the object as sender
+      {Rec::AnimStepA, 2, 11, A, INSTIGATOR}, {Rec::AnimStepB, 2, 21, B, INSTIGATOR},
+      {Rec::AnimAnyA, 2, 13, A, INSTIGATOR},
+      // A plays Walk (clip 1) once from frame 3: MainFinished, pin 0, is still there
+      {Rec::AnimFinishedA, ANY, 1, A},
+    };
+    bool ok = got.size() == expected.size();
+    for(size_t i = 0; ok && i < expected.size(); ++i) ok = matches(got[i], expected[i]);
+    if(!ok) {
+      debugf("  expected %lu animation records, got %lu:\n", (unsigned long)expected.size(), (unsigned long)got.size());
+      printRecords();
+    }
+    return ok;
+  }
+
   constexpr TestDef TESTS[T_COUNT] = {
     {"Engine events at boot",         1, 3,  checkBoot},
     {"Chain in the same frame",       1, 3,  checkChain},
@@ -656,6 +686,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Wired by the graph",            8, 6, checkGraph},
     {"UI canvas pins",                9, 30, checkCanvas},
     {"Conditions and logic nodes",    10, 14, checkConditions},
+    {"Animation event pins",          11, 60, checkAnimEvents},
   };
 
   void runStep()
@@ -732,6 +763,12 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     for(const auto &cond : COND_NAMES) {
       Events::listen(cond.id, onCond, reinterpret_cast<void*>(static_cast<uintptr_t>(cond.tag)));
     }
+
+    // animation events, scene 11
+    Events::listen("scene::AnimA.Step"_event,     onRecord, tag(Rec::AnimStepA));
+    Events::listen("scene::AnimA.AnyStep"_event,  onRecord, tag(Rec::AnimAnyA));
+    Events::listen("scene::AnimA.Finished"_event, onRecord, tag(Rec::AnimFinishedA));
+    Events::listen("scene::AnimB.Step"_event,     onRecord, tag(Rec::AnimStepB));
   }
 
   void onScenePreLoad()

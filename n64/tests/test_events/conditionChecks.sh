@@ -14,7 +14,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 DIR="$WORK/project"
 mkdir -p "$DIR"
-cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/src" "$DIR/"
+cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/events" "$HERE/src" "$DIR/"
 rm -rf "$DIR/src/p64" "$DIR/assets/p64"
 SCENE="$DIR/data/scenes/10/scene.json"
 LOG="$WORK/editor.log"

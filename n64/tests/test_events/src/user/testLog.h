@@ -53,6 +53,10 @@ namespace P64::User::EventTest
     KitNotTrue, KitNotFalse, // the Not inside a CondKit instance; value: x of the instance
     BlipPoked, BlipNudged,   // send() by id to the Blip prefab in the frame the Spawner queued it
     BlipGreeted,             // the Blip's child reports how many of its root's init() sends arrived
+    // animation events (docs/todo/anim-events/PLAN.md), scene 11
+    AnimFired,               // the driver called AnimModel::fireEvent(); value: its answer, sender: which call
+    AnimStepA, AnimAnyA, AnimFinishedA, // AnimA's Walk.STEP, Any.STEP and MainFinished pins
+    AnimStepB,               // AnimB's Walk.STEP pin
   };
 
   constexpr const char* const REC_NAMES[] = {
@@ -66,6 +70,7 @@ namespace P64::User::EventTest
     "HudFocused", "HudMid", "HudDone",
     "Cond", "CondEval", "KitNotTrue", "KitNotFalse",
     "BlipPoked", "BlipNudged", "BlipGreeted",
+    "AnimFired", "AnimStepA", "AnimAnyA", "AnimFinishedA", "AnimStepB",
   };
 
   struct Record
@@ -96,6 +101,7 @@ namespace P64::User::EventTest
     T_GRAPH,    // phase 5: scene 8, wired only with the Events window's operations (graphChecks.sh)
     T_CANVAS,   // phase 6: scene 9, an object shows a canvas and plays its clip; its marker, clip end and focus reach a script
     T_CONDITIONS, // conditions: scene 10, checks, triggers, edges, enable, reset, logic nodes, prefab scope
+    T_ANIM_EVENTS, // animation events: scene 11, Model (Animated) pins fired from code, per object
     T_COUNT
   };
 

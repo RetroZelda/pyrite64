@@ -1,0 +1,12 @@
+{
+  "animationEvents": {
+    "assets/anim_test.glb": {
+      "doc": "The test model of scene 11 (docs/todo/anim-events/PLAN.md). TestDriver11 fires the pins from code.",
+      "events": [
+        {"name": "Walk.STEP", "doc": "Walk, a foot touches the ground", "value": "set by the driver"},
+        {"name": "Idle.BLINK", "doc": "Idle, never fired"},
+        {"name": "Any.STEP", "doc": "STEP of any clip", "value": "set by the driver"}
+      ]
+    }
+  }
+}

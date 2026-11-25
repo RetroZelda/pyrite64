@@ -15,7 +15,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 DIR="$WORK/project"
 mkdir -p "$DIR"
-cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/src" "$DIR/"
+cp -r "$HERE/project.p64proj" "$HERE/Makefile.custom" "$HERE/assets" "$HERE/data" "$HERE/events" "$HERE/src" "$DIR/"
 rm -rf "$DIR/src/p64" "$DIR/assets/p64"
 
 pass=0
@@ -35,8 +35,11 @@ run() {
   fi
   local log="$WORK/ares.log"
   rm -f "$log"
-  timeout 120 ares --no-file-prompt --setting Audio/Mute=true --setting Input/Defocus=Allow \
-    --system "Nintendo 64" "$DIR/test_events.z64" > "$log" 2>&1 &
+  # a private copy of the settings: ares writes its settings file back on exit
+  local settings="$WORK/ares-settings.bml"
+  cp "${XDG_DATA_HOME:-$HOME/.local/share}/ares/settings.bml" "$settings" 2>/dev/null || : > "$settings"
+  timeout 120 ares --no-file-prompt --settings-file "$settings" --setting Audio/Mute=true --setting Input/Defocus=Allow \
+    --setting DebugServer/Enabled=false --system "Nintendo 64" "$DIR/test_events.z64" > "$log" 2>&1 &
   local pid=$!
   for _ in $(seq 1 100); do
     grep -q '\[event test\] DONE' "$log" 2>/dev/null && break
