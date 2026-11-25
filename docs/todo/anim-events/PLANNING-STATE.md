@@ -148,3 +148,4 @@ None.
 | 3 | pyrite64 4ccf993 | new wires keep the dots of pin names |
 | 5, 6 | kentucky-castle 7b1187f, 6b3d6e5 | `DefineModel`, `--anim-events`, `EventPin`, both drivers, Follow Bone, the footsteps in `Player.prefab`; builds on a copy with no new warning |
 | 8 | pyrite64 ef2a23a, kentucky-castle bcb6054 | the guide's "Animation events", trait docs, changelog, the Model (Animated) manual page |
+| 7 (part) | none (a copy) | ares, no input, a copy booted into TestEnemy with a Log in each enemy prefab: a FireballMinion guard (`RoleAnimDriver`) fired `prefab::FireballMinion.Any.DAMAGE_START` value 2 (Attack) sender 256 to its own Log 21 times in 60 s. The Player's footsteps need real input: waiting for the screen to be unlocked or the owner's playtest |
