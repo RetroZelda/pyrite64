@@ -145,6 +145,6 @@ None.
 | 1 | pyrite64 1252751 | `ANIM_EVENT_PIN_BASE`, `ANIM_EVENTS_MAX`, `AnimModel::fireEvent`, `setEventLists`, `registerAnimEvents` at boot |
 | 2, 3 | pyrite64 18afe7f | catalog section, cache, `pinsOf()`, tooltips, build checks and `animEvents.cpp`, command-line pin parsing, 4 unit tests (133 pass) |
 | 4 | pyrite64 0b5fff4 | scene 11; in ares 16 of 16; `buildChecks.sh` 10 of 10, `graphChecks.sh` 10 of 10, `nestingChecks.sh` 11 of 11, `conditionChecks.sh` 22 of 22 |
-| 3 | pyrite64 (see the log) | new wires keep the dots of pin names |
-| 5, 6 | kentucky-castle (see the log) | `DefineModel`, `--anim-events`, `EventPin`, both drivers, Follow Bone, the footsteps in `Player.prefab`; builds on a copy with no new warning |
-| 8 | both (see the log) | the guide's "Animation events", trait docs, changelog, the Model (Animated) manual page |
+| 3 | pyrite64 4ccf993 | new wires keep the dots of pin names |
+| 5, 6 | kentucky-castle 7b1187f, 6b3d6e5 | `DefineModel`, `--anim-events`, `EventPin`, both drivers, Follow Bone, the footsteps in `Player.prefab`; builds on a copy with no new warning |
+| 8 | pyrite64 ef2a23a, kentucky-castle bcb6054 | the guide's "Animation events", trait docs, changelog, the Model (Animated) manual page |
