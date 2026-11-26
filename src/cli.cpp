@@ -14,6 +14,7 @@
 #include "project/events/eventGraph.h"
 #include "project/events/eventUsages.h"
 #include "utils/logger.h"
+#include "utils/fs.h"
 #include "project/locale/locProject.h"
 
 namespace
@@ -62,6 +63,21 @@ namespace
       return false;
     }
     for (const auto &err : errors) printf("error: %s\n", err.c_str());
+
+    if (cmd == "loc-export" || cmd == "loc-import") {
+      const std::string csvPath = Project::Loc::localeDir(project.getPath()) + "/strings.csv";
+      if (cmd == "loc-export") {
+        Utils::FS::saveTextFile(csvPath, Project::Loc::exportCsv(loc));
+        printf("Wrote %s\n", csvPath.c_str());
+        return true;
+      }
+      std::vector<std::string> csvErrors{};
+      const int changed = Project::Loc::importCsv(loc, Utils::FS::loadTextFile(csvPath), csvErrors);
+      for (const auto &e : csvErrors) printf("error: %s\n", e.c_str());
+      Project::Loc::save(project.getPath(), loc);
+      printf("%d text(s) changed from %s\n", changed, csvPath.c_str());
+      return csvErrors.empty();
+    }
 
     auto result = Project::Loc::refresh(project, loc);
     for (const auto &err : result.errors) printf("error: %s\n", err.c_str());
@@ -353,7 +369,7 @@ CLI::Result CLI::run(int argc, char** argv)
   prog.add_argument("--cmd")
     .help("Command to run")
     .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire", "events", "rename-event",
-             "loc-refresh", "loc-unused", "loc-prune");
+             "loc-refresh", "loc-unused", "loc-prune", "loc-export", "loc-import");
 
   // Fork: arguments of to-prefab and unpack
   prog.add_argument("--scene")
@@ -493,7 +509,7 @@ CLI::Result CLI::run(int argc, char** argv)
   {
     res = runPrefabCommand(cmd, prog.get<int>("--scene"), prog.get<std::string>("--object"), prog.get<std::string>("--dir"));
   }
-  else if (cmd == "loc-refresh" || cmd == "loc-unused" || cmd == "loc-prune")
+  else if (cmd == "loc-refresh" || cmd == "loc-unused" || cmd == "loc-prune" || cmd == "loc-export" || cmd == "loc-import")
   {
     res = runLocCommand(cmd, prog["--yes"] == true);
   }

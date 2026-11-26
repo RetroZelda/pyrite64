@@ -218,6 +218,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/dialog/speakers.cpp
         src/project/locale/localization.cpp
         src/project/locale/locCompile.cpp
+        src/project/locale/locMeasure.cpp
         src/project/locale/locProject.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp

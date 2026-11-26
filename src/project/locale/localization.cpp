@@ -531,3 +531,121 @@ std::string Project::Loc::escapeForRdpq(const std::string &text)
   }
   return out;
 }
+
+// ---------------------------------------------------------------- CSV
+
+namespace
+{
+  std::string csvField(const std::string &v)
+  {
+    if(v.find_first_of(",\"\n\r") == std::string::npos) return v;
+    std::string out = "\"";
+    for(char c : v) { if(c == '"') out += '"'; out += c; }
+    return out + "\"";
+  }
+
+  std::vector<std::vector<std::string>> csvParse(const std::string &csv)
+  {
+    std::vector<std::vector<std::string>> rows{};
+    std::vector<std::string> row{};
+    std::string field{};
+    bool quoted = false, any = false;
+    for(size_t i = 0; i < csv.size(); ++i) {
+      const char c = csv[i];
+      if(quoted) {
+        if(c == '"') {
+          if(i + 1 < csv.size() && csv[i + 1] == '"') { field += '"'; ++i; }
+          else quoted = false;
+        } else {
+          field += c;
+        }
+        continue;
+      }
+      if(c == '"') { quoted = true; any = true; continue; }
+      if(c == ',') { row.push_back(field); field.clear(); any = true; continue; }
+      if(c == '\r') continue;
+      if(c == '\n') {
+        row.push_back(field); field.clear();
+        if(any || row.size() > 1 || !row[0].empty()) rows.push_back(row);
+        row.clear(); any = false;
+        continue;
+      }
+      field += c; any = true;
+    }
+    if(any || !field.empty() || !row.empty()) { row.push_back(field); rows.push_back(row); }
+    // a UTF-8 byte order mark (from spreadsheets) on the first cell
+    if(!rows.empty() && !rows[0].empty() && rows[0][0].starts_with("\xEF\xBB\xBF")) rows[0][0] = rows[0][0].substr(3);
+    return rows;
+  }
+}
+
+std::string Project::Loc::exportCsv(const Localization &loc)
+{
+  std::string out = "key,note";
+  std::vector<size_t> langs{};
+  for(size_t i = 0; i < loc.config.languages.size() && i < loc.tables.size(); ++i) {
+    if(loc.config.languages[i].pseudo) continue;
+    langs.push_back(i);
+    out += "," + csvField(loc.config.languages[i].code);
+  }
+  out += "\n";
+  const auto *src = loc.source();
+  for(const auto &key : loc.keys()) {
+    std::string note{};
+    if(src) {
+      auto it = src->entries.find(key);
+      if(it != src->entries.end()) note = it->second.note;
+    }
+    out += csvField(key) + "," + csvField(note);
+    for(size_t li : langs) {
+      auto it = loc.tables[li].entries.find(key);
+      out += "," + csvField(it == loc.tables[li].entries.end() ? std::string{} : it->second.text);
+    }
+    out += "\n";
+  }
+  return out;
+}
+
+int Project::Loc::importCsv(Localization &loc, const std::string &csv, std::vector<std::string> &errors)
+{
+  const auto rows = csvParse(csv);
+  if(rows.empty() || rows[0].empty() || rows[0][0] != "key") {
+    errors.push_back("the CSV must start with a header row: key, note, then language codes");
+    return 0;
+  }
+  const auto &header = rows[0];
+  std::vector<int> colLang(header.size(), -1);
+  int noteCol = -1;
+  for(size_t c = 1; c < header.size(); ++c) {
+    if(header[c] == "note") { noteCol = int(c); continue; }
+    const int li = loc.config.indexOf(header[c]);
+    if(li < 0 || loc.config.languages[size_t(li)].pseudo) { errors.push_back("column '" + header[c] + "' is not a language of locale.json"); continue; }
+    colLang[c] = li;
+  }
+  const auto known = loc.keys();
+  const int srcIdx = loc.sourceIndex();
+  int changed = 0;
+  // the source language first, so translations are marked as made from the new source text
+  for(int pass = 0; pass < 2; ++pass) {
+    for(size_t r = 1; r < rows.size(); ++r) {
+      const auto &row = rows[r];
+      if(row.empty() || row[0].empty()) continue;
+      const std::string &key = row[0];
+      if(!known.contains(key)) { if(pass == 0) errors.push_back("row " + std::to_string(r + 1) + ": '" + key + "' is not a key of the tables"); continue; }
+      for(size_t c = 1; c < row.size() && c < header.size(); ++c) {
+        if(pass == 0 && int(c) == noteCol && srcIdx >= 0) {
+          auto &e = loc.tables[size_t(srcIdx)].entries[key];
+          if(e.note != row[c]) { e.note = row[c]; }
+          continue;
+        }
+        const int li = colLang[c];
+        if(li < 0 || row[c].empty() || ((li == srcIdx) != (pass == 0))) continue;
+        auto it = loc.tables[size_t(li)].entries.find(key);
+        if(it != loc.tables[size_t(li)].entries.end() && it->second.text == row[c]) continue;
+        loc.setText(key, size_t(li), row[c]);
+        ++changed;
+      }
+    }
+  }
+  return changed;
+}

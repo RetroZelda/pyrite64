@@ -435,3 +435,32 @@ TEST_CASE("loc compile: glyphs, variable declarations, kinsoku")
   CHECK(P64::Loc::pluralCategory(P64::Loc::PluralRule::French, 0) == P64::Loc::PluralCat::One);
   CHECK(P64::Loc::pluralCategory(P64::Loc::PluralRule::Spanish, 1000000) == P64::Loc::PluralCat::Many);
 }
+
+TEST_CASE("loc: CSV round trip for translators")
+{
+  Localization loc{};
+  std::vector<std::string> errors{};
+  parseConfig(nlohmann::json::parse(R"({"source": "en", "languages": [{"code": "en"}, {"code": "ja"}, {"code": "qps", "pseudo": true}]})"), loc.config, errors);
+  for(const auto &l : loc.config.languages) loc.tables.push_back({.code = l.code});
+  loc.tables[0].entries["a.key"] = {.text = "Hello, \"you\"\nthere", .note = "two lines"};
+  loc.tables[0].entries["b.key"] = {.text = "Bye"};
+  loc.tables[1].entries["a.key"] = {};
+  loc.tables[1].entries["b.key"] = {};
+
+  const auto csv = exportCsv(loc);
+  CHECK(csv.starts_with("key,note,en,ja\n"));
+  CHECK(csv.find("\"Hello, \"\"you\"\"\nthere\"") != std::string::npos);
+
+  // a translator fills in Japanese and fixes the English of b.key
+  std::string edited = "\xEF\xBB\xBFkey,note,en,ja\n"
+                       "a.key,two lines,\"Hello, \"\"you\"\"\nthere\",こんにちは\n"
+                       "b.key,,Goodbye,さようなら\n"
+                       "zz.key,,x,y\n";
+  const int changed = importCsv(loc, edited, errors);
+  CHECK(changed == 3);
+  REQUIRE(errors.size() == 1); // zz.key
+  CHECK(loc.tables[1].entries["a.key"].text == "こんにちは");
+  CHECK(loc.status("a.key", 1) == Status::Ok);
+  CHECK(loc.tables[0].entries["b.key"].text == "Goodbye");
+  CHECK(loc.status("b.key", 1) == Status::Ok); // translated from the new English
+}

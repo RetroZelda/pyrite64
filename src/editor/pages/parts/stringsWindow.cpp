@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <format>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -18,6 +19,8 @@
 #include "../../../context.h"
 #include "../../../project/project.h"
 #include "../../../project/locale/locProject.h"
+#include "../../../project/locale/locMeasure.h"
+#include "../../../utils/fs.h"
 #include "../../imgui/notification.h"
 
 namespace
@@ -172,6 +175,24 @@ void Editor::StringsWindow::draw()
     st.addText.clear();
     st.openAdd = true;
   }
+  ImGui::SameLine();
+  // spreadsheets for translators: locale/strings.csv
+  const std::string csvPath = Project::Loc::localeDir(project.getPath()) + "/strings.csv";
+  if(ImGui::Button(ICON_MDI_FILE_EXPORT " Export CSV")) {
+    Utils::FS::saveTextFile(csvPath, Project::Loc::exportCsv(Project::Loc::cached(project)));
+    Editor::Noti::add(Editor::Noti::Type::INFO, "Strings: wrote locale/strings.csv");
+  }
+  ImGui::SetItemTooltip("Every key, its note and its text in each language, for a spreadsheet: locale/strings.csv");
+  ImGui::SameLine();
+  if(ImGui::Button(ICON_MDI_FILE_IMPORT " Import CSV")) {
+    std::vector<std::string> csvErrors{};
+    const int changed = Project::Loc::importCsv(Project::Loc::edit(project), Utils::FS::loadTextFile(csvPath), csvErrors);
+    Project::Loc::saveCached(project);
+    st.editKey.clear();
+    Editor::Noti::add(csvErrors.empty() ? Editor::Noti::Type::INFO : Editor::Noti::Type::ERROR,
+      std::format("Strings: {} text(s) changed from locale/strings.csv{}", changed, csvErrors.empty() ? "" : ", " + csvErrors[0]));
+  }
+  ImGui::SetItemTooltip("Read the translations back from locale/strings.csv");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(150);
   int filterIdx = static_cast<int>(st.filter);
@@ -371,6 +392,23 @@ void Editor::StringsWindow::draw()
           std::vector<std::string> textErrors{};
           Project::Loc::compileText(st.editText[li], env, Project::Loc::pluralRuleOf(lang), textErrors);
           for(const auto &err : textErrors) ImGui::TextColored(COL_MISSING, ICON_MDI_ALERT " %s", err.c_str());
+
+          // dialog lines: about how many pages of the talk box, longer than the source's is flagged
+          if(key.starts_with("dlg.")) {
+            const auto box = Project::Loc::boxSizeOf(edit.config);
+            const auto dir = Project::Loc::localeDir(project.getPath());
+            const auto here = Project::Loc::estimatePages(dir, env, lang, st.editText[li], box);
+            std::optional<Project::Loc::PageEstimate> base{};
+            const int si = edit.sourceIndex();
+            if(si >= 0 && static_cast<size_t>(si) != li && static_cast<size_t>(si) < st.editText.size()) {
+              base = Project::Loc::estimatePages(dir, env, edit.config.languages[size_t(si)], st.editText[size_t(si)], box);
+            }
+            if(here) {
+              const bool longer = base && here->pages > base->pages;
+              ImGui::TextColored(longer ? COL_REVIEW : COL_UNUSED, "%s %d line(s), %d page(s) of the talk box%s",
+                longer ? ICON_MDI_ALERT : ICON_MDI_RULER, here->lines, here->pages, longer ? ", more than the source" : "");
+            }
+          }
         }
         ImGui::PopID();
       }

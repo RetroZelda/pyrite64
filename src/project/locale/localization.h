@@ -146,6 +146,19 @@ namespace Project::Loc
   /** The bytes of a table file (engine text/locTable.h). Entries are sorted by id here. */
   std::vector<uint8_t> writeTable(std::vector<BuiltEntry> entries, uint16_t fileFlags);
 
+  /**
+   * The tables as CSV for translators: key, note, then one column per stored language (the source
+   * first). UTF-8, fields quoted when they hold a comma, a quote or a line break.
+   */
+  std::string exportCsv(const Localization &loc);
+
+  /**
+   * Reads translations back from such a CSV: every non-empty cell that differs from the table is
+   * set (a translation is marked as made from the current source text). Rows of unknown keys and
+   * columns of unknown languages are reported in 'errors'. Returns the number of texts changed.
+   */
+  int importCsv(Localization &loc, const std::string &csv, std::vector<std::string> &errors);
+
   /** Text made safe for rdpq: '$' and '^' start codes there, so they are doubled. */
   std::string escapeForRdpq(const std::string &text);
 }

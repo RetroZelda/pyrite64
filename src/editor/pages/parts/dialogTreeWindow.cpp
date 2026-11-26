@@ -395,10 +395,16 @@ namespace Editor
         break;
       }
 
-      case NodeType::Input:
-        ImGui::InputTextWithHint("##name", "HasTicket", &data.name);
-        ImGui::SetItemTooltip("A yes/no the scene wires in from its event graph");
+      case NodeType::Input: {
+        // the game's Dialog script reads these from its condition-input pins of the same name
+        static const char* SLOTS[] = {"Input1", "Input2", "Input3", "Input4"};
+        if(ImGui::BeginCombo("##name", data.name.empty() ? "pick an input" : data.name.c_str())) {
+          for(auto *slot : SLOTS) if(ImGui::Selectable(slot, data.name == slot)) data.name = slot;
+          ImGui::EndCombo();
+        }
+        ImGui::TextDisabled("wire a condition's Result into the\nDialog object's %s pin", data.name.empty() ? "InputN" : data.name.c_str());
         break;
+      }
 
       case NodeType::Event:
         ImGui::InputTextWithHint("##event", "prefab::Gate.Open", &data.event);
