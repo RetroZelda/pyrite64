@@ -58,6 +58,9 @@ namespace P64::AssetManager
 
   const char* getPathByIndex(uint32_t idx);
 
+  /** Fork: the index of an asset by its ROM path ("rom:/audio/x.wav64" or "audio/x.wav64"), -1 if none. A linear search. */
+  int32_t findByPath(const char* path);
+
   /**
    * Returns the vertex-scale of a 3D model asset: the factor that converts the
    * model's quantized vertex units back into meters (1 / import base-scale).

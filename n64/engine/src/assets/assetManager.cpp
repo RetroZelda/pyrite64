@@ -2,6 +2,7 @@
 * @copyright 2025 - Max Bebök
 * @license MIT
 */
+#include <cstring>
 #include "assets/assetManager.h"
 
 #include <libdragon.h>
@@ -200,6 +201,19 @@ void* P64::AssetManager::getByIndex(uint32_t idx) {
   }
 
   return res;
+}
+
+int32_t P64::AssetManager::findByPath(const char* path)
+{
+  if(!assetTable || !path) return -1;
+  if(strncmp(path, "rom:/", 5) == 0) path += 5;
+  for(uint32_t i = 0; i < assetTable->count; ++i) {
+    const char* p = assetTable->entries[i].path;
+    if(!p) continue;
+    if(strncmp(p, "rom:/", 5) == 0) p += 5;
+    if(strcmp(p, path) == 0) return int32_t(i);
+  }
+  return -1;
 }
 
 const char* P64::AssetManager::getPathByIndex(uint32_t idx)

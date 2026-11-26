@@ -63,6 +63,15 @@ namespace P64::Loc
   };
   constexpr uint8_t CONTROL_NONE = 0, CONTROL_SECONDS = 1, CONTROL_NUMBER = 2, CONTROL_NAME = 3;
 
+  /** A voice clip: assets/voice/<language code>/<key>.wav, found by the build. */
+  struct VoiceClip
+  {
+    uint32_t key;    // the line's id
+    uint8_t lang;    // the language index
+    uint8_t reserved;
+    uint16_t asset;  // audio asset index
+  };
+
   /** What locale.json says about fonts, colors and tags (generated, src/p64/locTable.cpp). */
   struct ProjectData
   {
@@ -81,6 +90,8 @@ namespace P64::Loc
     uint8_t iconSet;           // 0xFF: none
     uint32_t iconBase;
     uint8_t fallbackColor;     // palette index for untranslated text in debug builds
+    const VoiceClip* voices;   // sorted by language, then key
+    uint16_t voiceCount;
   };
 
   namespace Generated
@@ -143,6 +154,10 @@ namespace P64::Loc
 
   /** The font of a slot's language for a variant (0 regular, 1 bold) and size step from the current base; 0 without fonts. */
   uint8_t fontFor(Slot slot, uint8_t variant, int8_t sizeOffset);
+
+  constexpr uint16_t NO_VOICE = 0xFFFF;
+  /** The voice clip of a line in a slot's language (an audio asset index), NO_VOICE when it has none. */
+  uint16_t voiceClip(LocId id, Slot slot = Slot::Game);
 
   /** The text size setting: font sizes up (or down) from each set's normal size. */
   void setTextSize(int8_t steps);

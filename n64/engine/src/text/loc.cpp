@@ -273,6 +273,17 @@ uint8_t P64::Loc::fontFor(Slot slot, uint8_t variant, int8_t sizeOffset)
   return fs.ids[variant][sz] ? fs.ids[variant][sz] : fs.ids[0][sz];
 }
 
+uint16_t P64::Loc::voiceClip(LocId id, Slot slot)
+{
+  const uint8_t lang = slotOf(slot).lang;
+  if(!project || !project->voices || lang >= langCount) return NO_VOICE;
+  for(uint16_t i = 0; i < project->voiceCount; ++i) {
+    const VoiceClip &v = project->voices[i];
+    if(v.lang == lang && v.key == id.hash) return v.asset;
+  }
+  return NO_VOICE;
+}
+
 void P64::Loc::setTextSize(int8_t steps) { textSizeStep = steps; }
 int8_t P64::Loc::textSize() { return textSizeStep; }
 

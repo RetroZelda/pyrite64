@@ -11,7 +11,10 @@
 #include <filesystem>
 #include <format>
 #include <map>
+#include <regex>
 #include <set>
+#include <tuple>
+#include <algorithm>
 
 #include "../project/project.h"
 #include "../project/locale/locProject.h"
@@ -78,7 +81,7 @@ namespace
     uint8_t fallbackColor{0};
   };
 
-  void writeGenerated(Project::Project &project, const Output *outp)
+  void writeGenerated(Project::Project &project, Build::SceneCtx &ctx, const Output *outp)
   {
     std::string src = "// NOTE: Auto-Generated File!\n// Fork: localization, the project's languages and fonts (locale/locale.json).\n\n"
                       "#include \"text/loc.h\"\n\n";
@@ -156,14 +159,36 @@ namespace
       for(size_t i = 0; i < env.icons.size(); ++i) src += (i ? ", " : "") + cString(env.icons[i]);
       src += "};\n";
     }
+    // voice clips: assets/voice/<language code>/<key>.wav
+    struct Voice { int lang; uint32_t key; uint32_t asset; std::string path; };
+    std::vector<Voice> voices{};
+    for(const auto &entry : project.getAssets().getTypeEntries(Project::FileType::AUDIO)) {
+      const std::string &pp = entry.projectPath;
+      if(!pp.starts_with("assets/voice/")) continue;
+      const auto rest = pp.substr(13);
+      const auto slash = rest.find('/');
+      if(slash == std::string::npos) continue;
+      const int lang = cfg.indexOf(rest.substr(0, slash));
+      std::string key = rest.substr(slash + 1);
+      key = key.substr(0, key.rfind('.'));
+      auto idx = ctx.assetUUIDToIdx.find(entry.getUUID());
+      if(lang < 0 || idx == ctx.assetUUIDToIdx.end() || !isValidKey(key)) continue;
+      voices.push_back({lang, P64::Loc::keyId(key.data(), key.size()).hash, idx->second, pp});
+    }
+    std::sort(voices.begin(), voices.end(), [](const Voice &a, const Voice &b) { return std::tie(a.lang, a.key) < std::tie(b.lang, b.key); });
+    if(!voices.empty()) {
+      src += "  constexpr P64::Loc::VoiceClip VOICES[] = {\n";
+      for(const auto &v : voices) src += std::format("    {{0x{:08X}u, {}, 0, {}}}, // {}\n", v.key, v.lang, v.asset, v.path);
+      src += "  };\n";
+    }
     const int iconSet = env.iconSet.empty() ? -1 : env.fontSetIndex(env.iconSet);
-    src += std::format("\n  constexpr P64::Loc::ProjectData DATA{{\n    {}, {},\n    {}, {},\n    PALETTE, {},\n    EFFECTS, {},\n    {}, {},\n    {}, {}, {}, 0x{:X}u,\n    {}\n  }};\n}}\n\n",
+    src += std::format("\n  constexpr P64::Loc::ProjectData DATA{{\n    {}, {},\n    {}, {},\n    PALETTE, {},\n    EFFECTS, {},\n    {}, {},\n    {}, {}, {}, 0x{:X}u,\n    {},\n    {}, {}\n  }};\n}}\n\n",
       env.fontSets.empty() ? "nullptr" : "SETS", env.fontSets.size(),
       o.fonts.empty() ? "nullptr" : "FONTS", o.fonts.size(),
       env.paletteRgba.size(), env.effects.size(),
       env.controls.empty() ? "nullptr" : "CONTROLS", env.controls.size(),
       env.icons.empty() ? "nullptr" : "ICONS", env.icons.size(), iconSet < 0 ? 0xFF : iconSet, env.iconBase,
-      o.fallbackColor);
+      o.fallbackColor, voices.empty() ? "nullptr" : "VOICES", voices.size());
     src += "void P64::Loc::Generated::registerLanguages()\n{\n"
            "  P64::Loc::setLanguageList(LANGUAGES, sizeof(LANGUAGES) / sizeof(LANGUAGES[0]));\n"
            "  P64::Loc::setProjectData(&DATA);\n}\n";
@@ -190,6 +215,13 @@ namespace
         Utils::FS::saveTextFileIfChanged(work / "charset.txt", charset);
         cmd += " --charset \"" + (work / "charset.txt").string() + "\"";
       }
+    }
+    if(bmfont) {
+      // mkfont wants an ellipsis glyph; a bitmap font of icons has no '.': name its first glyph
+      static const std::regex firstChar{R"(char\s+id=(\d+))"};
+      std::smatch m;
+      const std::string fnt = Utils::FS::loadTextFile(fontPath);
+      if(std::regex_search(fnt, m, firstChar)) cmd += std::format(" --ellipsis {:X},1", std::stoul(m[1].str()));
     }
     cmd += " \"" + fontPath.string() + "\"";
 
@@ -218,7 +250,7 @@ namespace
 bool Build::buildLocalization(Project::Project &project, SceneCtx &ctx)
 {
   if(!hasLocalization(project.getPath())) {
-    writeGenerated(project, nullptr);
+    writeGenerated(project, ctx, nullptr);
     return true;
   }
 
@@ -370,6 +402,6 @@ bool Build::buildLocalization(Project::Project &project, SceneCtx &ctx)
     }
   }
 
-  writeGenerated(project, &out);
+  writeGenerated(project, ctx, &out);
   return true;
 }
