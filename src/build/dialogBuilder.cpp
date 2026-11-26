@@ -58,7 +58,7 @@ namespace
       auto it = args.find(field.name);
       std::string val = it == args.end() ? std::string{} : it->second;
       if(val.empty()) val = field.defaultValue;
-      if(val.empty()) val = "0";
+      if(val.empty() && field.type != Utils::DataType::string) val = "0"; // an empty text stays empty
       try {
         switch(field.type) {
           case Utils::DataType::ASSET_SPRITE: case Utils::DataType::ASSET_EMITTER: case Utils::DataType::PREFAB:

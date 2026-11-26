@@ -7,6 +7,7 @@
 #include "text/locTable.h"
 
 #include <libdragon.h>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -121,7 +122,7 @@ namespace
     return loaded.table.textAt(entry);
   }
 
-  FormatEnv envOf(const Loaded &loaded, const Args* args)
+  FormatEnv envOf(const Loaded &loaded, const Args* args, int8_t sizeOffset = 0)
   {
     FormatEnv env{};
     if(project) {
@@ -131,7 +132,7 @@ namespace
       env.iconBase = project->iconBase;
       env.fallbackColor = markFallbacks ? project->fallbackColor : 0;
     }
-    env.sizeStep = textSizeStep;
+    env.sizeStep = int8_t(textSizeStep + sizeOffset);
     if(loaded.lang < langCount) {
       const Language &lang = languages[loaded.lang];
       env.baseSet = lang.fontSet;
@@ -239,7 +240,7 @@ bool P64::Loc::isFallback(LocId id, Slot slot)
   return entry >= 0 && (loaded.table.flagsAt(entry) & ENTRY_FALLBACK);
 }
 
-P64::Loc::FormatResult P64::Loc::format(char* out, int size, LocId id, Slot slot, const Args* args)
+P64::Loc::FormatResult P64::Loc::format(char* out, int size, LocId id, Slot slot, const Args* args, int8_t sizeOffset)
 {
   const auto &loaded = slotOf(slot);
   const int32_t entry = loaded.table.find(id.hash);
@@ -252,12 +253,24 @@ P64::Loc::FormatResult P64::Loc::format(char* out, int size, LocId id, Slot slot
     return {static_cast<int>(out && size > 0 ? strlen(out) : 0), false, 0};
   }
   const bool fallback = (loaded.table.flagsAt(entry) & ENTRY_FALLBACK) != 0;
-  return formatText(loaded.table.textAt(entry), fallback, out, size, envOf(loaded, args));
+  return formatText(loaded.table.textAt(entry), fallback, out, size, envOf(loaded, args, sizeOffset));
 }
 
-P64::Loc::FormatResult P64::Loc::formatCompiled(char* out, int size, const char* compiled, bool fallback, Slot slot, const Args* args)
+P64::Loc::FormatResult P64::Loc::formatCompiled(char* out, int size, const char* compiled, bool fallback, Slot slot, const Args* args, int8_t sizeOffset)
 {
-  return formatText(compiled, fallback, out, size, envOf(slotOf(slot), args));
+  return formatText(compiled, fallback, out, size, envOf(slotOf(slot), args, sizeOffset));
+}
+
+uint8_t P64::Loc::fontFor(Slot slot, uint8_t variant, int8_t sizeOffset)
+{
+  const uint8_t set = fontSetOf(slotOf(slot).lang);
+  if(!project || set >= project->setCount || variant >= VARIANTS) return 0;
+  const FontSet &fs = project->sets[set];
+  if(fs.sizeCount == 0) return 0;
+  int sz = int(fs.baseSize) + textSizeStep + sizeOffset;
+  if(sz < 0) sz = 0;
+  if(sz >= fs.sizeCount) sz = fs.sizeCount - 1;
+  return fs.ids[variant][sz] ? fs.ids[variant][sz] : fs.ids[0][sz];
 }
 
 void P64::Loc::setTextSize(int8_t steps) { textSizeStep = steps; }
@@ -323,48 +336,87 @@ int P64::Loc::breakLines(char* text, int size, float width)
   if(!text) return 0;
   int len = static_cast<int>(strlen(text));
 
-  struct Item { int offset; uint32_t cp; uint8_t font; uint8_t style; };
-  constexpr int MAX_LINE = 160;
-  Item line[MAX_LINE];
-  int count = 0;
-  float x = 0.0f;
+  // the font and style in effect at the start
   uint8_t font = 0, style = 0;
+  {
+    const char* p = text;
+    const Scan first = scanNext(p, font, style);
+    font = first.font;
+    style = first.style;
+  }
+  if(!font || !rdpq_text_get_font(font)) return len;
 
-  const char* p = text;
-  while(true) {
-    Scan s = scanNext(p, font, style);
-    if(s.kind == Scan::Kind::End) break;
-    if(s.kind == Scan::Kind::Newline) { count = 0; x = 0.0f; continue; }
-    if(s.kind == Scan::Kind::Control) continue;
+  // one line of this font: a box a line and a half high lets rdpq lay out exactly one line
+  float lineHeight = 0.0f;
+  {
+    rdpq_textparms_t parms{};
+    parms.height = 1000;
+    const char probe[] = "A\nA";
+    int nbytes = 3;
+    rdpq_paragraph_t* lay = rdpq_paragraph_build(&parms, font, probe, &nbytes);
+    if(lay && lay->nchars >= 2) lineHeight = fabsf(float(lay->chars[1].y) - float(lay->chars[0].y));
+    if(lay) rdpq_paragraph_free(lay);
+  }
+  if(lineHeight <= 0.0f) return len;
 
-    rdpq_font_gmetrics_t m{};
-    const rdpq_font_t* fnt = rdpq_text_get_font(s.font);
-    rdpq_font_get_glyph_metrics(fnt, s.codepoint == '\t' ? uint32_t(' ') : s.codepoint, &m);
-    const int offset = static_cast<int>(s.at - text);
+  int pos = 0;
+  for(int guard = 0; guard < 256 && pos < len; ++guard) {
+    rdpq_textparms_t parms{};
+    parms.width = int16_t(width);
+    parms.height = int16_t(lineHeight * 1.5f); // one line fits (a font's ascent and descent can exceed its line step), two do not
+    parms.wrap = WRAP_CHAR;
+    parms.style_id = style;
+    int nbytes = len - pos;
+    rdpq_paragraph_t* lay = rdpq_paragraph_build(&parms, font, text + pos, &nbytes);
+    if(lay) rdpq_paragraph_free(lay);
+    const int end = pos + nbytes;
+    if(nbytes <= 0 || end >= len) break;
 
-    if(x + m.xadvance > width && count > 0 && s.kind != Scan::Kind::Space) {
-      // break before this glyph, moved back while kinsoku forbids it
-      int brk = count; // index in 'line' of the first glyph of the next line
-      if(kinsokuNoStart(s.codepoint) && brk > 1) --brk;
-      while(brk > 1 && brk < count && kinsokuNoStart(line[brk].cp)) --brk;
-      while(brk > 1 && kinsokuNoEnd(line[brk - 1].cp)) --brk;
+    // the line ended at a line break of its own: nothing to insert
+    int brk = end;
+    if(text[end - 1] != '\n') {
+      // where each letter of this line starts, to step back over them
+      constexpr int MAX_ITEMS = 96;
+      const char* starts[MAX_ITEMS];
+      uint32_t cps[MAX_ITEMS];
+      int count = 0;
+      uint8_t f = font, st = style;
+      const char* p = text + pos;
+      while(p < text + end && count < MAX_ITEMS) {
+        const Scan it = scanNext(p, f, st);
+        if(it.kind == Scan::Kind::End || it.at >= text + end) break;
+        if(it.kind == Scan::Kind::Glyph || it.kind == Scan::Kind::Space) { starts[count] = it.at; cps[count] = it.codepoint; ++count; }
+      }
+      uint8_t f2 = f, st2 = st;
+      const char* q = text + end;
+      const Scan next = scanNext(q, f2, st2);
+      // kinsoku: the next line must not start with a closing mark, this one must not end with an opening one
+      int k = count; // index of the first letter of the next line
+      uint32_t nextCp = next.codepoint;
+      while(k > 1 && (kinsokuNoStart(nextCp) || kinsokuNoEnd(cps[k - 1]))) {
+        --k;
+        nextCp = cps[k];
+      }
+      brk = k < count ? int(starts[k] - text) : end;
 
-      const int at = brk < count ? line[brk].offset : offset;
       if(len + 2 > size) break; // no room for another line break
-      memmove(text + at + 1, text + at, size_t(len - at + 1));
-      text[at] = '\n';
+      memmove(text + brk + 1, text + brk, size_t(len - brk + 1));
+      text[brk] = '\n';
       ++len;
-      p = text + at + 1;
-      // the font and style in effect at the break carry on
-      font = brk < count ? line[brk].font : s.font;
-      style = brk < count ? line[brk].style : s.style;
-      count = 0;
-      x = 0.0f;
-      continue;
     }
 
-    if(count < MAX_LINE) line[count++] = {offset, s.codepoint, s.font, s.style};
-    x += m.xadvance;
+    // the font and style in effect at the new line's start
+    {
+      const char* p = text + pos;
+      uint8_t f = font, st = style;
+      while(p < text + brk) {
+        const Scan it = scanNext(p, f, st);
+        if(it.kind == Scan::Kind::End) break;
+      }
+      font = f;
+      style = st;
+    }
+    pos = brk + (text[brk] == '\n' ? 1 : 0);
   }
   return len;
 }

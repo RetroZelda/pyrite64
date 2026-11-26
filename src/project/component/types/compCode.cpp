@@ -321,7 +321,8 @@ namespace Project::Component::Code
       // not prop.resolve(): an override of another property with the same name is not this arg's value
       std::string val = resolveArg(obj, prop);
       if (val.empty())val = field.defaultValue;
-      if (val.empty())val = "0";
+      // Fork: an empty text field stays empty (it was written as "0")
+      if (val.empty() && field.type != Utils::DataType::string)val = "0";
 
       if(field.type == Utils::DataType::ASSET_SPRITE || field.type == Utils::DataType::ASSET_EMITTER || field.type == Utils::DataType::ASSET_DIALOG)
       {

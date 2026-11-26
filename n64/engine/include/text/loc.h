@@ -136,10 +136,13 @@ namespace P64::Loc
    * codes, {variables} their values (from 'args' first, then P64_LOC_VAR), plurals the right form.
    * Pass any font id to rdpq: the text starts with its own font code when the project has fonts.
    */
-  FormatResult format(char* out, int size, LocId id, Slot slot = Slot::Game, const Args* args = nullptr);
+  FormatResult format(char* out, int size, LocId id, Slot slot = Slot::Game, const Args* args = nullptr, int8_t sizeOffset = 0);
 
   /** Formats a compiled text of the slot's language (a dialog line held by id elsewhere). */
-  FormatResult formatCompiled(char* out, int size, const char* compiled, bool fallback, Slot slot, const Args* args = nullptr);
+  FormatResult formatCompiled(char* out, int size, const char* compiled, bool fallback, Slot slot, const Args* args = nullptr, int8_t sizeOffset = 0);
+
+  /** The font of a slot's language for a variant (0 regular, 1 bold) and size step from the current base; 0 without fonts. */
+  uint8_t fontFor(Slot slot, uint8_t variant, int8_t sizeOffset);
 
   /** The text size setting: font sizes up (or down) from each set's normal size. */
   void setTextSize(int8_t steps);
