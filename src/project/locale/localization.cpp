@@ -375,7 +375,7 @@ void Project::Loc::Localization::confirm(const std::string &key, size_t lang)
 
 std::string Project::Loc::pseudoText(const std::string &source)
 {
-  std::string out = "[";
+  std::string out = "[["; // an escaped [, so the bracket is text and not a tag
   int letters = 0;
   int braceDepth = 0;
   for(size_t i = 0; i < source.size(); ++i) {

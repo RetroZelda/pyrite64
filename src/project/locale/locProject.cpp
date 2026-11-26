@@ -224,6 +224,23 @@ Project::Loc::Uses Project::Loc::scanProject(Project &project, std::vector<std::
   return uses;
 }
 
+Project::Loc::VarDecls Project::Loc::scanVariables(Project &project, std::vector<std::string> &errors)
+{
+  VarDecls vars{};
+  std::error_code ec{};
+  const fs::path root{project.getPath()};
+  const fs::path userDir = root / "src" / "user";
+  if(!fs::exists(userDir, ec)) return vars;
+  for(auto it = fs::recursive_directory_iterator(userDir, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    if(ec) break;
+    if(!it->is_regular_file()) continue;
+    const auto ext = it->path().extension().string();
+    if(ext != ".cpp" && ext != ".h" && ext != ".hpp" && ext != ".cc" && ext != ".inl") continue;
+    scanVarDecls(Utils::FS::loadTextFile(it->path()), fs::relative(it->path(), root, ec).generic_string(), vars, errors);
+  }
+  return vars;
+}
+
 Project::Loc::RefreshResult Project::Loc::refresh(Project &project, Localization &loc)
 {
   RefreshResult res{};

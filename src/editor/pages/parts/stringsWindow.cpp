@@ -61,6 +61,7 @@ struct Editor::StringsWindow::State
 {
   std::string projectPath{};
   Project::Loc::Uses uses{};
+  Project::Loc::VarDecls vars{};
   bool scanned{false};
   std::vector<std::string> scanErrors{};
 
@@ -89,6 +90,7 @@ struct Editor::StringsWindow::State
   {
     scanErrors.clear();
     uses = Project::Loc::scanProject(project, scanErrors);
+    vars = Project::Loc::scanVariables(project, scanErrors);
     scanned = true;
   }
 
@@ -149,6 +151,7 @@ void Editor::StringsWindow::draw()
     auto res = Project::Loc::refreshCached(project);
     st.uses = res.uses;
     st.scanErrors = res.errors;
+    st.vars = Project::Loc::scanVariables(project, st.scanErrors);
     st.scanned = true;
     Editor::Noti::add(Editor::Noti::Type::INFO, std::format("Strings: {} key(s) used, {} added, {} unused",
       res.uses.size(), res.added.size(), res.unused.size()));
@@ -264,7 +267,7 @@ void Editor::StringsWindow::draw()
             std::string text{};
             if(src) {
               auto it = src->entries.find(key);
-              if(it != src->entries.end()) text = Project::Loc::pseudoText(it->second.text);
+              if(it != src->entries.end()) text = Project::Loc::pseudoText(it->second.text).substr(1); // shown without the escape
             }
             ImGui::TextDisabled("%s", oneLine(text, 40).c_str());
             continue;
@@ -360,6 +363,14 @@ void Editor::StringsWindow::draw()
         if(ImGui::IsItemDeactivatedAfterEdit()) {
           edit.setText(key, li, st.editText[li]);
           Project::Loc::saveCached(project);
+        }
+        // the build's checks, while typing: unknown tags, undeclared variables, plural cases
+        if(!st.editText[li].empty()) {
+          std::vector<std::string> envErrors{};
+          auto env = Project::Loc::makeCompileEnv(edit.config, st.vars, envErrors);
+          std::vector<std::string> textErrors{};
+          Project::Loc::compileText(st.editText[li], env, Project::Loc::pluralRuleOf(lang), textErrors);
+          for(const auto &err : textErrors) ImGui::TextColored(COL_MISSING, ICON_MDI_ALERT " %s", err.c_str());
         }
         ImGui::PopID();
       }

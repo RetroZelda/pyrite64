@@ -1,11 +1,56 @@
 {
   "source": "en",
   "languages": [
-    {"code": "en", "name": "English", "fonts": "latin", "wrap": "word"},
-    {"code": "ja", "name": "日本語", "fonts": "japanese", "wrap": "char", "revealScale": 0.6},
-    {"code": "es", "name": "Español", "fonts": "latin", "wrap": "word"},
-    {"code": "qps", "name": "Pseudo", "fonts": "latin", "wrap": "word", "pseudo": true}
+    {
+      "code": "en",
+      "name": "English",
+      "fonts": "latin",
+      "wrap": "word"
+    },
+    {
+      "code": "ja",
+      "name": "日本語",
+      "fonts": "latin",
+      "wrap": "char",
+      "revealScale": 0.6
+    },
+    {
+      "code": "es",
+      "name": "Español",
+      "fonts": "latin",
+      "wrap": "word"
+    },
+    {
+      "code": "qps",
+      "name": "Pseudo",
+      "fonts": "latin",
+      "wrap": "word",
+      "pseudo": true
+    }
   ],
-  "pairs": {"en": "ja", "ja": "en"},
-  "keep": []
+  "pairs": {
+    "en": "ja",
+    "ja": "en"
+  },
+  "keep": [],
+  "fontSets": {
+    "latin": {
+      "regular": "fonts/NotoSans-Regular.ttf",
+      "bold": "fonts/NotoSans-Bold.ttf",
+      "sizes": [
+        16
+      ],
+      "base": 16
+    }
+  },
+  "colors": {
+    "red": "#ff3030"
+  },
+  "effects": [
+    "shake"
+  ],
+  "controls": {
+    "wait": "seconds",
+    "speed": "name"
+  }
 }

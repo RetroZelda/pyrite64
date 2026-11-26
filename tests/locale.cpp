@@ -222,3 +222,216 @@ TEST_CASE("loc: a written table is read back by the engine's reader")
   CHECK_FALSE(view.init(bytes.data(), static_cast<uint32_t>(bytes.size())));
   CHECK_FALSE(view.init(bytes.data(), 4));
 }
+
+// ---------------------------------------------------------------- phase 2: tags, variables, formatting
+
+#include "text/locFormat.h"
+#include "project/locale/locCompile.h"
+
+P64_LOC_VAR(testCoins, Int) { return 1234; }
+P64_LOC_VAR(testItem, Key) { return "test.sword"_localized; }
+P64_LOC_VAR(testName, Text) { return "R$tar"; }
+P64_LOC_ARG(testCount, Int);
+
+namespace
+{
+  struct Fixture
+  {
+    Config cfg{};
+    CompileEnv env{};
+    P64::Loc::FontSet sets[2]{};
+    P64::Loc::FormatEnv fenv{};
+    std::string sword{};
+
+    Fixture()
+    {
+      std::vector<std::string> errors{};
+      parseConfig(nlohmann::json::parse(R"({
+        "source": "en",
+        "languages": [{"code": "en", "fonts": "latin"}, {"code": "ja", "fonts": "latin", "wrap": "char"}],
+        "colors": {"red": "#ff0000", "place": "#3080ff"},
+        "effects": ["shake", "wave"],
+        "controls": {"wait": "seconds", "speed": "name", "sfx": "name"},
+        "fontSets": {"latin": {"regular": "a.ttf", "bold": "b.ttf", "sizes": [12, 16], "base": 16}, "icons": {"regular": "i.fnt"}},
+        "icons": {"set": "icons", "base": 57344, "names": ["a", "b"]}
+      })"), cfg, errors);
+      CHECK(errors.empty());
+      VarDecls vars{};
+      vars["testCoins"] = {.type = "Int"};
+      vars["testItem"] = {.type = "Key"};
+      vars["testName"] = {.type = "Text"};
+      vars["testCount"] = {.type = "Int", .isArg = true};
+      env = makeCompileEnv(cfg, vars, errors);
+      CHECK(errors.empty());
+
+      // font set 0 "icons", 1 "latin" (sets are sorted by name)
+      sets[0] = {"icons", {{30, 30, 0, 0}, {}, {}, {}}, 1, 0, 0};
+      sets[1] = {"latin", {{16, 18, 0, 0}, {17, 19, 0, 0}, {}, {}}, 2, 1, 0};
+      fenv.sets = sets;
+      fenv.setCount = 2;
+      fenv.baseSet = 1;
+      fenv.iconSet = 0;
+      fenv.iconBase = 0xE000;
+      std::vector<std::string> e2{};
+      sword = compileText("Sword", env, P64::Loc::PluralRule::OneOther, e2);
+      fenv.user = this;
+      fenv.keyText = [](uint32_t id, bool*, void* user) -> const char* {
+        auto* self = static_cast<Fixture*>(user);
+        return id == "test.sword"_localized.hash ? self->sword.c_str() : nullptr;
+      };
+    }
+
+    std::string run(const std::string &src, P64::Loc::PluralRule rule = P64::Loc::PluralRule::OneOther, const P64::Loc::Args* args = nullptr)
+    {
+      std::vector<std::string> errors{};
+      const auto compiled = compileText(src, env, rule, errors);
+      CHECK_MESSAGE(errors.empty(), src);
+      char out[256];
+      auto e = fenv;
+      e.plural = rule;
+      e.args = args;
+      P64::Loc::formatText(compiled.c_str(), false, out, sizeof(out), e);
+      return out;
+    }
+
+    std::vector<std::string> errorsOf(const std::string &src)
+    {
+      std::vector<std::string> errors{};
+      compileText(src, env, P64::Loc::PluralRule::OneOther, errors);
+      return errors;
+    }
+  };
+
+  std::string cp(uint32_t c)
+  {
+    char buf[4];
+    int n = P64::Loc::utf8Encode(c, buf, 4);
+    return std::string(buf, n);
+  }
+}
+
+TEST_CASE("loc format: fonts, bold and sizes become rdpq codes")
+{
+  Fixture f{};
+  CHECK(f.run("Hello [b]you[/b]!") == "$12^00Hello $13^00you$12^00!");
+  CHECK(f.run("[size=small]tiny") == "$10^00tiny");
+  CHECK(f.run("[size=big]big") == "$12^00big"); // clamped to the largest size
+  f.fenv.sizeStep = -1;                      // the text size setting
+  CHECK(f.run("A[b]B") == "$10^00A$11^00B");
+}
+
+TEST_CASE("loc format: colors and effects are style ids")
+{
+  Fixture f{};
+  f.fenv.baseSet = 0xFF; // no fonts: style codes only
+  // palette: 0 default, 1 place, 2 red (sorted by name); effects: 1 shake, 2 wave
+  CHECK(f.run("[color=red]Hi[/color] you") == "^02Hi^00 you");
+  CHECK(f.run("[shake]Boo[/shake]") == "^20Boo"); // a code is only written before text
+  CHECK(f.run("[color=place][wave]x") == "^41x");
+  CHECK(f.run("[color=#00ff00]g") == "^03g"); // a custom color joins the palette
+}
+
+TEST_CASE("loc format: variables, numbers and plurals")
+{
+  Fixture f{};
+  f.fenv.baseSet = 0xFF;
+  CHECK(f.run("{testCoins}") == "1,234");
+  CHECK(f.run("{testCoins:n}") == "1234");
+  CHECK(f.run("{testCoins:06}") == "001234");
+  f.fenv.groupSep = '.';
+  f.fenv.groupMin = 5;
+  CHECK(f.run("{testCoins}") == "1234"); // Spanish groups from 10.000
+  f.fenv.groupSep = ',';
+  f.fenv.groupMin = 4;
+
+  CHECK(f.run("You got {testItem}!") == "You got Sword!");
+  CHECK(f.run("{testName}") == "R$$tar"); // raw text is made safe for rdpq
+
+  const std::string coins = "{testCount, plural, =0 {no coins} one {# coin} other {# coins}}";
+  P64::Loc::Args args{};
+  args.set("testCount"_var, 0);
+  CHECK(f.run(coins, P64::Loc::PluralRule::OneOther, &args) == "no coins");
+  args.items[0].v.i = 1;
+  CHECK(f.run(coins, P64::Loc::PluralRule::OneOther, &args) == "1 coin");
+  args.items[0].v.i = 5;
+  CHECK(f.run(coins, P64::Loc::PluralRule::OneOther, &args) == "5 coins");
+  args.items[0].v.i = 1;
+  CHECK(f.run(coins, P64::Loc::PluralRule::OtherOnly, &args) == "1 coins"); // Japanese has one form
+
+  // the caller's value wins over the global one
+  P64::Loc::Args mine{};
+  mine.set("testCoins"_var, 7);
+  CHECK(f.run("{testCoins}", P64::Loc::PluralRule::OneOther, &mine) == "7");
+}
+
+TEST_CASE("loc format: controls, icons, pages and escapes")
+{
+  Fixture f{};
+  f.fenv.baseSet = 0xFF;
+  // controls are sorted by name: sfx 1, speed 2, wait 3
+  CHECK(f.run("a[wait=0.5]b") == "a" + cp(P64::Loc::control(3, 50)) + "b");
+  CHECK(f.run("[speed=slow]x[speed=fast]y") == cp(P64::Loc::control(2, 0)) + "x" + cp(P64::Loc::control(2, 1)) + "y");
+  CHECK(f.run("one[page]two") == "one" + cp(P64::Loc::control(0, P64::Loc::CTRL_PAGE)) + "two");
+  CHECK(f.run("Press [btn=b]") == "Press $1E" + cp(0xE001));
+  CHECK(f.run("[[not a tag] {{x} $5 ^_^ a\\nb") == "[not a tag] {x} $$5 ^^_^^ a\nb");
+  REQUIRE(f.env.controls.size() == 3);
+  CHECK(f.env.controls[1].names.size() == 2); // slow, fast
+}
+
+TEST_CASE("loc compile: mistakes are errors")
+{
+  Fixture f{};
+  CHECK(f.errorsOf("[blink]x").size() == 1);
+  CHECK(f.errorsOf("x[/b]").size() == 1);
+  CHECK(f.errorsOf("{nobody}").size() == 1);
+  CHECK(f.errorsOf("{testName:03}").size() == 1);
+  CHECK(f.errorsOf("{testCount, plural, one {#}}").size() == 1); // no other
+  CHECK(f.errorsOf("[color=blurple]").size() == 1);
+  CHECK(f.errorsOf("[wait=abc]").size() == 1);
+  CHECK(f.errorsOf("[btn=start]").size() == 1);
+  CHECK(f.errorsOf("open [b").size() == 1);
+  CHECK(f.errorsOf("[b]open at the end is fine").empty());
+}
+
+TEST_CASE("loc format: untranslated text is tinted, a cut never splits a code")
+{
+  Fixture f{};
+  f.fenv.baseSet = 0xFF;
+  std::vector<std::string> errors{};
+  const auto compiled = compileText("$$$$$$", f.env, P64::Loc::PluralRule::OneOther, errors);
+  char out[6];
+  auto res = P64::Loc::formatText(compiled.c_str(), false, out, sizeof(out), f.fenv);
+  CHECK(res.truncated);
+  CHECK(std::string(out) == "$$$$"); // pairs only
+
+  auto e = f.fenv;
+  e.fallbackColor = 5;
+  char out2[32];
+  P64::Loc::formatText("Hi", true, out2, sizeof(out2), e);
+  CHECK(std::string(out2) == "^05Hi");
+}
+
+TEST_CASE("loc compile: glyphs, variable declarations, kinsoku")
+{
+  Fixture f{};
+  std::vector<std::string> errors{};
+  const auto compiled = compileText("[b]あ[/b]{testCoins}[wait=1]い", f.env, P64::Loc::PluralRule::OneOther, errors);
+  std::set<uint32_t> glyphs{};
+  collectGlyphs(compiled, glyphs);
+  CHECK(glyphs == std::set<uint32_t>{0x3042, 0x3044});
+
+  VarDecls vars{};
+  scanVarDecls("// P64_LOC_VAR(commented, Int)\n#define P64_LOC_VAR(NAME, TYPE) x\nP64_LOC_VAR(coins, Int) { return 1; }\nP64_LOC_ARG(price, Int);\nP64_LOC_VAR(bad, Float) {}\n",
+    "v.cpp", vars, errors);
+  CHECK(vars.size() == 2);
+  CHECK(vars["coins"].type == "Int");
+  CHECK(vars["price"].isArg);
+  CHECK(errors.size() == 1);
+
+  CHECK(P64::Loc::kinsokuNoStart(0x3002)); // 。
+  CHECK(P64::Loc::kinsokuNoStart(0x3063)); // っ
+  CHECK(P64::Loc::kinsokuNoEnd(0x300C));   // 「
+  CHECK_FALSE(P64::Loc::kinsokuNoStart(0x3042));
+  CHECK(P64::Loc::pluralCategory(P64::Loc::PluralRule::French, 0) == P64::Loc::PluralCat::One);
+  CHECK(P64::Loc::pluralCategory(P64::Loc::PluralRule::Spanish, 1000000) == P64::Loc::PluralCat::Many);
+}

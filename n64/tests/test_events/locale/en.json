@@ -1,5 +1,24 @@
 {
-  "test.hello": {"text": "Hello", "note": "the test ROM's greeting"},
-  "test.money": {"text": "$5"},
-  "test.only_en": {"text": "Only English"}
+  "test.hello": {
+    "text": "Hello",
+    "note": "the test ROM's greeting"
+  },
+  "test.money": {
+    "text": "$5"
+  },
+  "test.only_en": {
+    "text": "Only English"
+  },
+  "test.coins": {
+    "text": "You have {testCoins} [b]coins[/b]"
+  },
+  "test.plural": {
+    "text": "{testCount, plural, =0 {none} one {# box} other {# boxes}}"
+  },
+  "test.tags": {
+    "text": "[color=red]Hot[/color][wait=0.5][shake]!"
+  },
+  "test.wrap": {
+    "text": "aaaa.bbbb"
+  }
 }

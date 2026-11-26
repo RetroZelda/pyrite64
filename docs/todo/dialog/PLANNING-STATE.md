@@ -206,6 +206,31 @@ Each is the option I recommend; change any on request.
     `Loc::text(data->line)`. The parser accepts LocText, LocId and the `P64::` forms; the default is
     written `= "key"_localized`.
 
+41. **Where codes live in a text.** Controls ([wait], [speed], [sfx], [page]) are Unicode plane 15
+    private-use code points that stay in the formatted text: rdpq has no glyph for them, so they
+    take no space and are not counted by max_chars. Compiled tokens (fonts, colors, variables,
+    plurals) are plane 16 and never reach rdpq. The engine's `text/locCodes.h` defines both.
+42. **Style ids.** `color + 32 x effect`: up to 31 palette colors (0 is "default", the rest sorted
+    by name, then custom `#rrggbb` colors in order of first use, then `_fallback`, the debug tint)
+    and 7 effects. Every loaded font gets every style.
+43. **Order is the JSON order.** locale.json objects are read sorted by name, so font sets, colors
+    and controls get their indices alphabetically; effects and icons keep their list order.
+44. **Fonts per language.** The build gives each baked font (set x variant x size) an id from 16
+    up; `setLanguage` loads the sets of both slots and the icon set, and frees the rest. Each
+    font's characters are the ones its languages' compiled texts use, plus printable ASCII (for
+    numbers and Text variables). The inputs are stamped in `build/loc/` so unchanged fonts are
+    not baked again.
+45. **Codes only before text.** The formatter writes a font or style code only when text follows,
+    so a closing tag at the end writes nothing.
+46. **The pseudo-language's bracket** is written `[[` so the build does not read it as a tag.
+47. **Placeholder fonts.** Noto Sans (Latin subset) and Noto Sans CJK JP (kana and JIS level 1
+    kanji for the game, levels 1 and 2 for the editor's UI, which merges it so Japanese shows in
+    the Strings window). SIL Open Font License.
+48. **Digit grouping** per language: en and ja "1,234", es "1234" but "12.345", pt and de "1.234",
+    fr "1 234". A language entry can name its plural family ("plural": "french").
+49. **`\n` written as two characters** in a table is a line break, so translators working in a
+    spreadsheet can type it; `\\` is a backslash.
+
 ## Phase log
 
 See PLAN.md section 11 for the seven phases.
@@ -214,5 +239,4 @@ See PLAN.md section 11 for the seven phases.
 |---|---|---|---|
 | 1 | pyrite64 (this commit) | `_localized` (engine `text/locId.h`); table format and reader (`text/locTable.h`, `locCore.cpp`); run time `text/loc.h` (two slots, fallback flag, debug marks), language list generated as `src/p64/locTable.cpp`, set to the source language at boot; editor model `src/project/locale/` (config, tables, status, refresh, unused, keep rules, pseudo-language, literal-aware C++ scan); scan of scenes and prefabs; build step `locBuilder.cpp` (refresh, id collisions, `filesystem/p64/loc/<code>.loc`); `LOC_TEXT` field type with a key picker; CLI `loc-refresh`, `loc-unused`, `loc-prune [--yes]`; Strings window (View > Strings) | `pyrite64_tests` 143/143 (11 new); `test_events` in ares 17/17, test 16 "Localized text" (en/ja/es/pseudo, pairs, fallback, `$` doubled, refused index); CLI on a scratch copy (unused listed, prune needs `--yes`, keep rule honoured); editor opened on the Strings window |
 
-Known after phase 1: the editor's UI font has no Japanese glyphs (shows ?????); phase 2 merges a
-Japanese font into it with the game fonts.
+| 2 | pyrite64 (this commit) | the tag compiler (`src/project/locale/locCompile.*`: b, i, size, font, color, effects, controls, btn, page, escapes, `\n`; variables `{n}`, `{n:n}`, `{n:0N}`, plurals with `=N` and CLDR categories; errors with key and language); `P64_LOC_VAR` / `P64_LOC_ARG` and their scan; the formatter (`text/locFormat.*`: font and style codes, numbers, plurals, Key and Text variables, caller Args, fallback tint, safe truncation); run time: fonts per language with styles, `format()`, `baseFont()`, text size, `scanNext()` (letters as rdpq counts them, controls), `breakLines()` with kinsoku, control and effect lookups; build: compile every text, bake font sets with generated charsets, generated font and style tables; Strings window: errors under each text while typing; editor UI font with Japanese | `pyrite64_tests` 150/150 (7 new); `test_events` in ares 17/17, test 16 now also checks a variable and bold as font codes, the fonts registered, plurals, the scan of letters and a wait control, the shake effect, and a kinsoku break |

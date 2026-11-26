@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "localization.h"
+#include "locCompile.h"
 
 namespace Project
 {
@@ -46,6 +47,9 @@ namespace Project::Loc
    * Dialog trees and the speakers list join in phase 3.
    */
   Uses scanProject(Project &project, std::vector<std::string> &errors);
+
+  /** Every P64_LOC_VAR and P64_LOC_ARG in src/user. */
+  VarDecls scanVariables(Project &project, std::vector<std::string> &errors);
 
   struct RefreshResult
   {

@@ -214,6 +214,7 @@ add_executable(pyrite64 src/main.cpp
         src/build/eventBuilder.cpp
         src/build/locBuilder.cpp
         src/project/locale/localization.cpp
+        src/project/locale/locCompile.cpp
         src/project/locale/locProject.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
@@ -436,7 +437,9 @@ if(PYRITE64_BUILD_TESTS)
         n64/engine/src/events/busCore.cpp
         n64/engine/src/events/conditionCore.cpp
         n64/engine/src/text/locCore.cpp
+        n64/engine/src/text/locFormat.cpp
         src/project/locale/localization.cpp
+        src/project/locale/locCompile.cpp
     )
     # n64/engine: the event bus core is engine code written to also compile on the host
     target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include

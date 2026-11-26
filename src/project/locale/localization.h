@@ -121,7 +121,8 @@ namespace Project::Loc
 
   /**
    * Makes the pseudo-language text of a source text: accented look-alike letters, about a third
-   * longer, inside brackets. [tags], {variables} and escapes are kept as they are.
+   * longer, inside brackets (the opening one written [[, so it is not a tag). [tags], {variables}
+   * and escapes are kept as they are.
    */
   std::string pseudoText(const std::string &source);
 

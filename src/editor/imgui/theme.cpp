@@ -144,6 +144,14 @@ namespace
       font = io.Fonts->AddFontFromFileTTF("./data/materialdesignicons-webfont.ttf", 16, &icons_config, icons_ranges);
       IM_ASSERT(font != nullptr);
 
+      // Fork: localization. Japanese in the Strings window and in dialog trees (Noto Sans CJK JP,
+      // JIS levels 1 and 2, SIL Open Font License, data/fonts/OFL.txt). Glyphs load on demand.
+      if(std::filesystem::exists("./data/fonts/NotoSansJP-Regular.otf")) {
+        ImFontConfig jpConfig;
+        jpConfig.MergeMode = true;
+        io.Fonts->AddFontFromFileTTF("./data/fonts/NotoSansJP-Regular.otf", 0.0f, &jpConfig);
+      }
+
       fontMono = io.Fonts->AddFontFromFileTTF("./data/GoogleSansCode.ttf", 16);
       IM_ASSERT(fontMono != nullptr);
 

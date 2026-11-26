@@ -53,6 +53,7 @@ namespace P64::Loc
     void localizedKey_must_not_be_empty();
     void localizedKey_must_be_lower_case_letters_digits_and_underscore();
     void localizedKey_must_not_have_empty_parts_between_dots();
+    void textVariable_must_be_an_identifier();
   }
 
   /**

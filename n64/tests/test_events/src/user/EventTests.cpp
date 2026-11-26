@@ -6,6 +6,7 @@
 #include "vi/swapChain.h"
 #include "./testLog.h"
 #include "text/loc.h"
+#include "text/locFormat.h"
 
 #include <cstring>
 
@@ -646,6 +647,10 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   // Scene 11, driven by TestDriver11 (docs/todo/anim-events/PLAN.md). AnimA, AnimB and AnimC show
   // the model events/anim_test.json lists (Walk.STEP, Idle.BLINK, Any.STEP). A binds Walk.STEP,
   // Any.STEP and MainFinished, B only Walk.STEP, C nothing.
+  // localization phase 2: variables declared in C++
+  P64_LOC_VAR(testCoins, Int) { return 1234; }
+  P64_LOC_ARG(testCount, Int);
+
   // localization (docs/todo/dialog/PLAN.md, section 4): the tables of locale/ in this project
   bool checkLocalization()
   {
@@ -684,9 +689,44 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     const char* pseudo = text(HELLO);
     expect(pseudo[0] == '[' && strstr(pseudo, "Ĥ") != nullptr, "the pseudo-language is generated from English");
 
+    // phase 2: formatted text, fonts, controls, line breaks (font set "latin": regular 16, bold 17)
+    setLanguage(0);
+    char buf[128];
+    format(buf, sizeof(buf), "test.coins"_localized);
+    expect(same(buf, "$10^00You have 1,234 $11^00coins"), "a variable and bold become a number and font codes");
+    expect(rdpq_text_get_font(16) != nullptr && rdpq_text_get_font(17) != nullptr, "the language's fonts are registered");
+    expect(baseFont() == 16, "the base font of English");
+
+    Args args{};
+    args.set("testCount"_var, 1);
+    format(buf, sizeof(buf), "test.plural"_localized, Slot::Game, &args);
+    expect(same(buf, "$10^001 box"), "plural: one");
+    args.items[0].v.i = 0;
+    format(buf, sizeof(buf), "test.plural"_localized, Slot::Game, &args);
+    expect(same(buf, "$10^00none"), "plural: =0");
+
+    format(buf, sizeof(buf), "test.tags"_localized);
+    const char* p = buf;
+    uint8_t font = 0, style = 0;
+    int glyphs = 0, controls = 0;
+    uint8_t ctlOp = 0; uint16_t ctlArg = 0; uint8_t shakeStyle = 0;
+    for(auto s = scanNext(p, font, style); s.kind != Scan::Kind::End; s = scanNext(p, font, style)) {
+      if(s.kind == Scan::Kind::Glyph) { ++glyphs; if(s.codepoint == '!') shakeStyle = s.style; }
+      if(s.kind == Scan::Kind::Control) { ++controls; ctlOp = s.op; ctlArg = s.arg; }
+    }
+    expect(glyphs == 4 && controls == 1, "scan: four letters and one control");
+    expect(ctlOp == controlOp("wait") && controlSeconds(ctlArg) > 0.49f && controlSeconds(ctlArg) < 0.51f, "the wait control is half a second");
+    expect(styleEffect(shakeStyle) == effectIndex("shake"), "the shaking letter carries the shake effect");
+
+    format(buf, sizeof(buf), "test.wrap"_localized);
+    rdpq_font_gmetrics_t m{};
+    rdpq_font_get_glyph_metrics(rdpq_text_get_font(16), 'a', &m);
+    breakLines(buf, sizeof(buf), m.xadvance * 4.05f); // "aaaa." does not fit
+    expect(strchr(buf, '\n') != nullptr && strstr(buf, "aaa\na.") != nullptr, "kinsoku: a line does not start with '.'");
+
     const uint32_t before = epoch();
     expect(!setLanguage(200), "a language out of range is refused");
-    expect(epoch() == before && current() == findLanguage("qps"), "a refused language keeps the current one");
+    expect(epoch() == before && current() == 0, "a refused language keeps the current one");
     setLanguage(0);
     return ok;
   }
