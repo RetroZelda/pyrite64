@@ -231,6 +231,23 @@ Each is the option I recommend; change any on request.
 49. **`\n` written as two characters** in a table is a line break, so translators working in a
     spreadsheet can type it; `\\` is a backslash.
 
+50. **How a script points at a tree.** A field `P64::AssetRef<P64::Dialog::dialog_t>` (a tree
+    picker in the inspector, built as the asset index); the game reads it with
+    `TreeView::init(ref.get(), Dialog::SIZE_UNKNOWN)`.
+51. **Conditions in a tree** show the script's own values only (the condition header is of no use
+    there); an ObjectRef value in a tree's condition is built as 0.
+52. **Wires.** A flow output leads to one place (drawing a second wire replaces the first); several
+    wires into a yes/no pin are ANDed.
+53. **Tree text keys** are `dlg.<file name>.<node id>` and `.<option number>` for options, kept on
+    the node, so renaming the file keeps the keys.
+54. **Saving.** A tree window saves on Save, on the project's save, and when it closes; its texts
+    are saved to locale/ as they are typed.
+55. **Play** in the editor walks the tree and asks you to answer each Branch (it does not run the
+    condition scripts) and pick each option.
+56. **`--window dlg:<path>`** opens a tree when the editor starts (for screenshots and videos).
+57. **The build syncs the tables.** Every translation table gets every key the source table has,
+    each build, even when no key is new.
+
 ## Phase log
 
 See PLAN.md section 11 for the seven phases.
@@ -239,4 +256,6 @@ See PLAN.md section 11 for the seven phases.
 |---|---|---|---|
 | 1 | pyrite64 (this commit) | `_localized` (engine `text/locId.h`); table format and reader (`text/locTable.h`, `locCore.cpp`); run time `text/loc.h` (two slots, fallback flag, debug marks), language list generated as `src/p64/locTable.cpp`, set to the source language at boot; editor model `src/project/locale/` (config, tables, status, refresh, unused, keep rules, pseudo-language, literal-aware C++ scan); scan of scenes and prefabs; build step `locBuilder.cpp` (refresh, id collisions, `filesystem/p64/loc/<code>.loc`); `LOC_TEXT` field type with a key picker; CLI `loc-refresh`, `loc-unused`, `loc-prune [--yes]`; Strings window (View > Strings) | `pyrite64_tests` 143/143 (11 new); `test_events` in ares 17/17, test 16 "Localized text" (en/ja/es/pseudo, pairs, fallback, `$` doubled, refused index); CLI on a scratch copy (unused listed, prune needs `--yes`, keep rule honoured); editor opened on the Strings window |
 
-| 2 | pyrite64 (this commit) | the tag compiler (`src/project/locale/locCompile.*`: b, i, size, font, color, effects, controls, btn, page, escapes, `\n`; variables `{n}`, `{n:n}`, `{n:0N}`, plurals with `=N` and CLDR categories; errors with key and language); `P64_LOC_VAR` / `P64_LOC_ARG` and their scan; the formatter (`text/locFormat.*`: font and style codes, numbers, plurals, Key and Text variables, caller Args, fallback tint, safe truncation); run time: fonts per language with styles, `format()`, `baseFont()`, text size, `scanNext()` (letters as rdpq counts them, controls), `breakLines()` with kinsoku, control and effect lookups; build: compile every text, bake font sets with generated charsets, generated font and style tables; Strings window: errors under each text while typing; editor UI font with Japanese | `pyrite64_tests` 150/150 (7 new); `test_events` in ares 17/17, test 16 now also checks a variable and bold as font codes, the fonts registered, plurals, the scan of letters and a wait control, the shake effect, and a kinsoku break |
+| 2 | pyrite64 2ac343b | the tag compiler (`src/project/locale/locCompile.*`: b, i, size, font, color, effects, controls, btn, page, escapes, `\n`; variables `{n}`, `{n:n}`, `{n:0N}`, plurals with `=N` and CLDR categories; errors with key and language); `P64_LOC_VAR` / `P64_LOC_ARG` and their scan; the formatter (`text/locFormat.*`: font and style codes, numbers, plurals, Key and Text variables, caller Args, fallback tint, safe truncation); run time: fonts per language with styles, `format()`, `baseFont()`, text size, `scanNext()` (letters as rdpq counts them, controls), `breakLines()` with kinsoku, control and effect lookups; build: compile every text, bake font sets with generated charsets, generated font and style tables; Strings window: errors under each text while typing; editor UI font with Japanese | `pyrite64_tests` 150/150 (7 new); `test_events` in ares 17/17, test 16 now also checks a variable and bold as font codes, the fonts registered, plurals, the scan of letters and a wait control, the shake effect, and a kinsoku break |
+| 3 | pyrite64 (this commit) | dialog tree asset (`.p64dlg`, type 13, `.dlg` built); engine `dialog/dialogData.h` (format, reader, expression bytecode) and `dialog/dialog.h` (speakers, `evaluate` on an object); `Conditions::evaluateScript`; editor model `src/project/dialog/` (nodes, pins, JSON, keys, build with errors and unreachable warnings; speakers list); build step `dialogBuilder.cpp` (trees, condition values like a Code component, `src/p64/dialogTable.cpp`); the Dialog Tree window (every node of PLAN 7.2 with Input, texts edited in the preview language, Play, Fit); the Speakers window; trees in the asset browser (Scripts tab, New: Dialog Tree); `AssetRef<dialog_t>` fields; trees and speakers in the strings scan | `pyrite64_tests` 154/154 (4 new); `test_events` in ares 18/18, test 17 "Dialog tree data" (a real condition script answers the branch on an object, both ways; a NOT node hides an option; speaker, events, end values); the tree window and Speakers window opened in the editor |
+

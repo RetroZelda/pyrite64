@@ -39,6 +39,8 @@ namespace Build
   bool buildPrefabAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildNodeGraphAssets(Project::Project &project, SceneCtx &sceneCtx);
   bool buildCanvasAssets(Project::Project &project, SceneCtx &sceneCtx);
+  // Fork: dialog trees and the speakers list
+  bool buildDialogAssets(Project::Project &project, SceneCtx &sceneCtx);
   // Fork: localization, after the scenes and prefabs (their LocText fields are keys too)
   bool buildLocalization(Project::Project &project, SceneCtx &sceneCtx);
 

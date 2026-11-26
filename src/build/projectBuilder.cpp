@@ -35,6 +35,7 @@ namespace
     {Build::buildTextureAssets, "Texture"},
     {Build::buildAudioAssets,   "Audio"},
     {Build::buildEmitterAssets, "Emitter"},
+    {Build::buildDialogAssets,  "Dialog"}, // Fork: dialog trees (needs the script indices)
     // Canvas: code-gen only, must run before scripts so UISceneTypes.h is available
     {Build::buildCanvasAssets,  "Canvas"},
     // must be last: (@TODO: handle prefab referencing prefab, [not in the editor yet])

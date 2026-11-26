@@ -33,6 +33,7 @@ namespace Utils
     COLOR, // 4 bytes (color_t: r,g,b,a), stored as "r,g,b,a" in 0-255
     ASSET_EMITTER, // editor-side only (parsed from the script source each time), the value is never stored
     LOC_TEXT,      // Fork: localization. A key ("npc.tank.greet"), stored as text, built as its 4-byte id
+    ASSET_DIALOG,  // Fork: dialog trees. AssetRef<dialog_t>, built as the tree's asset index
   };
 
   class BinaryFile

@@ -47,6 +47,7 @@ namespace Project
     CANVAS,
     EMITTER,
     EDITOR_SCRIPT,
+    DIALOG_TREE, // Fork: dialog trees (.p64dlg), 13 like the engine's AssetType
 
     _SIZE
   };
@@ -223,5 +224,7 @@ namespace Project
 
       bool createScript(const std::string &name, bool isGlobal, const std::string &subDir = {}, bool sharedData = false);
       uint64_t createNodeGraph(const std::string &name);
+      // Fork: dialog trees. A new tree with one Start node, in assets/ (or 'dir', relative to the project)
+      uint64_t createDialogTree(const std::string &name, const std::string &dir = {});
   };
 }

@@ -7,6 +7,8 @@
 #include "./testLog.h"
 #include "text/loc.h"
 #include "text/locFormat.h"
+#include "dialog/dialog.h"
+#include "assets/assetManager.h"
 
 #include <cstring>
 
@@ -731,6 +733,62 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     return ok;
   }
 
+  // dialog trees (docs/todo/dialog/PLAN.md, section 7): assets/dialog/test_tree.p64dlg
+  bool checkDialogTree()
+  {
+    using namespace P64::Dialog;
+    bool ok = true;
+    auto expect = [&](bool cond, const char* what) {
+      if(!cond) { debugf("[event test]   dialog: %s\n", what); ok = false; }
+    };
+
+    TreeView v{};
+    expect(v.init(AssetManager::getByIndex("dialog/test_tree.dlg"_asset), SIZE_UNKNOWN), "the tree loads");
+    if(!v.valid()) return false;
+    Object* obj = SceneManager::getCurrent().getObjectById(PROBE_ID);
+    expect(obj != nullptr, "an object to run conditions on");
+    if(!obj) return false;
+
+    const uint16_t s = v.start();
+    const uint16_t b = v.next(s);
+    expect(v.type(b) == NodeType::Branch, "the start leads to the branch");
+
+    // slot 5 off: the branch goes the false way, a timed line, an event, the end with 4
+    condSlots[5] = false;
+    expect(!evaluate(v, v.branchExpr(b), *obj), "slot 5 off: the condition is false");
+    const uint16_t off = v.branchFalse(b);
+    expect(v.type(off) == NodeType::Line && (v.flags(off) & LINE_TIMED), "the false way is the timed line");
+    expect(v.lineKey(off) == "dlg.test_tree.5"_localized.hash, "with its key");
+    char buf[64];
+    P64::Loc::format(buf, sizeof(buf), LocId{v.lineKey(off)});
+    expect(strstr(buf, "The slot is off") != nullptr, "its text in English");
+    const uint16_t ev = v.next(off);
+    expect(v.type(ev) == NodeType::Event && v.eventHash(ev) == "scene::Dialog.Done"_event.hash && v.eventValue(ev) == 9, "then the Done event");
+    expect(v.type(v.next(ev)) == NodeType::End && v.endValue(v.next(ev)) == 4, "then the end with 4");
+
+    // slot 5 on: the true way, the tester's line, a choice whose option 2 is hidden
+    condSlots[5] = true;
+    expect(evaluate(v, v.branchExpr(b), *obj), "slot 5 on: the condition is true");
+    const uint16_t on = v.next(b);
+    expect(v.type(on) == NodeType::Line, "the true way is a line");
+    const uint8_t sp = v.lineSpeaker(on);
+    expect(sp == findSpeaker("tester") && speakerCount() == 1, "spoken by the tester");
+    const Speaker* tester = speaker(sp);
+    expect(tester && tester->language == Lang::Paired && tester->nameColor == 0xFFCC00FFu, "who speaks the paired language, with a yellow name");
+    P64::Loc::format(buf, sizeof(buf), LocId{tester ? tester->name : 0});
+    expect(strstr(buf, "Tester") != nullptr, "the speaker's name is a text");
+    const uint16_t c = v.next(on);
+    expect(v.type(c) == NodeType::Choice && v.optionCount(c) == 2, "then a choice of two");
+    expect((v.optionFlags(c, 0) & OPTION_DEFAULT) && (v.optionFlags(c, 1) & OPTION_CANCEL), "Yes is the default, No the cancel");
+    expect(v.optionShow(c, 0) == NO_EXPR && evaluate(v, v.optionShow(c, 0), *obj), "Yes always shows");
+    expect(!evaluate(v, v.optionShow(c, 1), *obj), "No is hidden while slot 5 is on");
+    expect(v.optionEvent(c, 0) == "scene::Dialog.Bought"_event.hash && v.optionEventValue(c, 0) == 77, "Yes fires Bought with 77");
+    expect(v.type(v.optionNext(c, 0)) == NodeType::End && v.endValue(v.optionNext(c, 0)) == 3, "Yes ends with 3");
+    expect(v.optionNext(c, 1) == NONE, "No ends the dialog");
+    condSlots[5] = false;
+    return ok;
+  }
+
   bool checkAnimEvents()
   {
     constexpr uint16_t A = 3, B = 4;
@@ -776,6 +834,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"Conditions and logic nodes",    10, 14, checkConditions},
     {"Animation event pins",          11, 60, checkAnimEvents},
     {"Localized text",                1, 2,  checkLocalization},
+    {"Dialog tree data",              1, 2,  checkDialogTree},
   };
 
   void runStep()

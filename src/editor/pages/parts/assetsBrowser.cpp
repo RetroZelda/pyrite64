@@ -216,7 +216,7 @@ void Editor::AssetsBrowser::draw() {
     },
     TabDef{
       .name = ICON_MDI_SCRIPT_OUTLINE "  Scripts",
-      .fileTypes = {FileType::CODE_OBJ, FileType::CODE_GLOBAL, FileType::NODE_GRAPH, FileType::EDITOR_SCRIPT}
+      .fileTypes = {FileType::CODE_OBJ, FileType::CODE_GLOBAL, FileType::NODE_GRAPH, FileType::DIALOG_TREE, FileType::EDITOR_SCRIPT}
     },
     TabDef{
       .name = ICON_MDI_PACKAGE_VARIANT_CLOSED "  Prefabs",
@@ -665,6 +665,8 @@ void Editor::AssetsBrowser::draw() {
         iconTxt = ICON_MDI_LANGUAGE_CPP;
       } else if (asset.type == FileType::NODE_GRAPH) {
         iconTxt = ICON_MDI_GRAPH_OUTLINE;
+      } else if (asset.type == FileType::DIALOG_TREE) {
+        iconTxt = ICON_MDI_CHAT_PROCESSING_OUTLINE;
       } else if (asset.type == FileType::CANVAS) {
         iconTxt = ICON_MDI_LAYERS_OUTLINE;
       } else if (asset.type == FileType::EMITTER) {
@@ -698,6 +700,8 @@ void Editor::AssetsBrowser::draw() {
       } else if (asset.type == FileType::NODE_GRAPH) {
         // Node graphs open in the built-in graph editor, not an external text editor.
         Editor::Actions::call(Editor::Actions::Type::OPEN_NODE_GRAPH, std::to_string(asset.getUUID()));
+      } else if (asset.type == FileType::DIALOG_TREE) {
+        Editor::Actions::call(Editor::Actions::Type::OPEN_DIALOG_TREE, std::to_string(asset.getUUID()));
       } else if (!Utils::Proc::openFile(asset.path)) {
         Editor::Noti::add(Editor::Noti::Type::ERROR, "Failed to open File. This may be due to WSL path conversion failure.");
       }
@@ -999,7 +1003,7 @@ void Editor::AssetsBrowser::draw() {
     ImTable::start("SCRIPT");
 
     ImTable::add("Type");
-    const char* scriptTypes[] = {"Object Script", "Global Script", "Node Graph"};
+    const char* scriptTypes[] = {"Object Script", "Global Script", "Node Graph", "Dialog Tree"};
     ImGui::Combo("##ScriptType", &scriptType, scriptTypes, IM_ARRAYSIZE(scriptTypes));
 
     ImTable::add("Name");
@@ -1020,6 +1024,7 @@ void Editor::AssetsBrowser::draw() {
       if(scriptType == 0)res = ctx.project->getAssets().createScript(scriptName, false, newScriptDir, scriptSharedData);
       if(scriptType == 1)res = ctx.project->getAssets().createScript(scriptName, true, newScriptDir);
       if(scriptType == 2)res = ctx.project->getAssets().createNodeGraph(scriptName) != 0;
+      if(scriptType == 3)res = ctx.project->getAssets().createDialogTree(scriptName) != 0; // Fork: dialog trees
 
       if (res) {
         ImGui::CloseCurrentPopup();

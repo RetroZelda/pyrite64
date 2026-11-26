@@ -39,6 +39,7 @@ namespace
     if (str == "fm_quat_t") return Utils::DataType::QUAT;
     if (str == "AssetRef<sprite_t>") return Utils::DataType::ASSET_SPRITE;
     if (str == "AssetRef<emitter_t>") return Utils::DataType::ASSET_EMITTER;
+    if (str == "AssetRef<dialog_t>" || str == "AssetRef<P64::Dialog::dialog_t>") return Utils::DataType::ASSET_DIALOG; // Fork: dialog trees
     if (str == "PrefabRef") return Utils::DataType::PREFAB;
     // Fork: localization, a key of the string tables
     if (str == "LocText" || str == "P64::LocText" || str == "LocId" || str == "P64::LocId") return Utils::DataType::LOC_TEXT;

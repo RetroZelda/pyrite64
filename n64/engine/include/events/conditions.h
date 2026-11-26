@@ -25,6 +25,13 @@ namespace P64::Conditions
   bool evaluate(Object& obj);
 
   /**
+   * Fork: dialog trees. Runs a condition script by its index in the script table, with a values
+   * blob baked elsewhere (a dialog tree's Condition node), on 'obj'. Fires nothing; false when
+   * the script is not a condition.
+   */
+  bool evaluateScript(uint16_t scriptIndex, void* data, Object& obj);
+
+  /**
    * Evaluates every condition on 'obj' and fires its outputs, like the Check input. A disabled
    * condition does nothing.
    * @param value passed on by True, False, NewlyTrue and NewlyFalse

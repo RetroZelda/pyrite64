@@ -160,6 +160,9 @@ namespace
     } else if (ext == ".canvas") {
       type = Project::FileType::CANVAS;
       outPath = ""; // code-gen only — no ROM binary output
+    } else if (ext == ".p64dlg") { // Fork: dialog trees
+      type = Project::FileType::DIALOG_TREE;
+      outPath = changeExt(outPath, ".dlg");
     } else if (ext == ".emitter") {
       type = Project::FileType::EMITTER;
       outPath = changeExt(outPath, ".emit64");
@@ -1052,6 +1055,21 @@ uint64_t Project::AssetManager::createNodeGraph(const std::string &name)
   reload();
 
   auto entry = getByName(name + ".p64graph");
+  return entry ? entry->getUUID() : 0;
+}
+
+uint64_t Project::AssetManager::createDialogTree(const std::string &name, const std::string &dir)
+{
+  auto basePath = dir.empty() ? getAssetPath(project) : fs::path{project->getPath()} / dir;
+  fs::create_directories(basePath);
+  auto filePath = basePath / (name + ".p64dlg");
+  if (fs::exists(filePath))return 0;
+
+  Utils::FS::saveTextFile(filePath,
+    "{\n  \"version\": 1,\n  \"nextId\": 2,\n  \"nodes\": [{\"id\": 1, \"type\": \"start\", \"pos\": [0, 0], \"name\": \"\"}],\n  \"links\": []\n}\n");
+  reload();
+
+  auto entry = getByPath(filePath.string());
   return entry ? entry->getUUID() : 0;
 }
 

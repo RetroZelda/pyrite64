@@ -97,6 +97,8 @@ namespace
     // stays contiguous (GCC rejects sparse/gapped designated initializers).
     [AssetType::CANVAS]      = {nullptr,                  nullptr                 },
     [AssetType::EMITTER]     = {(LoadFunc)assetLoad,      (FreeFunc)free          },
+    [AssetType::EDITOR_SCRIPT] = {nullptr,                nullptr                 },
+    [AssetType::DIALOG_TREE] = {(LoadFunc)assetLoad,      (FreeFunc)free          }, // Fork: dialog trees
   };
 
   constinit AssetTable* assetTable{nullptr};

@@ -21,6 +21,7 @@ namespace Editor::Actions
     COPY, PASTE,
 
     OPEN_NODE_GRAPH,
+    OPEN_DIALOG_TREE, // Fork: dialog trees
     OPEN_CANVAS,
     CLOSE_CANVAS,
   };

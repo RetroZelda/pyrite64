@@ -11,6 +11,8 @@
 #include <map>
 
 #include "../project.h"
+#include "../dialog/dialogTree.h"
+#include "../dialog/speakers.h"
 #include "../../utils/fs.h"
 #include "../../utils/json.h"
 
@@ -210,6 +212,36 @@ Project::Loc::Uses Project::Loc::scanProject(Project &project, std::vector<std::
       } catch(const std::exception &e) {
         errors.push_back(file.string() + ": " + e.what());
       }
+    }
+  }
+
+  // dialog trees: lines and choice options
+  for(const auto &entry : project.getAssets().getTypeEntries(FileType::DIALOG_TREE)) {
+    try {
+      Dialog::Tree tree{};
+      std::vector<std::string> treeErrors{};
+      Dialog::parse(Utils::JSON::loadFile(entry.path), tree, treeErrors);
+      for(const auto &e : treeErrors) errors.push_back(entry.projectPath + ": " + e);
+      for(const auto &n : tree.nodes) {
+        const std::string at = "tree " + entry.projectPath + ": " + Dialog::typeName(n.type) + " #" + std::to_string(n.id);
+        if(n.type == Dialog::NodeType::Line && !n.key.empty()) uses[n.key].push_back({at, {}, 0});
+        if(n.type == Dialog::NodeType::Choice) {
+          for(size_t k = 0; k < n.options.size(); ++k) {
+            if(!n.options[k].key.empty()) uses[n.options[k].key].push_back({at + " option " + std::to_string(k + 1), {}, 0});
+          }
+        }
+      }
+    } catch(const std::exception &e) {
+      errors.push_back(entry.projectPath + ": " + e.what());
+    }
+  }
+
+  // speakers' names
+  {
+    Dialog::Speakers speakers{};
+    Dialog::loadSpeakers(project.getPath(), speakers, errors);
+    for(const auto &s : speakers.list) {
+      if(!s.name.empty()) uses[s.name].push_back({"speaker " + s.id, {}, 0});
     }
   }
 

@@ -323,7 +323,7 @@ namespace Project::Component::Code
       if (val.empty())val = field.defaultValue;
       if (val.empty())val = "0";
 
-      if(field.type == Utils::DataType::ASSET_SPRITE || field.type == Utils::DataType::ASSET_EMITTER)
+      if(field.type == Utils::DataType::ASSET_SPRITE || field.type == Utils::DataType::ASSET_EMITTER || field.type == Utils::DataType::ASSET_DIALOG)
       {
         uint64_t uuid = Utils::parseU64(val);
         ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
@@ -474,6 +474,7 @@ namespace Project::Component::Code
 
           if(field.type == Utils::DataType::ASSET_SPRITE ||
              field.type == Utils::DataType::ASSET_EMITTER ||
+             field.type == Utils::DataType::ASSET_DIALOG ||
              field.type == Utils::DataType::OBJECT_REF ||
              field.type == Utils::DataType::PREFAB)
           {
@@ -523,6 +524,9 @@ namespace Project::Component::Code
               ImTable::addAssetVecComboBox("", assets, uuid, validationFunc);
             } else if(field.type == Utils::DataType::ASSET_EMITTER) {
               const auto &assets = ctx.project->getAssets().getTypeEntries(FileType::EMITTER);
+              ImTable::addAssetVecComboBox("", assets, uuid, validationFunc);
+            } else if(field.type == Utils::DataType::ASSET_DIALOG) { // Fork: dialog trees
+              const auto &assets = ctx.project->getAssets().getTypeEntries(FileType::DIALOG_TREE);
               ImTable::addAssetVecComboBox("", assets, uuid, validationFunc);
             } else if(field.type == Utils::DataType::OBJECT_REF) {
               // @TODO: do this in scene itself

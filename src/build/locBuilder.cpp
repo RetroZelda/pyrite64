@@ -236,8 +236,9 @@ bool Build::buildLocalization(Project::Project &project, SceneCtx &ctx)
   if(!added.empty()) {
     Utils::Logger::log(std::format("Localization: added {} new key(s) to the tables", added.size()));
     for(const auto &key : added) Utils::Logger::log("  + " + key);
-    save(project.getPath(), loc);
   }
+  // also when only a translation table lacked a key the source has: files that did not change are not written
+  save(project.getPath(), loc);
 
   const auto vars = scanVariables(project, errors);
   CompileEnv env = makeCompileEnv(loc.config, vars, errors);

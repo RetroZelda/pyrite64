@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "nextId": 11,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "start",
+      "pos": [
+        0,
+        0
+      ],
+      "name": ""
+    },
+    {
+      "id": 2,
+      "type": "branch",
+      "pos": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": 3,
+      "type": "condition",
+      "pos": [
+        0,
+        160
+      ],
+      "script": "14240860050882426384",
+      "args": {
+        "slot": "5"
+      }
+    },
+    {
+      "id": 4,
+      "type": "line",
+      "pos": [
+        440,
+        -120
+      ],
+      "key": "dlg.test_tree.4",
+      "speaker": "tester",
+      "lang": "speaker"
+    },
+    {
+      "id": 5,
+      "type": "line",
+      "pos": [
+        440,
+        160
+      ],
+      "key": "dlg.test_tree.5",
+      "speaker": "",
+      "lang": "game",
+      "timed": true
+    },
+    {
+      "id": 6,
+      "type": "choice",
+      "pos": [
+        720,
+        -120
+      ],
+      "options": [
+        {
+          "key": "dlg.test_tree.6.1",
+          "default": true,
+          "event": "scene::Dialog.Bought",
+          "eventValue": 77
+        },
+        {
+          "key": "dlg.test_tree.6.2",
+          "cancel": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "end",
+      "pos": [
+        1000,
+        -160
+      ],
+      "value": 3
+    },
+    {
+      "id": 8,
+      "type": "event",
+      "pos": [
+        720,
+        160
+      ],
+      "event": "scene::Dialog.Done",
+      "value": 9
+    },
+    {
+      "id": 9,
+      "type": "end",
+      "pos": [
+        1000,
+        160
+      ],
+      "value": 4
+    },
+    {
+      "id": 10,
+      "type": "logic",
+      "pos": [
+        440,
+        320
+      ],
+      "logic": "not"
+    }
+  ],
+  "links": [
+    {
+      "from": 1,
+      "out": "Next",
+      "to": 2,
+      "in": "In"
+    },
+    {
+      "from": 3,
+      "out": "Result",
+      "to": 2,
+      "in": "Condition"
+    },
+    {
+      "from": 2,
+      "out": "True",
+      "to": 4,
+      "in": "In"
+    },
+    {
+      "from": 2,
+      "out": "False",
+      "to": 5,
+      "in": "In"
+    },
+    {
+      "from": 4,
+      "out": "Next",
+      "to": 6,
+      "in": "In"
+    },
+    {
+      "from": 6,
+      "out": "Option 1",
+      "to": 7,
+      "in": "In"
+    },
+    {
+      "from": 5,
+      "out": "Next",
+      "to": 8,
+      "in": "In"
+    },
+    {
+      "from": 8,
+      "out": "Next",
+      "to": 9,
+      "in": "In"
+    },
+    {
+      "from": 3,
+      "out": "Result",
+      "to": 10,
+      "in": "Inputs"
+    },
+    {
+      "from": 10,
+      "out": "Result",
+      "to": 6,
+      "in": "Show 2"
+    }
+  ]
+}

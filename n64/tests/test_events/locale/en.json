@@ -20,5 +20,20 @@
   },
   "test.wrap": {
     "text": "aaaa.bbbb"
+  },
+  "dlg.test_tree.4": {
+    "text": "Hello from the tree"
+  },
+  "dlg.test_tree.5": {
+    "text": "The slot is off"
+  },
+  "dlg.test_tree.6.1": {
+    "text": "Yes"
+  },
+  "dlg.test_tree.6.2": {
+    "text": "No"
+  },
+  "speaker.tester": {
+    "text": "Tester"
   }
 }

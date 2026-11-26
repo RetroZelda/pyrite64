@@ -250,3 +250,14 @@ void P64::Conditions::Internal::onSceneDestroyed()
   warnings = 0;
   checks = 0;
 }
+
+bool P64::Conditions::evaluateScript(uint16_t scriptIndex, void* data, Object& obj)
+{
+  auto &entry = Script::getCodeByIndex(scriptIndex);
+  if(!entry.evaluate) return false;
+  if(depth >= MAX_DEPTH) return false;
+  ++depth;
+  const bool answer = entry.evaluate(obj, data);
+  --depth;
+  return answer;
+}

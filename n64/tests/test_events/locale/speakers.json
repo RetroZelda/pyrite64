@@ -1,0 +1,16 @@
+{
+  "speakers": [
+    {
+      "id": "tester",
+      "name": "speaker.tester",
+      "language": "paired",
+      "nameColor": "#ffcc00",
+      "blip": {
+        "sound": "0",
+        "every": 2,
+        "pitch": 0.1
+      },
+      "portraits": []
+    }
+  ]
+}

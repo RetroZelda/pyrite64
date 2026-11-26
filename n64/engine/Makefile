@@ -36,6 +36,7 @@ src += $(wildcard src/renderer/particles/*.cpp) $(wildcard src/script/*.cpp)
 src += $(wildcard src/libdragon/*.cpp)
 src += $(wildcard src/events/*.cpp) # Fork: event bus
 src += $(wildcard src/text/*.cpp) # Fork: localization
+src += $(wildcard src/dialog/*.cpp) # Fork: dialog trees
 
 # HDR / Bloom ucode
 extraObj = $(BUILD_DIR)/renderer/hdr/rsp_hdr.o

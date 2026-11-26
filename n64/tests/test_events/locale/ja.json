@@ -1,13 +1,40 @@
 {
+  "dlg.test_tree.4": {
+    "text": ""
+  },
+  "dlg.test_tree.5": {
+    "text": ""
+  },
+  "dlg.test_tree.6.1": {
+    "text": ""
+  },
+  "dlg.test_tree.6.2": {
+    "text": ""
+  },
+  "speaker.tester": {
+    "text": ""
+  },
+  "test.coins": {
+    "text": ""
+  },
   "test.hello": {
-    "text": "こんにちは",
-    "from": "f7d18982"
+    "from": "f7d18982",
+    "text": "こんにちは"
   },
   "test.money": {
-    "text": "$5",
-    "from": "e682377a"
+    "from": "e682377a",
+    "text": "$5"
   },
   "test.only_en": {
+    "text": ""
+  },
+  "test.plural": {
+    "text": ""
+  },
+  "test.tags": {
+    "text": ""
+  },
+  "test.wrap": {
     "text": ""
   }
 }

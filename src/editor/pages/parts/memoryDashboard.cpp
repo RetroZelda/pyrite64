@@ -100,6 +100,7 @@ void Editor::MemoryDashboard::scanBuildOutputs()
               case Project::FileType::CODE_OBJ:
               case Project::FileType::CODE_GLOBAL:
               case Project::FileType::NODE_GRAPH:  cat = AssetCategory::Code; break;
+              case Project::FileType::DIALOG_TREE: cat = AssetCategory::Code; break; // Fork: dialog trees
               case Project::FileType::PREFAB:      cat = AssetCategory::Other; break;
               default: break;
             }

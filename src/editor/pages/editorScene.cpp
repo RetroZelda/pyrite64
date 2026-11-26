@@ -50,6 +50,19 @@ Editor::Scene::Scene()
     return false;
   });
 
+  // Fork: dialog trees, one window per tree (a second open brings the window forward)
+  Editor::Actions::registerAction(Editor::Actions::Type::OPEN_DIALOG_TREE, [this](const std::string& asset)
+  {
+    if(!ctx.project)return false;
+    auto assetEntry = ctx.project->getAssets().getEntryByUUID(std::stoull(asset));
+    if(!assetEntry)return false;
+    for(auto &ed : dialogEditors) {
+      if(ed->getAssetUUID() == assetEntry->getUUID()) { ImGui::SetWindowFocus(ed->getName().c_str()); return true; }
+    }
+    dialogEditors.push_back(std::make_shared<DialogTreeWindow>(assetEntry->getUUID()));
+    return true;
+  });
+
   Editor::Actions::registerAction(Editor::Actions::Type::OPEN_CANVAS, [this](const std::string& asset)
   {
     if(!ctx.project)return false;
@@ -89,6 +102,7 @@ Editor::Scene::~Scene()
 {
   // The active project's windows are persisted when it is torn down (see persistOpenWindows).
   Editor::Actions::registerAction(Editor::Actions::Type::OPEN_NODE_GRAPH, nullptr);
+  Editor::Actions::registerAction(Editor::Actions::Type::OPEN_DIALOG_TREE, nullptr);
   Editor::Actions::registerAction(Editor::Actions::Type::OPEN_CANVAS, nullptr);
   Editor::Actions::registerAction(Editor::Actions::Type::CLOSE_CANVAS, nullptr);
 }
@@ -180,6 +194,7 @@ void Editor::Scene::persistOpenWindows()
 void Editor::Scene::closeAllEditors()
 {
   nodeEditors.clear();
+  dialogEditors.clear();
   modelEditors.clear();
   pendingNodeEditorCloseUUID = 0;
   pendingNodeEditorClosePopup = false;
@@ -460,6 +475,13 @@ void Editor::Scene::draw()
     nodeEditors.erase(nodeEditors.begin() + delIndices[i]);
   }
 
+  // Fork: dialog trees. Closing a tree with changes saves it (its texts are saved as they are typed).
+  std::erase_if(dialogEditors, [](const std::shared_ptr<DialogTreeWindow> &ed) {
+    if(ed->draw()) return false;
+    if(ed->isDirty()) ed->save();
+    return true;
+  });
+
   if (pendingNodeEditorClosePopup) {
     ImGui::OpenPopup("Unsaved Node Graph");
     pendingNodeEditorClosePopup = false;
@@ -602,10 +624,24 @@ void Editor::Scene::draw()
       if(ImGui::Begin(ICON_MDI_TRANSLATE " Strings###Strings", &stringsOpen)) strings.draw();
       ImGui::End();
     }
+    // Fork: dialog trees, the Speakers window; --window dlg:assets/x.p64dlg opens a tree at start
+    if(CLI::getStartWindow() == "Speakers" && startFrames < 2) speakersOpen = true;
+    if(startFrames == 1 && CLI::getStartWindow().starts_with("dlg:") && ctx.project) {
+      const std::string want = CLI::getStartWindow().substr(4);
+      for(const auto &e : ctx.project->getAssets().getTypeEntries(Project::FileType::DIALOG_TREE)) {
+        if(e.projectPath == want) Editor::Actions::call(Editor::Actions::Type::OPEN_DIALOG_TREE, std::to_string(e.getUUID()));
+      }
+    }
+    if(speakersOpen) {
+      ImGui::SetNextWindowSize({620, 420}, ImGuiCond_FirstUseEver);
+      if(ImGui::Begin(ICON_MDI_ACCOUNT_VOICE " Speakers###Speakers", &speakersOpen)) speakersWin.draw();
+      ImGui::End();
+    }
     if(startFrames < 3 && ++startFrames == 3 && !CLI::getStartWindow().empty()) {
       const auto &win = CLI::getStartWindow();
       ImGui::SetWindowFocus(win == "Events" ? ICON_MDI_SITEMAP " Events###Events"
-        : win == "Strings" ? ICON_MDI_TRANSLATE " Strings###Strings" : win.c_str());
+        : win == "Strings" ? ICON_MDI_TRANSLATE " Strings###Strings"
+        : win == "Speakers" ? ICON_MDI_ACCOUNT_VOICE " Speakers###Speakers" : win.c_str());
     }
   }
 
@@ -738,6 +774,7 @@ void Editor::Scene::draw()
         if(ImGui::MenuItem(ICON_MDI_PLUS " New Viewport")) wantNewViewport = true;
         ImGui::MenuItem(ICON_MDI_SITEMAP " Events", nullptr, &eventsOpen); // Fork: event graph
         ImGui::MenuItem(ICON_MDI_TRANSLATE " Strings", nullptr, &stringsOpen); // Fork: localization
+        ImGui::MenuItem(ICON_MDI_ACCOUNT_VOICE " Speakers", nullptr, &speakersOpen); // Fork: dialog trees
         ImGui::Separator();
         if(ImGui::MenuItem(ICON_MDI_MAGNIFY_PLUS " Zoom In")) {
           ImGui::Theme::changeZoom(+1);
@@ -951,6 +988,7 @@ void Editor::Scene::save()
   for(auto &nodeEditor : nodeEditors) {
     nodeEditor->save();
   }
+  for(auto &dialogEditor : dialogEditors) dialogEditor->save(); // Fork: dialog trees
   if(editingEmitterUUID != 0) {
     auto *e = ctx.project->getAssets().getEntryByUUID(editingEmitterUUID);
     if(e && e->emitter) {

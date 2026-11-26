@@ -213,6 +213,9 @@ add_executable(pyrite64 src/main.cpp
         src/build/sceneBuilder.cpp
         src/build/eventBuilder.cpp
         src/build/locBuilder.cpp
+        src/build/dialogBuilder.cpp
+        src/project/dialog/dialogTree.cpp
+        src/project/dialog/speakers.cpp
         src/project/locale/localization.cpp
         src/project/locale/locCompile.cpp
         src/project/locale/locProject.cpp
@@ -226,6 +229,8 @@ add_executable(pyrite64 src/main.cpp
         src/editor/pages/parts/eventInspector.cpp
         src/editor/pages/parts/eventGraphWindow.cpp
         src/editor/pages/parts/stringsWindow.cpp
+        src/editor/pages/parts/speakersWindow.cpp
+        src/editor/pages/parts/dialogTreeWindow.cpp
         src/editor/uiScript.cpp
         src/utils/binaryFile.h
         src/build/sceneContext.h
@@ -429,6 +434,7 @@ if(PYRITE64_BUILD_TESTS)
         tests/idTable.cpp
         tests/interactions.cpp
         tests/locale.cpp
+        tests/dialog.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp
@@ -438,6 +444,8 @@ if(PYRITE64_BUILD_TESTS)
         n64/engine/src/events/conditionCore.cpp
         n64/engine/src/text/locCore.cpp
         n64/engine/src/text/locFormat.cpp
+        n64/engine/src/dialog/dialogData.cpp
+        src/project/dialog/dialogTree.cpp
         src/project/locale/localization.cpp
         src/project/locale/locCompile.cpp
     )
