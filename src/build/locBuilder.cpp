@@ -227,7 +227,8 @@ namespace
 
     // the inputs: the command, the characters, and the font file's size and time
     std::error_code ec{};
-    const auto fontTime = fs::last_write_time(fontPath, ec).time_since_epoch().count();
+    // long long: macOS keeps file times in a 128-bit count, which std::to_string has no overload for
+    const auto fontTime = static_cast<long long>(fs::last_write_time(fontPath, ec).time_since_epoch().count());
     const std::string sig = cmd + "\n" + charset + "\n" + std::to_string(fs::file_size(fontPath, ec)) + ":" + std::to_string(fontTime);
     const fs::path sigFile = work / "inputs.sig"; // not next to the font: all of filesystem/ goes into the ROM
     if(fs::exists(outFile) && Utils::FS::loadTextFile(sigFile) == sig) return true;
