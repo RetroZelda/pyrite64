@@ -37,6 +37,20 @@
 * The command line (`wire`, `unwire`) finds pins whose names have dots
 * Test scene 11 in `n64/tests/test_events`; the check scripts copy the project's `events/` folder, and `nestingChecks.sh` runs ares on a copy of the settings file
 
+### Localization and dialog trees (docs/todo/dialog)
+* Symbolic text keys: `"npc.tank.greet"_localized` is a CRC-32 id (`text/locId.h`); one table per language in `locale/` (source language, translations, notes), built to `filesystem/p64/loc/<code>.loc`, the language picked at run time (`text/loc.h`)
+* Two language slots at once (the game's and a paired one), a missing translation falls back to the source text with a debug mark, and a pseudo-language for testing layouts
+* Text tags in brackets, compiled at build time: `[b]`, `[i]`, `[size]`, `[font]`, `[color]`, `[shake]`, `[wave]`, pauses and speed, `[btn=...]` button icons, `[sfx=...]`, `[page]`, and `\n`; errors name the key and the language
+* Variables in braces, declared only in C++ (`P64_LOC_VAR`, caller values with `P64_LOC_ARG`): numbers with formatting, plurals with CLDR rules and `=N` cases, keys of other texts; `Loc::format()` (`text/locFormat.h`)
+* Font sets per language with bold and italic, baked with only the characters the texts use; line breaks measured with rdpq and kinsoku rules for Japanese
+* The Strings window (View > Strings): every key in every language with errors while typing, notes, keep rules, unused keys, CSV export and import for translators (`locale/strings.csv`), and how many lines and pages a dialog line takes in each language
+* The build scans code, scenes, prefabs and dialog trees for keys; command line `loc-refresh`, `loc-unused`, `loc-prune --yes`, `loc-export`, `loc-import`
+* `LOC_TEXT` script fields: a key picked from the table, built as its id
+* Dialog tree assets (`.p64dlg`, New: Dialog Tree) and the Dialog Tree window: Start, Line, Choice, Branch, Condition, Logic, Input, Event, GoTo and End nodes, texts edited in the preview language, Play; the engine only holds the data (`dialog/dialog.h`, `dialog/dialogData.h`), the game walks the trees
+* The Speakers window: name, language, colour, fonts, portraits, voice blips and talk clip per speaker
+* `Conditions::evaluateScript()` answers a condition script on any object; `Loc::voiceClip()` finds a voice clip by key and language; `AssetManager::findByPath()`
+* Tests 16 "Localized text" and 17 "Dialog tree data" in `n64/tests/test_events`, and unit tests for tables, tags, plurals, CSV and trees
+
 ### Performance
 * `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id
 * `n64/tests/perf_events`: a benchmark of the event bus and the conditions, with its results in the README (about 4 µs an event, 6 µs a condition check, in the ares emulator)
