@@ -5,6 +5,9 @@
 #include "ui/UI.h"
 #include "vi/swapChain.h"
 #include "./testLog.h"
+#include "text/loc.h"
+
+#include <cstring>
 
 #include <vector>
 
@@ -643,6 +646,51 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
   // Scene 11, driven by TestDriver11 (docs/todo/anim-events/PLAN.md). AnimA, AnimB and AnimC show
   // the model events/anim_test.json lists (Walk.STEP, Idle.BLINK, Any.STEP). A binds Walk.STEP,
   // Any.STEP and MainFinished, B only Walk.STEP, C nothing.
+  // localization (docs/todo/dialog/PLAN.md, section 4): the tables of locale/ in this project
+  bool checkLocalization()
+  {
+    using namespace P64::Loc;
+    bool ok = true;
+    auto expect = [&](bool cond, const char* what) {
+      if(!cond) { debugf("[event test]   localization: %s\n", what); ok = false; }
+    };
+    auto same = [](const char* a, const char* b) { return strcmp(a, b) == 0; };
+
+    constexpr auto HELLO = "test.hello"_localized;
+    constexpr auto ONLY_EN = "test.only_en"_localized;
+    constexpr auto MONEY = "test.money"_localized;
+
+    expect(languageCount() == 4, "four languages");
+    expect(current() == 0 && same(language(0)->code, "en"), "the source language is set at boot");
+    expect(same(text(HELLO), "Hello"), "en: Hello");
+    expect(same(text(MONEY), "$$5"), "a dollar sign is doubled for rdpq");
+    expect(paired() == findLanguage("ja"), "en is paired with ja");
+    expect(same(text(HELLO, Slot::Paired), "こんにちは"), "the paired slot reads ja");
+    expect(same(text(LocId{12345}), ""), "an unknown id gives an empty text");
+    expect(!has(LocId{12345}), "an unknown id is not in the table");
+
+    expect(setLanguage(findLanguage("ja")), "ja loads");
+    expect(same(text(HELLO), "こんにちは"), "ja: こんにちは");
+    expect(same(text(HELLO, Slot::Paired), "Hello"), "ja is paired with en");
+    expect(isFallback(ONLY_EN) && same(text(ONLY_EN), "Only English"), "an untranslated key falls back to English");
+    expect(!isFallback(HELLO), "a translated key is not a fallback");
+    expect(language(current())->flags & LANG_WRAP_CHAR, "ja wraps by character");
+
+    expect(setLanguage(findLanguage("es")), "es loads");
+    expect(same(text(HELLO), "Hola"), "es: Hola");
+    expect(paired() == current(), "a language without a pair uses itself in the paired slot");
+
+    expect(setLanguage(findLanguage("qps")), "the pseudo-language loads");
+    const char* pseudo = text(HELLO);
+    expect(pseudo[0] == '[' && strstr(pseudo, "Ĥ") != nullptr, "the pseudo-language is generated from English");
+
+    const uint32_t before = epoch();
+    expect(!setLanguage(200), "a language out of range is refused");
+    expect(epoch() == before && current() == findLanguage("qps"), "a refused language keeps the current one");
+    setLanguage(0);
+    return ok;
+  }
+
   bool checkAnimEvents()
   {
     constexpr uint16_t A = 3, B = 4;
@@ -687,6 +735,7 @@ namespace P64::GlobalScript::C5D2B8E4F1A07C93
     {"UI canvas pins",                9, 30, checkCanvas},
     {"Conditions and logic nodes",    10, 14, checkConditions},
     {"Animation event pins",          11, 60, checkAnimEvents},
+    {"Localized text",                1, 2,  checkLocalization},
   };
 
   void runStep()

@@ -286,6 +286,7 @@ void Editor::Scene::draw()
     ImGui::DockBuilderDockWindow("Canvas",      dockSpaceID);
     ImGui::DockBuilderDockWindow("Particles",   dockSpaceID);
     ImGui::DockBuilderDockWindow("Events",      dockSpaceID); // Fork: event graph
+    ImGui::DockBuilderDockWindow("Strings",     dockSpaceID); // Fork: localization
 
     // Left
     ImGui::DockBuilderDockWindow("Scene",     dockLeftID);
@@ -591,8 +592,20 @@ void Editor::Scene::draw()
       if(ImGui::Begin(ICON_MDI_SITEMAP " Events###Events", &eventsOpen)) eventGraph.draw();
       ImGui::End();
     }
+    // Fork: localization, the Strings window, a tab next to the 3D viewport too
+    if(CLI::getStartWindow() == "Strings" && startFrames < 2) stringsOpen = true;
+    if(stringsOpen) {
+      ImGuiID stringsDock = dockSpaceID;
+      if (ImGuiWindow* vpWin = ImGui::FindWindowByName("3D-Viewport"))
+        if (vpWin->DockId != 0) stringsDock = vpWin->DockId;
+      ImGui::SetNextWindowDockID(stringsDock, ImGuiCond_Appearing);
+      if(ImGui::Begin(ICON_MDI_TRANSLATE " Strings###Strings", &stringsOpen)) strings.draw();
+      ImGui::End();
+    }
     if(startFrames < 3 && ++startFrames == 3 && !CLI::getStartWindow().empty()) {
-      ImGui::SetWindowFocus(CLI::getStartWindow() == "Events" ? ICON_MDI_SITEMAP " Events###Events" : CLI::getStartWindow().c_str());
+      const auto &win = CLI::getStartWindow();
+      ImGui::SetWindowFocus(win == "Events" ? ICON_MDI_SITEMAP " Events###Events"
+        : win == "Strings" ? ICON_MDI_TRANSLATE " Strings###Strings" : win.c_str());
     }
   }
 
@@ -724,6 +737,7 @@ void Editor::Scene::draw()
       {
         if(ImGui::MenuItem(ICON_MDI_PLUS " New Viewport")) wantNewViewport = true;
         ImGui::MenuItem(ICON_MDI_SITEMAP " Events", nullptr, &eventsOpen); // Fork: event graph
+        ImGui::MenuItem(ICON_MDI_TRANSLATE " Strings", nullptr, &stringsOpen); // Fork: localization
         ImGui::Separator();
         if(ImGui::MenuItem(ICON_MDI_MAGNIFY_PLUS " Zoom In")) {
           ImGui::Theme::changeZoom(+1);

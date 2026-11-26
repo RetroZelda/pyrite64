@@ -102,6 +102,7 @@ namespace P64::User::EventTest
     T_CANVAS,   // phase 6: scene 9, an object shows a canvas and plays its clip; its marker, clip end and focus reach a script
     T_CONDITIONS, // conditions: scene 10, checks, triggers, edges, enable, reset, logic nodes, prefab scope
     T_ANIM_EVENTS, // animation events: scene 11, Model (Animated) pins fired from code, per object
+    T_LOCALIZATION, // localization: string tables per language, the paired language, fallbacks, the pseudo-language
     T_COUNT
   };
 

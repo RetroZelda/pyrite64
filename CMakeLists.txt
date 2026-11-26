@@ -212,6 +212,9 @@ add_executable(pyrite64 src/main.cpp
         src/utils/proc.cpp
         src/build/sceneBuilder.cpp
         src/build/eventBuilder.cpp
+        src/build/locBuilder.cpp
+        src/project/locale/localization.cpp
+        src/project/locale/locProject.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
         src/project/events/eventPins.cpp
@@ -221,6 +224,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/events/eventUsages.cpp
         src/editor/pages/parts/eventInspector.cpp
         src/editor/pages/parts/eventGraphWindow.cpp
+        src/editor/pages/parts/stringsWindow.cpp
         src/editor/uiScript.cpp
         src/utils/binaryFile.h
         src/build/sceneContext.h
@@ -423,6 +427,7 @@ if(PYRITE64_BUILD_TESTS)
         tests/conditions.cpp
         tests/idTable.cpp
         tests/interactions.cpp
+        tests/locale.cpp
         src/utils/codeParser.cpp
         src/utils/logger.cpp
         src/project/events/eventBindings.cpp
@@ -430,6 +435,8 @@ if(PYRITE64_BUILD_TESTS)
         src/project/events/eventPinList.cpp
         n64/engine/src/events/busCore.cpp
         n64/engine/src/events/conditionCore.cpp
+        n64/engine/src/text/locCore.cpp
+        src/project/locale/localization.cpp
     )
     # n64/engine: the event bus core is engine code written to also compile on the host
     target_include_directories(pyrite64_tests PRIVATE src vendored/doctest vendored/glm vendored/SHA256/include

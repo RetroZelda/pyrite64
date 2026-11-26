@@ -14,6 +14,8 @@
 #include "../../../utils/string.h"
 #include "../../../utils/meshGen.h"
 #include "../../../editor/pages/parts/viewport3D.h"
+#include "../../locale/locProject.h" // Fork: localization
+#include "../../../../n64/engine/include/text/locId.h"
 #include <algorithm>
 #include <cctype>
 #include <compare>
@@ -333,6 +335,20 @@ namespace Project::Component::Code
       } else if(field.type == Utils::DataType::PREFAB){
         uint64_t uuid = Utils::parseU64(val);
         ctx.fileObj.write<uint32_t>(ctx.assetUUIDToIdx[uuid]);
+      } else if(field.type == Utils::DataType::LOC_TEXT) {
+        // Fork: localization. A key, built as its id; the build adds keys the tables lack (locBuilder.cpp).
+        uint32_t locId = 0;
+        if(val != "0") {
+          std::string why{};
+          if(::Project::Loc::isValidKey(val, &why)) {
+            locId = P64::Loc::keyId(val.data(), val.size()).hash;
+            ctx.locUses[val].push_back({ctx.eventWhere + ": " + obj.name + ": " + script->getName() + "." + field.name, {}, 0});
+          } else {
+            Utils::Logger::log(ctx.eventWhere + ": " + obj.name + ": " + script->getName() + "." + field.name
+              + ": '" + val + "' is not a text key (" + why + ")", Utils::Logger::LEVEL_ERROR);
+          }
+        }
+        ctx.fileObj.write<uint32_t>(locId);
       } else if(field.type == Utils::DataType::string){
         // Fixed-size char[N] member: write exactly field.dataSize bytes (truncating a longer
         // value, zero-padding a shorter one, always leaving a null terminator). The runtime
@@ -590,6 +606,44 @@ namespace Project::Component::Code
               ImTable::addAssetVecComboBox("", prefabs, uuid, validationFunc);
             }
             ImGui::PopID();
+          } else if(field.type == Utils::DataType::LOC_TEXT) {
+            // Fork: localization. A key, its source text under it, and a picker of the tables' keys.
+            drawArg([&](std::string *val) -> bool {
+              bool changed = ImTable::typedInput<std::string>(val);
+              if (!ctx.project || !::Project::Loc::hasLocalization(ctx.project->getPath())) {
+                ImGui::TextDisabled("the project has no locale/ yet (View > Strings)");
+                return changed;
+              }
+              const auto &loc = ::Project::Loc::cached(*ctx.project);
+              const auto *src = loc.source();
+              if (!val->empty()) {
+                std::string why{};
+                const ::Project::Loc::Entry *locEntry = nullptr;
+                if (src) {
+                  auto it = src->entries.find(*val);
+                  if (it != src->entries.end()) locEntry = &it->second;
+                }
+                if (!::Project::Loc::isValidKey(*val, &why)) {
+                  ImGui::TextColored({1.0f, 0.45f, 0.35f, 1.0f}, "%s", why.c_str());
+                } else if (!locEntry) {
+                  ImGui::TextColored({1.0f, 0.8f, 0.3f, 1.0f}, "not in the tables yet (Refresh adds it)");
+                } else {
+                  ImGui::TextDisabled("%s", locEntry->text.empty() ? "(no text yet)" : locEntry->text.c_str());
+                }
+              }
+              if (src && ImGui::BeginCombo("##locKeys", "pick a key", ImGuiComboFlags_HeightLarge)) {
+                static char filter[64]{};
+                if (ImGui::IsWindowAppearing()) { filter[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
+                ImGui::InputTextWithHint("##filter", "filter", filter, sizeof(filter));
+                for (const auto &[key, e] : src->entries) {
+                  if (filter[0] && key.find(filter) == std::string::npos && e.text.find(filter) == std::string::npos) continue;
+                  const std::string label = key + "  " + (e.text.size() > 40 ? e.text.substr(0, 40) + "..." : e.text);
+                  if (ImGui::Selectable(label.c_str(), key == *val)) { *val = key; changed = true; }
+                }
+                ImGui::EndCombo();
+              }
+              return changed;
+            });
           } else if(field.type == Utils::DataType::VEC3) {
             drawArg([&](std::string *val) -> bool {
               auto values = Utils::parseFloatList(*val);

@@ -1,0 +1,5 @@
+{
+  "test.hello": {"text": "Hello", "note": "the test ROM's greeting"},
+  "test.money": {"text": "$5"},
+  "test.only_en": {"text": "Only English"}
+}

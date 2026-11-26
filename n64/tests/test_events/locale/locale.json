@@ -1,0 +1,11 @@
+{
+  "source": "en",
+  "languages": [
+    {"code": "en", "name": "English", "fonts": "latin", "wrap": "word"},
+    {"code": "ja", "name": "日本語", "fonts": "japanese", "wrap": "char", "revealScale": 0.6},
+    {"code": "es", "name": "Español", "fonts": "latin", "wrap": "word"},
+    {"code": "qps", "name": "Pseudo", "fonts": "latin", "wrap": "word", "pseudo": true}
+  ],
+  "pairs": {"en": "ja", "ja": "en"},
+  "keep": []
+}

@@ -1,0 +1,13 @@
+{
+  "test.hello": {
+    "text": "こんにちは",
+    "from": "f7d18982"
+  },
+  "test.money": {
+    "text": "$5",
+    "from": "e682377a"
+  },
+  "test.only_en": {
+    "text": ""
+  }
+}

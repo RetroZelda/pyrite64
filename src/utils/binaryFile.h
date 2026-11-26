@@ -32,6 +32,7 @@ namespace Utils
     BOOL,  // 1 byte, stored as "0"/"1"
     COLOR, // 4 bytes (color_t: r,g,b,a), stored as "r,g,b,a" in 0-255
     ASSET_EMITTER, // editor-side only (parsed from the script source each time), the value is never stored
+    LOC_TEXT,      // Fork: localization. A key ("npc.tank.greet"), stored as text, built as its 4-byte id
   };
 
   class BinaryFile

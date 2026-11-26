@@ -18,6 +18,7 @@
 #include "renderer/drawLayer.h"
 #include "script/globalScript.h"
 #include "events/bus.h"
+#include "text/loc.h" // Fork: localization
 
 P64::GlobalState P64::state{};
 
@@ -97,6 +98,8 @@ int main()
 
   P64::Events::Generated::registerNames();       // Fork: event bus, names for debug output
   P64::Events::Generated::registerAnimEvents();  // Fork: animation events, the pins of each model
+  P64::Loc::Generated::registerLanguages();     // Fork: localization, the project's languages
+  if(P64::Loc::languageCount() > 0)P64::Loc::setLanguage(0); // the source language until the game picks one
   P64::GlobalScript::registerEventPins();        // Fork: event graph, global script input pins
   P64::GlobalScript::callHooks(P64::GlobalScript::HookType::GAME_INIT);
   P64::Events::Internal::postImmediate(P64::Events::Builtin::GameInit); // Fork: event bus

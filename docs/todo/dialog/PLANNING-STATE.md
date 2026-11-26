@@ -194,6 +194,25 @@ Each is the option I recommend; change any on request.
 35. **Fork only.** The work is fork-only (not upstreamable), like the event graph.
 36. **Pairs.** English with Japanese, Spanish with Portuguese, as the Number One design sets.
 
+37. **Prefab instance overrides.** Override keys are salted per prefab layer, so Refresh reads a
+    string override (`9:` values) as a key when it is a valid key with a dot and a letter. The
+    build also records every LocText field it writes, exactly, and adds any key the tables lack.
+38. **Fallbacks are filled in at build time.** Each language's `.loc` is complete: an untranslated
+    key holds the source text with an entry flag, so the console never needs the source table
+    loaded beside the current one.
+39. **Debug marks are a run-time switch.** `Loc::setDebugMarks(fallbacks, missing)`, set by the game in
+    debug builds, because the engine library is not built with the game's debug flags.
+40. **`P64::LocText` is `P64::LocId`.** The field type is the id itself, so a script reads
+    `Loc::text(data->line)`. The parser accepts LocText, LocId and the `P64::` forms; the default is
+    written `= "key"_localized`.
+
 ## Phase log
 
-Nothing built yet. See PLAN.md section 11 for the seven phases.
+See PLAN.md section 11 for the seven phases.
+
+| Phase | Commit | What | Checked |
+|---|---|---|---|
+| 1 | pyrite64 (this commit) | `_localized` (engine `text/locId.h`); table format and reader (`text/locTable.h`, `locCore.cpp`); run time `text/loc.h` (two slots, fallback flag, debug marks), language list generated as `src/p64/locTable.cpp`, set to the source language at boot; editor model `src/project/locale/` (config, tables, status, refresh, unused, keep rules, pseudo-language, literal-aware C++ scan); scan of scenes and prefabs; build step `locBuilder.cpp` (refresh, id collisions, `filesystem/p64/loc/<code>.loc`); `LOC_TEXT` field type with a key picker; CLI `loc-refresh`, `loc-unused`, `loc-prune [--yes]`; Strings window (View > Strings) | `pyrite64_tests` 143/143 (11 new); `test_events` in ares 17/17, test 16 "Localized text" (en/ja/es/pseudo, pairs, fallback, `$` doubled, refused index); CLI on a scratch copy (unused listed, prune needs `--yes`, keep rule honoured); editor opened on the Strings window |
+
+Known after phase 1: the editor's UI font has no Japanese glyphs (shows ?????); phase 2 merges a
+Japanese font into it with the game fonts.

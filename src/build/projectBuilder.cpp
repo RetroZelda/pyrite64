@@ -255,6 +255,14 @@ bool Build::buildProject(const std::string &configPath)
     return false;
   }
 
+  // Fork: localization. The string tables, after every scene and prefab is written.
+  if(!buildLocalization(project, sceneCtx)) {
+    auto msg = std::string("Localization has errors, see the log");
+    Utils::Logger::log(msg, Utils::Logger::LEVEL_ERROR);
+    Editor::Noti::add(Editor::Noti::Type::ERROR, msg);
+    return false;
+  }
+
   auto assetTableCode = Utils::replaceAll(
     Utils::FS::loadTextFile("data/scripts/assetTable.h"),
     "{{ASSET_MAP}}", sceneCtx.assetFileMap

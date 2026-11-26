@@ -14,6 +14,7 @@
 #include "project/events/eventGraph.h"
 #include "project/events/eventUsages.h"
 #include "utils/logger.h"
+#include "project/locale/locProject.h"
 
 namespace
 {
@@ -44,6 +45,56 @@ namespace
       start = end + 1;
     }
     return found;
+  }
+
+  // Fork: localization. Refresh the string tables, list what nothing uses, or remove it (--yes).
+  bool runLocCommand(const std::string &cmd, bool yes)
+  {
+    Project::Project project{argProgPath};
+    Project::Project *prevProject = ctx.project;
+    ctx.project = &project;
+    struct Restore { Project::Project *prev; ~Restore() { ctx.project = prev; } } restore{prevProject};
+
+    Project::Loc::Localization loc{};
+    std::vector<std::string> errors{};
+    if (!Project::Loc::load(project.getPath(), loc, errors)) {
+      printf("The project has no locale/locale.json (open the Strings window in the editor to make one)\n");
+      return false;
+    }
+    for (const auto &err : errors) printf("error: %s\n", err.c_str());
+
+    auto result = Project::Loc::refresh(project, loc);
+    for (const auto &err : result.errors) printf("error: %s\n", err.c_str());
+    if (cmd == "loc-refresh") {
+      printf("%zu key(s) used, %zu added, %zu unused\n", result.uses.size(), result.added.size(), result.unused.size());
+      for (const auto &key : result.added) printf("  + %s\n", key.c_str());
+      return errors.empty() && result.errors.empty();
+    }
+
+    if (result.unused.empty()) {
+      printf("Nothing is unused\n");
+      return true;
+    }
+    printf("%zu unused key(s):\n", result.unused.size());
+    const auto *src = loc.source();
+    for (const auto &key : result.unused) {
+      std::string text{};
+      if (src) {
+        auto it = src->entries.find(key);
+        if (it != src->entries.end()) text = it->second.text;
+      }
+      printf("  %s  \"%s\"\n", key.c_str(), text.c_str());
+    }
+    if (cmd == "loc-prune") {
+      if (!yes) {
+        printf("Nothing was removed: run again with --yes to remove them from every language\n");
+        return true;
+      }
+      loc.remove(result.unused);
+      Project::Loc::save(project.getPath(), loc);
+      printf("Removed them from every language\n");
+    }
+    return true;
   }
 
   // Fork: the Events window's graph without the editor: print it, or draw and remove wires
@@ -301,7 +352,8 @@ CLI::Result CLI::run(int argc, char** argv)
 
   prog.add_argument("--cmd")
     .help("Command to run")
-    .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire", "events", "rename-event");
+    .choices("build", "clean", "migrate", "to-prefab", "unpack", "graph", "wire", "unwire", "events", "rename-event",
+             "loc-refresh", "loc-unused", "loc-prune");
 
   // Fork: arguments of to-prefab and unpack
   prog.add_argument("--scene")
@@ -348,6 +400,12 @@ CLI::Result CLI::run(int argc, char** argv)
   prog.add_argument("--event")
     .help("An event to bind one pin to, like an Event node in the window (wire, unwire)")
     .default_value(std::string{});
+
+  // Fork: localization
+  prog.add_argument("--yes")
+    .help("Really remove the unused strings (loc-prune); without it loc-prune only lists them")
+    .default_value(false)
+    .implicit_value(true);
 
   prog.add_argument("--experimental")
     .help("Enable experimental features (may cause instability / break projects)")
@@ -434,6 +492,10 @@ CLI::Result CLI::run(int argc, char** argv)
   else if (cmd == "to-prefab" || cmd == "unpack")
   {
     res = runPrefabCommand(cmd, prog.get<int>("--scene"), prog.get<std::string>("--object"), prog.get<std::string>("--dir"));
+  }
+  else if (cmd == "loc-refresh" || cmd == "loc-unused" || cmd == "loc-prune")
+  {
+    res = runLocCommand(cmd, prog["--yes"] == true);
   }
   else if (cmd == "clean")
   {

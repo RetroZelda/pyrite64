@@ -40,6 +40,8 @@ namespace
     if (str == "AssetRef<sprite_t>") return Utils::DataType::ASSET_SPRITE;
     if (str == "AssetRef<emitter_t>") return Utils::DataType::ASSET_EMITTER;
     if (str == "PrefabRef") return Utils::DataType::PREFAB;
+    // Fork: localization, a key of the string tables
+    if (str == "LocText" || str == "P64::LocText" || str == "LocId" || str == "P64::LocId") return Utils::DataType::LOC_TEXT;
     if (str == "ObjectRef" || str == "P64::ObjectRef" || str.rfind("ObjectRef<", 0) == 0 || str.find("::ObjectRef<") != std::string::npos) return Utils::DataType::OBJECT_REF;
     return Utils::DataType::s32;
   }
@@ -484,6 +486,14 @@ namespace
         .attr = std::move(attr),
         .defaultValue = fieldMatch[5],
       };
+
+      // Fork: localization. The default of a LocText field is written as "key"_localized; the editor keeps the key.
+      if (field.type == DataType::LOC_TEXT) {
+        static const std::regex locDefault(R"re("([^"\\\n]*)"_localized)re");
+        std::smatch locMatch;
+        const std::string def = field.defaultValue;
+        field.defaultValue = std::regex_search(def, locMatch, locDefault) ? locMatch[1].str() : std::string{};
+      }
 
       const bool isUnsigned = field.type == DataType::u8 || field.type == DataType::u16 || field.type == DataType::u32;
       const bool isSigned = field.type == DataType::s8 || field.type == DataType::s16 || field.type == DataType::s32;

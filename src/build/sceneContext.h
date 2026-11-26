@@ -9,6 +9,7 @@
 #include "../utils/binaryFile.h"
 #include "../utils/toolchain.h"
 #include "../project/events/eventRules.h"
+#include "../project/locale/localization.h"
 
 namespace Project { class Project; class Scene; class Object; struct AssetManagerEntry; }
 
@@ -65,6 +66,9 @@ namespace Build
     };
     std::vector<EventPathEntry> eventPath{};
     std::vector<EventContext> eventContexts{};
+
+    // Fork: localization. Keys of LocText fields, written by the scenes and prefabs built so far.
+    Project::Loc::Uses locUses{};
 
     void addAsset(const Project::AssetManagerEntry &entry);
   };
