@@ -268,6 +268,10 @@ void P64::Scene::update(float deltaTime)
   {
     accumulator_ticks = fixedDeltaTimeTicks * MAX_PHYSICS_STEPS;
   }
+  // Fork: the CPU overlay's component and script update rows include their fixedUpdate time (the physics-step
+  // work of scripts, e.g. AI floor probes and steering, was invisible before); cleared here, before the steps
+  ticksComponents.clear();
+  ticksScripts.clear();
   while (accumulator_ticks >= fixedDeltaTimeTicks)
   {
     for(auto obj : objects)
@@ -280,7 +284,14 @@ void P64::Scene::update(float deltaTime)
         if(!compDef.fixedUpdate) continue;
 
         char* dataPtr = (char*)obj + compRefs[i].offset;
+        const uint64_t fixedStart = get_ticks();
         compDef.fixedUpdate(*obj, dataPtr, fixedDeltaTime);
+        const uint64_t fixedTicks = get_ticks() - fixedStart;
+        ticksComponents[compRefs[i].type].update += fixedTicks;
+        if(compRefs[i].type == 0) {
+          auto* codeData = reinterpret_cast<P64::Comp::Code*>(dataPtr);
+          ticksScripts[codeData->index].update += fixedTicks;
+        }
       }
     }
 
@@ -295,8 +306,6 @@ void P64::Scene::update(float deltaTime)
     applyRigidBodyRenderInterpolation(remainderSec);
   }
 
-  ticksComponents.clear();
-  ticksScripts.clear();
   uint64_t componentTicksStart, componentTicksEnd;
   ticksActorUpdate = get_ticks();
   for(auto obj : objects)

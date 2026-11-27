@@ -1,7 +1,10 @@
 # Companions: plan
 
 Draft 2 (2026-11-26): the owner answered Q1-Q3 (section 9). Q3 widened the plan, because enemies now
-fight companions too (section 5.5). Status and decisions are in [PLANNING-STATE.md](PLANNING-STATE.md).
+fight companions too (section 5.5). **Built** the same day. Where the build differs from this plan
+(Leash 35 m, the ledge stop, the steered leap, no tint, and the owner's follow-up round of 2026-11-27:
+out-of-view warps, steering, aggressors, any body, the Minion companion), PLANNING-STATE.md "Decisions
+while building" says so, and the guide `kentucky-castle/docs/Companions/README.md` describes what was built. Status and decisions are in [PLANNING-STATE.md](PLANNING-STATE.md).
 The evidence, with file and line references, is in [FINDINGS.md](FINDINGS.md). Paths are relative to
 `kentucky-castle/` unless they start with `pyrite64/`.
 
@@ -74,8 +77,8 @@ Model (Animated).
 |---|---|---|
 | Attack Style | Melee, Ranged | Melee |
 | Combat Role | Guard, Hunt, Auto (Q2) | Auto |
-| Follow Distance | meters from the player where it stops and waits | 2.5 m |
-| Leash | the farthest it goes from the player in combat | 15 m |
+| Follow Distance | meters from the player where it stops and waits | 4.5 m (follow-up round; 2.5 m in draft 2) |
+| Leash | the farthest it goes from the player in combat (a Guard: half of it) | 35 m (built; 15 m in draft 2) |
 | Catch Up Distance | farther than this from the player: it warps to her (section 4.7) | 40 m |
 
 Speeds, the jump arc, the climb steps and the attack timings are tweakables under

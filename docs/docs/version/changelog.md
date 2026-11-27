@@ -56,6 +56,10 @@
 ### Single-skeleton animated models (docs/todo/companions)
 * Model (Animated) has a **Blend Skeletons** option, on by default. Off, the engine allocates only the main skeleton instead of one copy per clip (for a 27-clip, 54-bone character about 140 KB less per instance), the model cannot blend, and `setBlendAnim()` with a clip (or the PlayBlend pin) is ignored with one warning. `AnimModel::canBlend()` tells which it is; `getSkelAnim()` is null then
 * The flags byte of the component's build data carries it (`AnimModel::FLAG_NO_BLEND`); the other bits are run-time state
+* Model (Animated) remembers which skeleton each clip is attached to. Selecting a clip that is already attached to that skeleton only rewinds it: `t3d_anim_attach` primes every channel with keyframes read from ROM, about 10 ms for a big clip on the N64, and every clip change used to pay it. Game code that calls `t3d_anim_attach` itself after `setMainAnim()` pays it twice, so it should not
+
+### CPU overlay
+* The component and script **Update** rows include `fixedUpdate` time (it was not measured, so a script's physics-step work, such as AI probes and steering, did not show)
 
 ### Performance
 * `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id

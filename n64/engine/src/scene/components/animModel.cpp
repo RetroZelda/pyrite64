@@ -40,12 +40,20 @@ namespace
 namespace P64::Comp
 {
   void AnimModel::activateAnim(int16_t idx, T3DSkeleton* skel) {
-    t3d_anim_attach(&anims[idx], skel);
+    // Fork: attach only when the clip drives another skeleton (or none) yet. Attaching primes every channel
+    // with keyframes streamed from ROM (milliseconds for a big rig); a clip already attached here is rewound.
+    const uint8_t where = (skel == &skelMain) ? ATTACHED_MAIN : ATTACHED_BLEND;
+    if (!animAttached || animAttached[idx] != where) {
+      t3d_anim_attach(&anims[idx], skel);
+      if (animAttached) animAttached[idx] = where;
+    }
     t3d_anim_set_time(&anims[idx], 0.0f); // restart from frame 0 on (re)selection
   }
 
   void AnimModel::setMainAnim(int16_t idx) {
     if (idx == animIdxMain) {
+      // still the main clip, but a blend request may have moved it onto a blend skeleton since
+      if (idx >= 0 && animAttached && animAttached[idx] != ATTACHED_MAIN) activateAnim(idx, &skelMain);
       mainAnimDuration = idx >= 0 ? anims[idx].animRef->duration : 0.0f;
       return;
     }
@@ -92,6 +100,7 @@ namespace P64::Comp
     skelAnim = (flags & FLAG_NO_BLEND) ? nullptr
                                        : static_cast<T3DSkeleton*>(malloc(sizeof(T3DSkeleton) * animCount));
     anims    = static_cast<T3DAnim*>(malloc(sizeof(T3DAnim) * animCount));
+    animAttached = static_cast<uint8_t*>(calloc(animCount > 0 ? animCount : 1, 1)); // ATTACHED_NONE
     t3d_skeleton_update(&skelMain);
 
     // @TODO: handles names vs indices in the public API
@@ -119,8 +128,10 @@ namespace P64::Comp
     t3d_skeleton_destroy(&skelMain);
     free(skelAnim);
     free(anims);
+    free(animAttached);
     skelAnim = nullptr;
     anims    = nullptr;
+    animAttached = nullptr;
   }
 
   void AnimModel::swapModel(uint16_t newAssetIdx) {

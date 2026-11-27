@@ -27,6 +27,9 @@ namespace P64::Comp
       T3DSkeleton skelMain{};
       T3DSkeleton *skelAnim{};
       T3DAnim *anims{};
+      // Fork: which skeleton each clip is attached to (ATTACHED_*): attaching primes every channel from ROM,
+      // which costs milliseconds, so a clip selected again on the same skeleton is only rewound
+      uint8_t *animAttached{};
       
       float mainAnimDuration  = 0.0f;
       float blendAnimDuration = 0.0f;
@@ -55,6 +58,10 @@ namespace P64::Comp
       static constexpr uint8_t FLAG_NOT_UPDATED  = 1 << 0; // skipped this frame by the stagger, not drawn
       static constexpr uint8_t FLAG_NO_BLEND     = 1 << 1;
       static constexpr uint8_t FLAG_BLEND_WARNED = 1 << 2;
+
+      static constexpr uint8_t ATTACHED_NONE  = 0;
+      static constexpr uint8_t ATTACHED_MAIN  = 1;
+      static constexpr uint8_t ATTACHED_BLEND = 2;
 
       // Stagger fields written by AnimController::setAnimStagger
       uint8_t staggerRate{1};   // 0=disabled, 1=every frame, N=every N frames
