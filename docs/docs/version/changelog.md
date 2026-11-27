@@ -56,6 +56,7 @@
 ### Performance
 * `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id
 * `n64/tests/perf_events`: a benchmark of the event bus and the conditions, with its results in the README (about 4 µs an event, 6 µs a condition check, in the ares emulator)
+* tiny3d is at RetroZelda/tiny3d `full-frontal` 95bc862: attaching an animation clip counts each channel once while it primes the channels, instead of recounting all of them after every keyframe. A 150-channel clip attaches in about 2 ms instead of 10 ms on the N64, with the same bone values. The game links the N64 library from that branch (the toolchain install); the editor's glTF importer is unchanged
 
 ## v0.10.0
 
