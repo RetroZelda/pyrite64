@@ -32,6 +32,9 @@ namespace Project::Component::AnimModel
     PROP_U64(model);
     PROP_U32(layerIdx); // position or name key, see 'Project::Layer'
     PROP_STRING(previewAnimName);
+    // Fork: off = the engine allocates only the main skeleton, not one copy per clip, so the model
+    // cannot blend (docs/todo/companions)
+    PROP_BOOL(blendSkeletons);
 
     Shared::MaterialInstance material{};
     std::shared_ptr<Renderer::Skeleton> skeleton{nullptr};
@@ -41,8 +44,13 @@ namespace Project::Component::AnimModel
     Utils::AABB aabb{};
   };
 
+  // engine flag (n64/engine scene/components/animModel.h, AnimModel::FLAG_NO_BLEND)
+  constexpr uint8_t FLAG_NO_BLEND = 1 << 1;
+
   std::shared_ptr<void> init(Object &obj) {
-    return std::make_shared<Data>();
+    auto data = std::make_shared<Data>();
+    data->blendSkeletons.value = true;
+    return data;
   }
 
   void setModel(Entry &entry, uint64_t modelUUID)
@@ -59,6 +67,7 @@ namespace Project::Component::AnimModel
       .set(data.model)
       .set(data.layerIdx)
       .set(data.previewAnimName)
+      .set(data.blendSkeletons)
       .set("material", data.material.serialize())
       .doc;
   }
@@ -68,6 +77,7 @@ namespace Project::Component::AnimModel
     Utils::JSON::readProp(doc, data->layerIdx);
     Utils::JSON::readProp(doc, data->previewAnimName);
     Utils::JSON::readProp(doc, data->model);
+    Utils::JSON::readProp(doc, data->blendSkeletons, true);
 
     data->material.deserialize(
       doc.value("material", nlohmann::json::object())
@@ -91,7 +101,9 @@ namespace Project::Component::AnimModel
     checkLayerRef(ctx, obj, layerRef);
 
     ctx.fileObj.write<uint16_t>(id);
-    ctx.fileObj.write<uint8_t>(0); // flags, unused
+    uint8_t flags = 0;
+    if(!data.blendSkeletons.resolve(obj.propOverrides))flags |= FLAG_NO_BLEND;
+    ctx.fileObj.write<uint8_t>(flags);
     ctx.fileObj.write<uint8_t>(0); // padding
     ctx.fileObj.write<uint32_t>(layerRef);
 
@@ -145,6 +157,8 @@ namespace Project::Component::AnimModel
       ImTable::addObjProp<uint32_t>("Draw-Layer", data.layerIdx, [&scene](uint32_t *ref) {
         return layerCombo(*ref, scene->conf.layers3D);
       }, nullptr);
+
+      ImTable::addObjProp("Blend Skeletons", data.blendSkeletons);
 
       auto asset = ctx.project->getAssets().getEntryByUUID(effectiveModelUUID);
       if (asset && asset->mesh3D)

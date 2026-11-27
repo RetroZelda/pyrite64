@@ -14,6 +14,7 @@ component, but the model can play skinned animations at runtime.
 | **Model** | The animated 3D model asset to render. |
 | **Open Model Editor** | Opens the model editor for the selected asset. |
 | **Draw-Layer** | Which 3D draw layer the model is rendered on (see scene settings). |
+| **Blend Skeletons** | On (the default): the engine keeps a copy of the skeleton for every clip, so the model can blend two clips (PlayBlend, `setBlendAnim()`). Off: only the one skeleton that is drawn exists, which saves a skeleton per clip (54 bones × 27 clips is about 140 KB), and blend requests are ignored with one warning. Turn it off for characters that only ever play one clip at a time. |
 | **Preview Anim.** | Selects an animation to preview inside the editor viewport. This is an editor-only aid and does not affect what plays at runtime. |
 | **Material Instance** | Per-object material overrides for this model. See {doc}`Material Instance <../materials/instance>` for the full list of options. |
 

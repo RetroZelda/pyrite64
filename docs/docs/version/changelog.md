@@ -53,6 +53,10 @@
 * `Conditions::evaluateScript()` answers a condition script on any object; `Loc::voiceClip()` finds a voice clip by key and language; `AssetManager::findByPath()`
 * Tests 16 "Localized text" and 17 "Dialog tree data" in `n64/tests/test_events`, and unit tests for tables, tags, plurals, CSV and trees
 
+### Single-skeleton animated models (docs/todo/companions)
+* Model (Animated) has a **Blend Skeletons** option, on by default. Off, the engine allocates only the main skeleton instead of one copy per clip (for a 27-clip, 54-bone character about 140 KB less per instance), the model cannot blend, and `setBlendAnim()` with a clip (or the PlayBlend pin) is ignored with one warning. `AnimModel::canBlend()` tells which it is; `getSkelAnim()` is null then
+* The flags byte of the component's build data carries it (`AnimModel::FLAG_NO_BLEND`); the other bits are run-time state
+
 ### Performance
 * `Scene::getObjectById()` finds objects with ids from 128 up through a hash table (`scene/idTable.h`) instead of going through every object: 0.5 µs instead of 60 µs for the last of 237 objects. Every object of a spawned prefab has such an id
 * `n64/tests/perf_events`: a benchmark of the event bus and the conditions, with its results in the README (about 4 µs an event, 6 µs a condition check, in the ares emulator)

@@ -18,6 +18,7 @@
 #include "scene/sceneManager.h"
 
 #include "lib/animController.h"
+#include "lib/logger.h"
 
 namespace
 {
@@ -59,6 +60,14 @@ namespace P64::Comp
       blendAnimDuration = 0.0f;
       return;
     }
+    if (!skelAnim) {
+      // Fork: 'Blend Skeletons' is off for this model, so there is no skeleton to blend into
+      if (!(flags & FLAG_BLEND_WARNED)) {
+        flags |= FLAG_BLEND_WARNED;
+        P64::Log::warn("AnimModel: blend asked for (clip %d) but 'Blend Skeletons' is off on this model, ignored", idx);
+      }
+      return;
+    }
     if (animIdxBlend != idx) {
       animIdxBlend = idx;
 
@@ -75,21 +84,47 @@ namespace P64::Comp
   }
 
 
-  void AnimModel::swapModel(uint16_t newAssetIdx) {
-    if (anims) {
-      auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
-      uint32_t i = 0;
-      while(t3d_model_iter_next(&it)) {
-        t3d_anim_destroy(&anims[i]);
-        t3d_skeleton_destroy(&skelAnim[i]);
-        ++i;
-      }
-      t3d_skeleton_destroy(&skelMain);
-      free(skelAnim);
-      free(anims);
-      skelAnim = nullptr;
-      anims    = nullptr;
+  // Fork: one main skeleton for drawing, plus (unless 'Blend Skeletons' is off) one clone per clip for
+  // blending, and a streamed animation per clip.
+  void AnimModel::createAnims() {
+    auto animCount = t3d_model_get_animation_count(model);
+    skelMain = t3d_skeleton_create_buffered(model, 3); // @TODO: take from scene settings once added
+    skelAnim = (flags & FLAG_NO_BLEND) ? nullptr
+                                       : static_cast<T3DSkeleton*>(malloc(sizeof(T3DSkeleton) * animCount));
+    anims    = static_cast<T3DAnim*>(malloc(sizeof(T3DAnim) * animCount));
+    t3d_skeleton_update(&skelMain);
+
+    // @TODO: handles names vs indices in the public API
+    auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
+    uint32_t i = 0;
+    while(t3d_model_iter_next(&it)) {
+      if(skelAnim)skelAnim[i] = t3d_skeleton_clone(&skelMain, false);
+      // @TOOD: add  create by-index to t3d API
+      // Attached when selected (see activateAnim), so only the playing animations prime and
+      // allocate their targets.
+      anims[i] = t3d_anim_create_buffered(model, it.anim->name, ANIM_STREAM_BUFFER_SIZE);
+      ++i;
     }
+  }
+
+  void AnimModel::destroyAnims() {
+    if (!anims) return;
+    auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
+    uint32_t i = 0;
+    while(t3d_model_iter_next(&it)) {
+      t3d_anim_destroy(&anims[i]);
+      if(skelAnim)t3d_skeleton_destroy(&skelAnim[i]);
+      ++i;
+    }
+    t3d_skeleton_destroy(&skelMain);
+    free(skelAnim);
+    free(anims);
+    skelAnim = nullptr;
+    anims    = nullptr;
+  }
+
+  void AnimModel::swapModel(uint16_t newAssetIdx) {
+    destroyAnims();
 
     if(model)AssetManager::release(assetIdx);
     assetIdx = newAssetIdx;
@@ -103,26 +138,13 @@ namespace P64::Comp
     blendAnimDuration = 0.0f;
     blendFactor       = 0.0f;
 
-    auto animCount = t3d_model_get_animation_count(model);
-    skelMain = t3d_skeleton_create_buffered(model, 3);
-    skelAnim = static_cast<T3DSkeleton*>(malloc(sizeof(T3DSkeleton) * animCount));
-    anims    = static_cast<T3DAnim*>(malloc(sizeof(T3DAnim) * animCount));
-    t3d_skeleton_update(&skelMain);
-
-    auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_ANIM);
-    uint32_t i = 0;
-    while(t3d_model_iter_next(&it)) {
-      skelAnim[i] = t3d_skeleton_clone(&skelMain, false);
-      // attached when selected (see activateAnim)
-      anims[i]    = t3d_anim_create_buffered(model, it.anim->name, ANIM_STREAM_BUFFER_SIZE);
-      ++i;
-    }
+    createAnims();
 
     if (!model->userBlock) {
       Renderer::MaterialState state{};
       rspq_block_begin();
       auto boneSeg = (const T3DMat4FP*)t3d_segment_placeholder(T3D_SEGMENT_SKELETON);
-      it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_OBJECT);
+      auto it = t3d_model_iter_create(model, T3D_CHUNK_TYPE_OBJECT);
       while(t3d_model_iter_next(&it)) {
         auto *mat = (P64::Renderer::Material*)it.object->material;
         assert(mat);
@@ -143,16 +165,7 @@ namespace P64::Comp
   {
     auto *initData = (InitData*)initData_;
     if (initData == nullptr) {
-      auto it = t3d_model_iter_create(data->model, T3D_CHUNK_TYPE_ANIM);
-      uint32_t i=0;
-      while(t3d_model_iter_next(&it)) {
-        t3d_anim_destroy(&data->anims[i]);
-        t3d_skeleton_destroy(&data->skelAnim[i]);
-        ++i;
-      }
-      t3d_skeleton_destroy(&data->skelMain);
-      free(data->skelAnim);
-      free(data->anims);
+      data->destroyAnims();
 
       AssetManager::release(data->assetIdx);
       data->~AnimModel();
@@ -166,7 +179,7 @@ namespace P64::Comp
     assert(data->model != nullptr);
     data->vertexScale = AssetManager::getVertexScale(initData->assetIdx);
     data->layerRef = initData->layerRef;
-    data->flags = initData->flags;
+    data->flags = initData->flags & FLAG_NO_BLEND; // Fork: the editor's bits; the rest are run-time state
 
     // struct has move/copy removed for safety and to avoid accidental copies.
     // but we still need to memcpy here, the warning is wrong anyways as it's still a trivial type
@@ -187,30 +200,7 @@ namespace P64::Comp
     // @TODO: all of this is rather hacky and unoptimized
     // @TODO: refactor and rethink animations here
 
-    auto animCount = t3d_model_get_animation_count(data->model);
-
-    // one main skeleton for drawing, others for potential blending
-    data->skelMain = t3d_skeleton_create_buffered(data->model, 3); // @TODO: take from scene settings once added
-    data->skelAnim = static_cast<T3DSkeleton*>(malloc(sizeof(T3DSkeleton) * animCount));
-    data->anims = static_cast<T3DAnim*>(malloc(sizeof(T3DAnim) * animCount));
-
-    t3d_skeleton_update(&data->skelMain);
-
-    auto it = t3d_model_iter_create(data->model, T3D_CHUNK_TYPE_ANIM);
-    uint32_t i = 0;
-
-    // @TODO: handles names vs indices in the public API
-
-    //debugf("AnimModel: count=%lu\n", animCount);
-    while(t3d_model_iter_next(&it)) {
-      data->skelAnim[i] = t3d_skeleton_clone(&data->skelMain, false);
-      // @TOOD: add  create by-index to t3d API
-      // Attached when selected (see activateAnim), so only the playing animations prime and
-      // allocate their targets.
-      data->anims[i] = t3d_anim_create_buffered(data->model, it.anim->name, ANIM_STREAM_BUFFER_SIZE);
-      //debugf(" - %s: %lu\n", it.anim->name, i);
-      ++i;
-    }
+    data->createAnims();
 
     Renderer::MaterialState state{};
 
@@ -218,7 +208,7 @@ namespace P64::Comp
     rspq_block_begin();
 
     auto boneSeg = (const T3DMat4FP*)t3d_segment_placeholder(T3D_SEGMENT_SKELETON);
-    it = t3d_model_iter_create(data->model, T3D_CHUNK_TYPE_OBJECT);
+    auto it = t3d_model_iter_create(data->model, T3D_CHUNK_TYPE_OBJECT);
     while(t3d_model_iter_next(&it))
     {
       auto *mat = (P64::Renderer::Material*)it.object->material;
@@ -235,10 +225,10 @@ namespace P64::Comp
   {
     uint8_t framesSinceUpdate;
     if (!data->shouldUpdate(AnimController::getFrameCount(), framesSinceUpdate)) {
-      data->flags |= 1;
+      data->flags |= FLAG_NOT_UPDATED;
       return;
     }
-    data->flags &= ~1;
+    data->flags &= ~FLAG_NOT_UPDATED;
 
     if (framesSinceUpdate == 0) return;
     if (data->animIdxMain < 0) return;
@@ -335,7 +325,7 @@ namespace P64::Comp
 
   void AnimModel::draw(Object &obj, AnimModel* data, float deltaTime)
   {
-    if(data->flags & (1)) {
+    if(data->flags & FLAG_NOT_UPDATED) {
       // animation was not updated this frame by request, so lets not even bother drawing it.
       return;
     }

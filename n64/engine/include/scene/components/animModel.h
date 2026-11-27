@@ -44,7 +44,18 @@ namespace P64::Comp
       // (keyframes stream from ROM, so unselected animations hold no file handles).
       void activateAnim(int16_t idx, T3DSkeleton* skel);
 
+      // Fork: the skeletons and the streamed animations of the current model (and their teardown)
+      void createAnims();
+      void destroyAnims();
+
     public:
+      // 'flags' bits. Fork: FLAG_NO_BLEND comes from the editor ('Blend Skeletons' off): only the main
+      // skeleton is allocated, not one clone per clip, so the model cannot blend and setBlendAnim(>= 0)
+      // is ignored (with one warning). The other bits are run-time state.
+      static constexpr uint8_t FLAG_NOT_UPDATED  = 1 << 0; // skipped this frame by the stagger, not drawn
+      static constexpr uint8_t FLAG_NO_BLEND     = 1 << 1;
+      static constexpr uint8_t FLAG_BLEND_WARNED = 1 << 2;
+
       // Stagger fields written by AnimController::setAnimStagger
       uint8_t staggerRate{1};   // 0=disabled, 1=every frame, N=every N frames
       uint8_t staggerOffset{0};
@@ -99,9 +110,11 @@ namespace P64::Comp
       const T3DSkeleton& getSkelMain() const {
         return skelMain;
       }
+      // nullptr when the model has no blend skeletons ('Blend Skeletons' off)
       const T3DSkeleton* getSkelAnim() const {
         return skelAnim;
       }
+      bool canBlend() const { return skelAnim != nullptr; }
       const T3DAnim* getAnims() const {
         return anims;
       }
