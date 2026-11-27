@@ -20,11 +20,17 @@ namespace Project::Loc
     int pages{0};
   };
 
-  /** The box the estimate fits text into: locale.json "box" {"width": 272, "lines": 3}. */
+  /**
+   * The box the estimate fits text into: locale.json "box" {"width": 272, "lines": 3,
+   * "pageSizeStep": 1}. pageSizeStep is the text size, in font sizes from the normal one, that the
+   * game works its pages out at (Kentucky Castle: its largest text size, so every size shows the
+   * same pages).
+   */
   struct BoxSize
   {
     float width{272.0f};
     int lines{3};
+    int pageSizeStep{0};
   };
   BoxSize boxSizeOf(const Config &config);
 

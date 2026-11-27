@@ -464,3 +464,126 @@ TEST_CASE("loc: CSV round trip for translators")
   CHECK(loc.tables[0].entries["b.key"].text == "Goodbye");
   CHECK(loc.status("b.key", 1) == Status::Ok); // translated from the new English
 }
+
+// ---- page breaks (text/locPages.h): a monospace box, every letter and space one wide
+#include "text/locPages.h"
+
+namespace
+{
+  struct MonoBox
+  {
+    int width;
+    int lines;
+    bool byChar;
+  };
+
+  /** Bytes of [from, end) that fit in the box: word wrap like rdpq, codes ($xx ^xx) take no room. */
+  int monoFit(const char* t, int from, int end, void* user)
+  {
+    const auto &box = *static_cast<const MonoBox*>(user);
+    int line = 1, x = 0, word = 0, wordStart = from;
+    for(int i = from; i < end && t[i];) {
+      if((t[i] == '$' || t[i] == '^') && i + 2 < end && t[i + 1] != t[i]) { i += 3; continue; }
+      const char* p = t + i;
+      const uint32_t cp = P64::Loc::utf8Decode(p);
+      const int next = int(p - t);
+      if(cp == '\n') {
+        if(++line > box.lines) return i - from;
+        x = 0; word = 0; wordStart = next; i = next;
+        continue;
+      }
+      if(box.byChar) {
+        if(x + 1 > box.width) {
+          if(++line > box.lines) return i - from;
+          x = 0;
+        }
+        ++x; i = next;
+        continue;
+      }
+      if(cp == ' ') { x += word + 1; word = 0; wordStart = next; i = next; continue; }
+      ++word;
+      if(x + word > box.width && x > 0) {
+        if(++line > box.lines) return wordStart - from;
+        x = 0;
+      }
+      i = next;
+    }
+    return end - from;
+  }
+
+  std::vector<std::string> pagesOf(const std::string &text, MonoBox box)
+  {
+    P64::Loc::PageSpan spans[16]{};
+    const int n = P64::Loc::splitPages(text.c_str(), 0, int(text.size()), monoFit, &box, box.byChar, spans, 16);
+    std::vector<std::string> out{};
+    for(int i = 0; i < n; ++i) out.push_back(text.substr(size_t(spans[i].start), size_t(spans[i].len)));
+    return out;
+  }
+}
+
+TEST_CASE("loc pages: a sentence that does not fit starts the next page")
+{
+  const MonoBox box{20, 2, false};
+  CHECK(pagesOf("Hello there.", box) == std::vector<std::string>{"Hello there."});
+  // the box holds "Hello there friend. This next sentence", but the second sentence moves whole
+  CHECK(pagesOf("Hello there friend. This next sentence is long enough.", box)
+        == std::vector<std::string>{"Hello there friend.", "This next sentence is long enough."});
+  // several short sentences share a page
+  CHECK(pagesOf("Hi. Yes. No! Why? Because I said so, that is why.", box)
+        == std::vector<std::string>{"Hi. Yes. No! Why?", "Because I said so, that is why."});
+  // closing quotes and codes stay with their sentence; the space between pages belongs to none
+  CHECK(pagesOf("^01\"Hello there, friend!\"^00 This next sentence is long enough.", box)
+        == std::vector<std::string>{"^01\"Hello there, friend!\"^00", "This next sentence is long enough."});
+  CHECK(pagesOf("", box) == std::vector<std::string>{""});
+}
+
+TEST_CASE("loc pages: a sentence longer than a page is split evenly")
+{
+  const MonoBox box{20, 2, false};
+  // filled pages would be 32 letters and 9; even is about 20 and 21
+  CHECK(pagesOf("aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj.", box)
+        == std::vector<std::string>{"aaaa bbbb cccc dddd eeee", "ffff gggg hhhh iiii jjjj."});
+  // at a comma near the even point, rather than the word nearest it
+  CHECK(pagesOf("We walked along the river for hours, and then we rested under a tree.", box)
+        == std::vector<std::string>{"We walked along the river for hours,", "and then we rested under a tree."});
+  // or at a line break
+  CHECK(pagesOf("aaaa bbbb cccc dddd\neeee ffff gggg hhhh iiii jjjj.", box)
+        == std::vector<std::string>{"aaaa bbbb cccc dddd", "eeee ffff gggg hhhh iiii jjjj."});
+  // a comma far from the even point is not used
+  CHECK(pagesOf("Well, aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii.", box)
+        == std::vector<std::string>{"Well, aaaa bbbb cccc dddd", "eeee ffff gggg hhhh iiii."});
+  // three pages
+  const auto three = pagesOf("aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq.", box);
+  REQUIRE(three.size() == 3);
+  for(const auto &p : three) CHECK(p.size() <= 40);
+}
+
+TEST_CASE("loc pages: what does not end a sentence")
+{
+  const MonoBox box{20, 2, false};
+  // "3.5" and "e.g. a" go on; "Go!" he said goes on; the ellipsis is a comma
+  CHECK(pagesOf("It costs 3.5 rupees. That is a fair price for it.", box)
+        == std::vector<std::string>{"It costs 3.5 rupees.", "That is a fair price for it."});
+  CHECK(pagesOf("\"Go!\" he said loudly. Then everyone left the room.", box)
+        == std::vector<std::string>{"\"Go!\" he said loudly.", "Then everyone left the room."});
+  // (44 letters: the even point is after "the", 22 and 22; the ellipsis at 7 is too early)
+  CHECK(pagesOf("Well... I suppose that the answer could be yes, then.", box)
+        == std::vector<std::string>{"Well... I suppose that the", "answer could be yes, then."});
+  // an ellipsis near the even point is used like a comma
+  CHECK(pagesOf("aaaa bbbb cccc dddd... eeee ffff gggg hhhh iiii.", box)
+        == std::vector<std::string>{"aaaa bbbb cccc dddd...", "eeee ffff gggg hhhh iiii."});
+}
+
+TEST_CASE("loc pages: languages without spaces")
+{
+  const MonoBox box{10, 2, true};
+  // 。 ends a sentence by itself: the second one moves whole
+  CHECK(pagesOf("おはようございます。きょうはいいてんきですね。", box)
+        == std::vector<std::string>{"おはようございます。", "きょうはいいてんきですね。"});
+  // a long sentence splits at 、 near the even point, never before a closing mark
+  CHECK(pagesOf("あしたはやまのうえまでのぼって、みんなでおべんとうをたべましょう。", box)
+        == std::vector<std::string>{"あしたはやまのうえまでのぼって、", "みんなでおべんとうをたべましょう。"});
+  const auto even = pagesOf("ああああああああああああああああああああああああ。", box);
+  REQUIRE(even.size() == 2);
+  CHECK(even[0] == "ああああああああああああ");
+}

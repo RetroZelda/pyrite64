@@ -342,13 +342,13 @@ P64::Loc::Scan P64::Loc::scanNext(const char*& p, uint8_t &font, uint8_t &style)
   return s;
 }
 
-int P64::Loc::breakLines(char* text, int size, float width)
+int P64::Loc::breakLines(char* text, int size, float width, uint8_t startFont, uint8_t startStyle)
 {
   if(!text) return 0;
   int len = static_cast<int>(strlen(text));
 
-  // the font and style in effect at the start
-  uint8_t font = 0, style = 0;
+  // the font and style in effect at the start: the caller's, or the text's first code
+  uint8_t font = startFont, style = startStyle;
   {
     const char* p = text;
     const Scan first = scanNext(p, font, style);

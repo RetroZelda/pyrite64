@@ -219,6 +219,7 @@ add_executable(pyrite64 src/main.cpp
         src/project/locale/localization.cpp
         src/project/locale/locCompile.cpp
         src/project/locale/locMeasure.cpp
+        n64/engine/src/text/locPages.cpp
         src/project/locale/locProject.cpp
         src/project/events/eventBindings.cpp
         src/project/events/eventRules.cpp
@@ -445,6 +446,7 @@ if(PYRITE64_BUILD_TESTS)
         n64/engine/src/events/conditionCore.cpp
         n64/engine/src/text/locCore.cpp
         n64/engine/src/text/locFormat.cpp
+        n64/engine/src/text/locPages.cpp
         n64/engine/src/dialog/dialogData.cpp
         src/project/dialog/dialogTree.cpp
         src/project/locale/localization.cpp

@@ -288,6 +288,83 @@ Each is the option I recommend; change any on request.
 72. **The C-Up and R hints** are drawn in the talk box's bottom-right corner with the button icons
     (the HUD canvas has no bound C-Up text); R's HUD label also says SKIP.
 
+## After the hardware playtest (2026-11-26)
+
+The owner, word for word:
+
+> a number of changes that should happen.  we should try to avoid splitting a sentence between
+> different dialog windows.  so if a sentence wont fit on a screen, we should just push it to the
+> next one.  however if the sentence is too long, then we can split it, but we should try to split
+> it evenly or by commas or newlines
+
+Decisions made without the owner:
+
+73. **One page breaker for the game and the editor.** `Loc::splitPages` (`text/locPages.h`, host
+    code) takes a fit callback: KC measures with `rdpq_paragraph_build`, the Strings window's estimate
+    with the font file. The estimate and the game cannot disagree on the rule, only on measurement.
+74. **"Doesn't fit" is literal.** A sentence that does not fit on what is left of a page starts the
+    next page, even when it is longer than a page and could have started on this one; then it is
+    split evenly from the top of its own page.
+75. **Evenly** is by letters: the sentence's letters divided by the pages it takes when each is
+    filled. A comma or line break is used when it is within 4/10 of a share from the even point, fits
+    on the page, and leaves no more than the remaining pages can hold; the nearest one wins, commas
+    and line breaks alike. Otherwise the space (in Japanese, the letter boundary kinsoku allows)
+    nearest the even point.
+76. **Sentence ends** are `.` `!` `?` with a space or the end after them (`3.5` and `1,000` are not),
+    and `。！？` on their own; closing quotes, brackets and codes stay with the sentence. An ellipsis
+    (`…` or `...`) is a comma, not an end. A mark before a lowercase word (`"Go!" he said`, `e.g. this`)
+    is a comma. Abbreviations before a capital (`Mr. Smith`) still end a sentence.
+77. **Kinsoku per page.** `Loc::breakLines` takes the font and style in effect at its start; KC
+    paginates one page at a time and re-breaks the rest of a Japanese line from the top of each page,
+    so a page that starts inside a line of the whole text starts a new line.
+
+Then, about text sizes (the owner's words, and their answers):
+
+> i also want to try getting a smaller font scale as well. we jsut have normal and large but i want
+> a small too if possible.  also font size shouldnt affect the page counts of the dialog - so small
+> and large should always have the same text displayed
+
+Asked how sizes should fit the same pages, the owner picked "Pages worked out at Large" (the box
+keeps its lines; smaller sizes leave room). Then:
+
+> lets make the normal size font the size of the large font, and make normal and smaller be smaler.
+> and the current large cna be a giant
+
+Asked for the scale: "small 9; normal 11; large 14; giant 18". Then:
+
+> page sizes should still be on large, and then giant can resize the box
+
+78. **Four text sizes**: Small 9, Normal 11, Large 14, Giant 18 px, steps -1 to +2 from the base
+    (KC's font sets bake 9, 11, 14 and 18 with 11 as the base).
+79. **Pages are worked out at Large** on a copy of the line formatted at that size. The line at the
+    player's size is cut at the same places by counting the bytes that are not font or style codes
+    ($xx ^xx), the only thing that differs between sizes. Kinsoku breaks are made per page at each
+    size.
+80. **Giant grows the box**: the text area is as many lines as the longest page of the line takes at
+    the shown size (never fewer than the box's lines), so the box keeps one height for a line's pages.
+81. **Labels follow the text size itself**: the name plate, the LOG/SKIP hints, the log's title and
+    names, the HUD words and the gameplay box used one size below the text; they now use the text
+    size, so at Normal they stay 11 px as before and only the talk text changed (14 to 11 px).
+82. **The estimate's size** comes from locale.json "box": {"pageSizeStep": 1}; KC's
+    `Settings::PAGE_SIZE_STEPS` must match it (both say so).
+
+Then:
+
+> lets move the font sizes down one more time.  so small should be 7; normal 9; large 12; giant 14
+
+83. **Sizes 7, 9, 12 and 14 px** (base 9), replacing 78's. Pages are still worked out at Large (now
+    12 px) and Giant still grows the box. The labels follow the text size (81), so at Normal they are
+    9 px now too; there is no 11 px font left to keep them at.
+
+Then, after trying 7, 9, 12 and 14 on the console:
+
+> lets use size: 8 small; 10 normal; 12 large; 14 giant and then base the text on normal and resize
+> for large and giant
+
+84. **Sizes 8, 10, 12 and 14 px** (base 10), replacing 83's. **Pages are worked out at Normal**
+    (`PAGE_SIZE_STEPS` 0, locale.json `box.pageSizeStep` 0), replacing 79's Large: Small leaves room
+    in the box, Large and Giant grow it (80 already grows it for any size above the page size).
+
 ## Phase log
 
 See PLAN.md section 11 for the seven phases.
@@ -301,4 +378,8 @@ See PLAN.md section 11 for the seven phases.
 | 5 | KC 9d2a789, pyrite64 aee2b66 | [shake]/[wave] (paragraph laid out, letters moved, drawn), [btn=...] icons (button font), [sfx=...], portraits, voice blips, voice clips by key and language (engine `Loc::voiceClip`, build table), Dialog Actor talk clips, `AssetManager::findByPath`; test data (portraits, sounds, espeak clips, Teacher's third line, a talking minion) | ares: shake and wave letters, the A icon inline, Tank's normal then happy portrait, the minion's talk clip and back to idle; a logged run showed the voice clip, 24 blips and the chime started |
 | 6 | KC 123f857 | gameplay lines (top box, timer, no input capture, paused by talks, priority queue), the log (C-Up), Skip read lines (instant read lines, R held runs through), LOG/SKIP hints, text size and box opacity checked; a trigger zone and Tank's walking lines in the test level | ares: Tank's lines in the top box while the player walks; the log with three entries and scrolling; large text at 75% opacity; a second talk shows the read line at once and R ends it |
 | 7 | pyrite64 ccb75b4, KC 11b8830, 9948644, 2e2b7bc | Input nodes answered by conditions the scene wires into the Dialog script (Input1-4); the Strings window exports every key, note and translation to `locale/strings.csv` and imports it back (CLI `loc-export`, `loc-import`); the lines and pages a dialog line takes in each language, measured with its font, a translation longer than its source flagged. KC fix: a line shown at once (Instant speed, a read line) is whole on its first frame. Usage guide `kentucky-castle/docs/Dialog/README.md` with 9 screenshots and 11 clips; the Interactions, Event Graph and LevelSystem docs updated | `pyrite64_tests` 155/155 (CSV round trip); `test_events` 18/18; ares: a tree Input wired from the scene picks the branch both ways; the fix built on a scratch copy, not yet seen in ares |
+| 8 | pyrite64 (this commit), KC 04a084c | Page breaks keep whole sentences and split a long one evenly or at a comma or line break (`Loc::splitPages`, decisions 73-77); `breakLines` with a start font and style; KC paginates page by page; the Strings window estimate breaks pages the same way; Tank's page-break line in the test level, English and Japanese; the guide describes it with a screenshot | `pyrite64_tests` 159/159 (4 new: page breaks); ares: Tank's line in English (the second sentence moved whole, the long one in three even pages) and Japanese (pages start on a new line, the long sentence split evenly); Strings window: 3 pages English and Japanese; not on the SummerCart |
+| 9 | pyrite64 (this commit), KC 04a084c | Text sizes Small 9, Normal 11, Large 14, Giant 18 px (decisions 78-82): pages worked out at Large and mapped onto the shown size; Giant grows the box; labels at the text size; the estimate at `box.pageSizeStep`; the guide with a picture of the four sizes | ares: the page-break line at all four sizes in English shows the same pages, Small and Giant in Japanese too, the Giant box 4 lines; `pyrite64_tests` 159/159; not on the SummerCart |
+| 10 | pyrite64 (this commit), KC 04a084c | Text sizes 7, 9, 12 and 14 px (decision 83) | ares: the page-break line at all four sizes in English shows the same pages, Small and Giant in Japanese too, the Giant box 4 lines; a debug build of the branch made for the SummerCart |
+| 11 | pyrite64 (this commit), KC 04a084c | Text sizes 8, 10, 12 and 14 px, pages worked out at Normal (decision 84) | ares: the page-break line at all four sizes in English shows the same pages, 8 and 14 px in Japanese too, the Large and Giant boxes 4 lines; on the SummerCart: the owner played 7/9/12/14, then this build booted and ran its levels |
 

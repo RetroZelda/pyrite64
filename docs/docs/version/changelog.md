@@ -43,6 +43,8 @@
 * Text tags in brackets, compiled at build time: `[b]`, `[i]`, `[size]`, `[font]`, `[color]`, `[shake]`, `[wave]`, pauses and speed, `[btn=...]` button icons, `[sfx=...]`, `[page]`, and `\n`; errors name the key and the language
 * Variables in braces, declared only in C++ (`P64_LOC_VAR`, caller values with `P64_LOC_ARG`): numbers with formatting, plurals with CLDR rules and `=N` cases, keys of other texts; `Loc::format()` (`text/locFormat.h`)
 * Font sets per language with bold and italic, baked with only the characters the texts use; line breaks measured with rdpq and kinsoku rules for Japanese
+* Page breaks (`Loc::splitPages`, `text/locPages.h`): whole sentences stay on one page, a sentence longer than a page is split evenly, at a comma or line break near the even point; the game and the Strings window's estimate share it. `Loc::breakLines` takes the font and style at its start
+* The Strings window's page estimate measures at locale.json `box.pageSizeStep`, the text size the game works pages out at
 * The Strings window (View > Strings): every key in every language with errors while typing, notes, keep rules, unused keys, CSV export and import for translators (`locale/strings.csv`), and how many lines and pages a dialog line takes in each language
 * The build scans code, scenes, prefabs and dialog trees for keys; command line `loc-refresh`, `loc-unused`, `loc-prune --yes`, `loc-export`, `loc-import`
 * `LOC_TEXT` script fields: a key picked from the table, built as its id

@@ -170,8 +170,10 @@ namespace P64::Loc
    * Inserts line breaks into formatted text so no line is wider than 'width' pixels, for languages
    * that wrap by character (LANG_WRAP_CHAR), following kinsoku rules: no line starts with a closing
    * mark or a small kana, none ends with an opening mark. Existing '\n' stay. Returns the length.
+   * 'font' and 'style' are the ones in effect where the text starts, for a part of a longer text
+   * (a dialog page); 0 takes them from the text's first code.
    */
-  int breakLines(char* text, int size, float width);
+  int breakLines(char* text, int size, float width, uint8_t font = 0, uint8_t style = 0);
 
   /** Control tags: the op of a name ("wait"), 0 when the project has none by that name. */
   uint8_t controlOp(const char* name);
